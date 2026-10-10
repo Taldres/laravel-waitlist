@@ -24,8 +24,12 @@ class PurposesController
     public function __invoke(Request $request, WaitlistManager $waitlist, ProjectResolver $projects): JsonResponse
     {
         $project = $projects->resolve($request);
-        $list = $request->query('list', WaitlistConfig::defaultList());
-        $list = is_string($list) ? $list : '';
+        $list = $request->query('list');
+        $list = match (true) {
+            $list === null || $list === '' => WaitlistConfig::defaultList(),
+            is_string($list) => $list,
+            default => '',
+        };
         $locale = $request->query('locale');
 
         WaitlistGate::inspect($request, $project, WaitlistAction::ViewPurposes, $list)->authorize();

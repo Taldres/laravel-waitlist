@@ -61,6 +61,27 @@ it('validates the email', function (string $email) {
     'unicode local part' => ['jörg@example.com'],
 ]);
 
+it('takes a null or empty list for the default list', function (mixed $list) {
+    $defaultList = config(ConfigKey::DefaultList->value);
+
+    $this->postJson('/waitlist', ['email' => 'user@example.com', 'list' => $list, 'purposes' => waitlistConsent()])
+        ->assertStatus(202);
+
+    expect(WaitlistEntry::query()->value('list'))->toBe($defaultList);
+
+    $this->getJson('/waitlist/purposes?list=')->assertOk()->assertJsonPath('data.0.purpose', 'waitlist');
+    $this->postJson('/waitlist/manage-link', ['email' => 'user@example.com', 'list' => $list])->assertStatus(202);
+})->with([
+    'null' => [null],
+    'empty' => [''],
+]);
+
+it('still refuses a list that is no text', function () {
+    $this->postJson('/waitlist', ['email' => 'user@example.com', 'list' => ['beta'], 'purposes' => waitlistConsent()])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('list');
+});
+
 it('accepts only plain list names', function (string $list) {
     $this->postJson('/waitlist', ['email' => 'user@example.com', 'list' => $list, 'purposes' => waitlistConsent()])
         ->assertStatus(422)
