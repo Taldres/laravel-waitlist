@@ -127,13 +127,6 @@ return [
         | no limit.
         */
         'max_pending_per_address' => env('WAITLIST_MAX_PENDING_PER_ADDRESS', 5),
-
-        /*
-        | By default the confirm link keeps working after confirmation and only
-        | reports the status. Enable this to make it single-use: the token is
-        | cleared on confirmation, and re-clicking raises an invalid-token error.
-        */
-        'invalidate_confirm_token_after_confirmation' => env('WAITLIST_INVALIDATE_CONFIRM_TOKEN', false),
     ],
 
     /*

@@ -91,10 +91,9 @@ Three consequences worth knowing:
   is cleared and the link reports as invalid rather than bringing the address
   back.
 
-Confirming is idempotent by default: a second click reports success rather than a
+Confirming is idempotent: a second click reports success rather than a
 confusing error, and the link degrades to a status link that can never change
-state again. `WAITLIST_INVALIDATE_CONFIRM_TOKEN=true` makes it single-use
-instead. An expired confirm link answers `410`; a resend issues a fresh one.
+state again. An expired confirm link answers `410`; a resend issues a fresh one.
 
 ## Consent in force
 

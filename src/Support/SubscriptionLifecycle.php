@@ -133,14 +133,7 @@ class SubscriptionLifecycle
      */
     public function confirm(WaitlistSubscription $subscription, RequestContext $context): bool
     {
-        $attributes = ['confirmed_at' => Carbon::now()];
-
-        if (WaitlistConfig::singleUseConfirmTokens()) {
-            $attributes['confirm_token_hash'] = null;
-            $attributes['confirm_token_expires_at'] = null;
-        }
-
-        return $this->transition($subscription, $attributes, fn (Builder $query): Builder => $query
+        return $this->transition($subscription, ['confirmed_at' => Carbon::now()], fn (Builder $query): Builder => $query
             ->whereNull('confirmed_at')
             ->whereNull('ended_at'), ActivityType::Confirmed, $context,
             fn (WaitlistEntry $entry): EntryConfirmed => $this->confirmed($entry, $subscription));
