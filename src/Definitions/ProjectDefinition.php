@@ -7,6 +7,7 @@ namespace Taldres\Waitlist\Definitions;
 use Closure;
 use Taldres\Waitlist\Enums\Page;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
+use Taldres\Waitlist\Support\OriginPolicy;
 use Taldres\Waitlist\Support\ProjectPeriods;
 
 /**
@@ -47,6 +48,11 @@ final class ProjectDefinition
     private bool $manageLinks = true;
 
     private ProjectPeriods $periods;
+
+    /**
+     * @var list<string>
+     */
+    private array $origins = [];
 
     /**
      * @internal Created by ProjectDefinitions when the project is first needed.
@@ -196,6 +202,34 @@ final class ProjectDefinition
     }
 
     /**
+     * The websites that may use this project's endpoints from a browser as a
+     * guest, such as https://acme.example: a request that names another origin
+     * is refused with 403, whatever the useWaitlist gate says. The same list
+     * lets a browser read the answers (CORS), so the paths and origins need no
+     * entry in config/cors.php. Calls add to each other. A request without an
+     * Origin header, as from a server, is not affected, and a script outside a
+     * browser can set any: this keeps other websites out, not bots.
+     *
+     * @param  array<array-key, mixed>  $origins
+     *
+     * @throws InvalidConfigurationException
+     */
+    public function origins(array $origins): static
+    {
+        foreach ($origins as $origin) {
+            if (! is_string($origin)) {
+                throw new InvalidConfigurationException("The origins of the project [{$this->name}] must be texts.");
+            }
+
+            $this->origins[] = OriginPolicy::normalize($origin);
+        }
+
+        $this->origins = array_values(array_unique($this->origins));
+
+        return $this;
+    }
+
+    /**
      * The retention periods this project promises in its privacy notice, in
      * days, where they differ from waitlist.retention: how long an address may
      * stay unconfirmed, how long one is kept after it left, and how long the IP
@@ -284,6 +318,14 @@ final class ProjectDefinition
     public function getManageLinks(): bool
     {
         return $this->manageLinks;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function getOrigins(): array
+    {
+        return $this->origins;
     }
 
     public function getPeriods(): ProjectPeriods

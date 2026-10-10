@@ -283,6 +283,19 @@ No manage link is mailed then, and a request for one is refused (see
 leave through the unsubscribe link in every mail; requests for access or erasure
 reach you and go through `waitlist:export` and `waitlist:forget`.
 
+### Websites that may use a project
+
+A project used from a browser on another site lists that site:
+
+```php
+$project->origins(['https://acme.example']);
+```
+
+A guest request from any other website is refused with `403`, and the list drives
+CORS, so `config/cors.php` needs no entry for the waitlist. A server calling for
+the project and a request without an `Origin` header are not affected. Details in
+[Securing the endpoints](securing-the-endpoints.md#websites-that-may-use-a-project).
+
 ### Periods a project promises itself
 
 `waitlist.retention` and `waitlist.double_opt_in.token_ttl` are global. In a
@@ -599,8 +612,9 @@ shows both. A catalog of your own replaces the definitions entirely, the fields
 included: its `fields($project, $list)` returns the rules the HTTP signup applies,
 `urlPattern($project, $action)` is asked for a page by its
 `Taldres\Waitlist\Enums\Page` value, such as `Page::Confirm->value`, and
-`manageLinks($project)` says whether the project mails manage links, and
-`periods($project)` the retention periods and the confirm link lifetime that
+`manageLinks($project)` says whether the project mails manage links,
+`origins($project)` the websites that may use it from a browser (empty for any)
+and `periods($project)` the retention periods and the confirm link lifetime that
 differ from the configuration (`new ProjectPeriods` for none).
 
 ## Privacy across projects

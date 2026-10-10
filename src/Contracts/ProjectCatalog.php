@@ -66,6 +66,15 @@ interface ProjectCatalog
     public function periods(string $project): ProjectPeriods;
 
     /**
+     * The origins, such as https://example.com, from which a browser may use the
+     * project's endpoints as a guest; empty for any. A request without an Origin
+     * header, as from a server, is not affected. The same list drives CORS.
+     *
+     * @return list<string>
+     */
+    public function origins(string $project): array;
+
+    /**
      * Must include "default": the facade acts on that project when no
      * project() is named.
      *

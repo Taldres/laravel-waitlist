@@ -108,14 +108,17 @@ Rocket.
 
 ## 3. Let the sites call the app
 
-Both sites are other origins, so allow them in CORS
-(`php artisan config:publish cors` if the file does not exist yet):
+Both sites are other origins. Name each in its project, and the package does the
+CORS handling and refuses the other site's browsers:
 
 ```php
-// config/cors.php
-'paths' => ['api/*', 'waitlist', 'waitlist/*'],
-'allowed_origins' => ['https://rocket.example', 'https://anvil.example'],
+Waitlist::define('rocket', fn (ProjectDefinition $project) => $project->origins(['https://rocket.example']));
+Waitlist::define('anvil', fn (ProjectDefinition $project) => $project->origins(['https://anvil.example']));
 ```
+
+Without `origins()`, configure CORS in `config/cors.php`
+(`php artisan config:publish cors` if the file does not exist yet), see
+[Securing the endpoints](../securing-the-endpoints.md#cors).
 
 Behind a load balancer or CDN, configure
 [trusted proxies](https://laravel.com/docs/requests#configuring-trusted-proxies),

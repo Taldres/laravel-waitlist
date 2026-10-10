@@ -69,7 +69,7 @@ Statuses besides the package's own `error` codes, as a client sees them:
 | Status | Usually | Retry? | Log |
 | --- | --- | --- | --- |
 | `401` | The caller sent no credentials the API accepts: `authentication.required` is on, or the project resolver needs them. A wrong token looks the same. | No, fix the token | Yes, as a setup error |
-| `403` | The `useWaitlist` gate refused the caller: a project that is not its own, or wording from a guest. | No | Yes |
+| `403` | The `useWaitlist` gate refused the caller: a project that is not its own, or wording from a guest; or the project lists origins and the browser's website is not among them. | No | Yes |
 | `404` without `error` | Not the package: a URL without the routes' prefix, routes switched off, or the gate keeping the caller from the project. | No | Yes, as a setup error |
 | `419` | A CSRF or form check of your own on the signup group, such as `web`. | No, send what the check wants | Yes |
 | `422` | Validation (`errors`), or `spam_check_failed` | No, fix the input | No, show it to the person |

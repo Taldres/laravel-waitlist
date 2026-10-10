@@ -84,6 +84,11 @@ class DefinedProjectCatalog implements ProjectCatalog
         return $this->definitions->get($project)?->getManageLinks() ?? true;
     }
 
+    public function origins(string $project): array
+    {
+        return $this->definitions->get($project)?->getOrigins() ?? [];
+    }
+
     public function periods(string $project): ProjectPeriods
     {
         return $this->definitions->get($project)?->getPeriods() ?? new ProjectPeriods;
