@@ -113,6 +113,8 @@ complete record: it does not audit infrastructure or find every recipient.
 - double opt-in on; IP and user agent off unless needed
 - fields per project and list (`->fields()`) as few as possible, none if in doubt
 - scheduler running; retention periods chosen and justified
+- `php artisan waitlist:check` passes on the production host (all settings read, no
+  setting left from an older version, no table or column missing)
 - `php artisan waitlist:privacy` run on the production host prints no warnings (mail
   links https and not localhost, `APP_DEBUG` off, guests meant to call the signup)
 - config reads: no empty `WAITLIST_*=` line in `.env` (an empty value is refused;
