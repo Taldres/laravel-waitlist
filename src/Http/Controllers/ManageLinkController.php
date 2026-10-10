@@ -50,7 +50,7 @@ class ManageLinkController
 
         // Anyone can type an address here, as on the signup form.
         if (! app(SpamProtector::class)->passes($request)) {
-            return new JsonResponse(['message' => 'Spam check failed.'], 422);
+            return new JsonResponse(['message' => 'Spam check failed.', 'error' => ApiError::SpamCheckFailed->value], 422);
         }
 
         try {

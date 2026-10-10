@@ -173,7 +173,7 @@ the test, so the guest request would still see the server.
 use Taldres\Waitlist\Events\EntryForgotten;
 
 Waitlist::verifySpamUsing(fn () => true);    // bypass Turnstile & co. in tests
-Waitlist::verifySpamUsing(fn () => false);   // assert the 422 "Spam check failed."
+Waitlist::verifySpamUsing(fn () => false);   // assert the 422 with `error: spam_check_failed`
 Waitlist::verifySpamUsing(null);             // back to the configured protector
 
 Event::fake([EntryForgotten::class]);
