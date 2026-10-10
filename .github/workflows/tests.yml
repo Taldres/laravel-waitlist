@@ -1,0 +1,153 @@
+name: tests
+
+on:
+  push:
+    branches:
+      - main
+      - '*.x'
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        php: [8.3, 8.4, 8.5]
+        laravel: [12.*, 13.*]
+        stability: [prefer-lowest, prefer-stable]
+        include:
+          - laravel: 12.*
+            testbench: 10.*
+          - laravel: 13.*
+            testbench: 11.*
+
+    name: P${{ matrix.php }} - L${{ matrix.laravel }} - ${{ matrix.stability }} - ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: dom, curl, libxml, mbstring, zip, fileinfo, sqlite, pdo_sqlite, bcmath, intl
+          ini-values: error_reporting=E_ALL
+          tools: composer:v2
+          coverage: none
+
+      - name: Install dependencies
+        run: |
+          composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --no-interaction --no-update
+          composer update --${{ matrix.stability }} --prefer-dist --no-interaction --no-progress --no-scripts
+          composer run prepare
+
+      # The code is the same on every OS, but Larastan types console
+      # arguments from the command signature only on Windows, so its verdict
+      # there differs from the one everyone gets locally.
+      - name: PHPStan
+        if: runner.os != 'Windows'
+        run: composer analyse
+
+      - name: Linter
+        run: composer lint:check
+
+      # Only where Pest 5 resolves: the type coverage plugin before 5.0.1
+      # writes its cache from parallel workers and corrupts it at random. The
+      # result does not depend on the lane anyway.
+      - name: Type Coverage
+        if: runner.os != 'Windows' && matrix.laravel == '13.*' && matrix.stability == 'prefer-stable'
+        run: composer test:types
+
+      - name: Test Suite
+        if: runner.os != 'Windows'
+        run: composer test:unit
+
+      - name: Test Suite (Windows)
+        if: runner.os == 'Windows'
+        run: vendor/bin/pest
+
+  databases:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # The oldest version Laravel's own CI covers and a current one of each.
+        include:
+          - db: mysql
+            image: mysql:5.7
+          - db: mysql
+            image: mysql:8.4
+          - db: mariadb
+            image: mariadb:10.11
+          - db: mariadb
+            image: mariadb:11.8
+          - db: pgsql
+            image: postgres:10
+          - db: pgsql
+            image: postgres:17
+
+    name: ${{ matrix.image }}
+
+    # An empty image skips a service, so each lane starts only its database.
+    # Data lives on tmpfs: the suite rebuilds the schema before every test,
+    # and each DDL statement would otherwise wait for the runner's disk.
+    services:
+      mysql:
+        image: ${{ matrix.db == 'mysql' && matrix.image || '' }}
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: yes
+          MYSQL_DATABASE: waitlist
+        ports: ['3306:3306']
+        options: --tmpfs /var/lib/mysql --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=5
+      mariadb:
+        image: ${{ matrix.db == 'mariadb' && matrix.image || '' }}
+        env:
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: yes
+          MARIADB_DATABASE: waitlist
+        ports: ['3306:3306']
+        options: --tmpfs /var/lib/mysql --health-cmd="mariadb-admin ping" --health-interval=10s --health-timeout=5s --health-retries=5
+      postgres:
+        image: ${{ matrix.db == 'pgsql' && matrix.image || '' }}
+        env:
+          POSTGRES_DB: waitlist
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: --tmpfs /var/lib/postgresql/data --health-cmd="pg_isready" --health-interval=10s --health-timeout=5s --health-retries=5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: 8.4
+          extensions: dom, curl, libxml, mbstring, zip, fileinfo, pdo_mysql, pdo_pgsql, bcmath, intl
+          tools: composer:v2
+          coverage: none
+
+      - name: Install dependencies
+        run: |
+          composer update --prefer-stable --prefer-dist --no-interaction --no-progress --no-scripts
+          composer run prepare
+
+      # Not parallel: the processes would share one database. The concurrency
+      # tests only run here, against two real connections.
+      - name: Test Suite
+        run: vendor/bin/pest
+        env:
+          DB_CONNECTION: ${{ matrix.db }}
+          DB_PASSWORD: ${{ matrix.db == 'pgsql' && 'postgres' || '' }}

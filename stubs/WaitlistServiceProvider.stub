@@ -1,0 +1,59 @@
+<?php
+
+namespace App\Providers;
+
+use Illuminate\Support\ServiceProvider;
+use Taldres\Waitlist\Definitions\ProjectDefinition;
+use Taldres\Waitlist\Facades\Waitlist;
+
+class WaitlistServiceProvider extends ServiceProvider
+{
+    /**
+     * Describe your waitlist: what people can agree to, the lists they can
+     * join, the fields a signup may carry and the pages your mails link to.
+     *
+     * Read the environment through config(), never env(): once the config is
+     * cached, env() returns null outside the config files.
+     */
+    public function boot(): void
+    {
+        Waitlist::define(function (ProjectDefinition $project): void {
+            // Never edit a version's wording; add a new version instead.
+            $project->purpose('waitlist', [
+                '2026-10' => 'Email me when early access opens. I can unsubscribe at any time.',
+            ]);
+
+            // $project->purpose('newsletter', [
+            //     '2026-10' => 'Also send me the monthly product newsletter.',
+            // ]);
+
+            $project->list('default', purpose: 'waitlist');
+            // $project->list('beta', purpose: 'waitlist')->optional('newsletter');
+
+            // Extra fields a signup may send under "metadata". Anything not
+            // listed is refused; without fields, no metadata is accepted.
+            // $project->fields(fn () => [
+            //     'source' => ['nullable', 'string', 'max:50'],
+            // ]);
+
+            // Unset pages use the package routes when they are enabled.
+            // $project->urls(
+            //     confirm: config('app.frontend_url').'/waitlist/confirm/{token}',
+            //     unsubscribe: config('app.frontend_url').'/waitlist/leave/{token}',
+            //     manage: config('app.frontend_url').'/waitlist/preferences/{token}',
+            // );
+        });
+
+        // Who may sign up, read the wording and request a manage link by
+        // address. The package's default lets everyone through and keeps a
+        // caller with a project to that project; replace it here, see the
+        // "useWaitlist" gate in docs/projects.md.
+        // \Illuminate\Support\Facades\Gate::define('useWaitlist', fn (?\Illuminate\Contracts\Auth\Authenticatable $caller, string $project) => $caller !== null);
+
+        // Further products get a project of their own:
+        // Waitlist::define('anvil', function (ProjectDefinition $project): void {
+        //     $project->purpose('launch', ['2026-10' => 'Email me when Anvil launches.']);
+        //     $project->list('default', purpose: 'launch');
+        // });
+    }
+}

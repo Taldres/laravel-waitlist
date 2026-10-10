@@ -1,0 +1,333 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Taldres\Waitlist\Console\Commands;
+
+use Closure;
+use Illuminate\Console\Command;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Event;
+use ReflectionFunction;
+use Symfony\Component\Console\Output\OutputInterface;
+use Taldres\Waitlist\Actions\IssueManageLink;
+use Taldres\Waitlist\Actions\PruneEntries;
+use Taldres\Waitlist\Actions\ResendConfirmation;
+use Taldres\Waitlist\Contracts\ProjectCatalog;
+use Taldres\Waitlist\Enums\ConfigKey;
+use Taldres\Waitlist\Events\ConsentGranted;
+use Taldres\Waitlist\Events\ConsentWithdrawn;
+use Taldres\Waitlist\Events\EntryConfirmed;
+use Taldres\Waitlist\Events\EntryForgotten;
+use Taldres\Waitlist\Events\EntrySubscribed;
+use Taldres\Waitlist\Events\EntryUnsubscribed;
+use Taldres\Waitlist\Events\ManageLinkRequested;
+use Taldres\Waitlist\Events\SubscriptionExpired;
+use Taldres\Waitlist\Exceptions\MissingWordingException;
+use Taldres\Waitlist\Support\PurposeRegistry;
+use Taldres\Waitlist\Support\PurposeWording;
+use Taldres\Waitlist\Support\Setting;
+use Taldres\Waitlist\WaitlistManager;
+
+class PrivacyCommand extends Command
+{
+    protected $signature = 'waitlist:privacy
+        {--project= : Only describe this project}';
+
+    protected $description = 'Describe what the waitlist stores, why, for how long, and where it flows (input for your record of processing, GDPR Art. 30)';
+
+    protected const array EVENTS = [
+        EntrySubscribed::class,
+        EntryConfirmed::class,
+        EntryUnsubscribed::class,
+        SubscriptionExpired::class,
+        EntryForgotten::class,
+        ConsentGranted::class,
+        ConsentWithdrawn::class,
+        ManageLinkRequested::class,
+    ];
+
+    public function handle(PurposeRegistry $registry, ProjectCatalog $catalog): int
+    {
+        $project = $this->option('project');
+        $projects = is_string($project) && $project !== '' ? [$project] : $catalog->projects();
+
+        $lines = [
+            '# Waitlist processing record',
+            '',
+            'Generated from the configuration and the project definitions on '.now()->toDateString().'. Input for your record of processing activities (GDPR Art. 30); review and complete it, it is not legal advice.',
+            '',
+            'The application operator is responsible for lawful processing and secure deployment. This output is a partial technical inventory, not a compliance assessment or a complete processing record.',
+            'The software is provided under the MIT License, including its warranty and liability disclaimer, subject to applicable mandatory law. No GDPR compliance warranty is provided; see https://github.com/Taldres/laravel-waitlist/blob/main/docs/responsibility.md',
+            '',
+            ...$this->data($catalog, $projects),
+            ...$this->purposes($registry, $catalog, $projects),
+            ...$this->retention(),
+            ...$this->measures(),
+            ...$this->recipients(),
+        ];
+
+        // Raw: wording is stored text, and the console would read tags in it.
+        $this->output->writeln(implode(PHP_EOL, $lines), OutputInterface::OUTPUT_RAW);
+
+        return self::SUCCESS;
+    }
+
+    /**
+     * @param  list<string>  $projects
+     * @return list<string>
+     */
+    protected function data(ProjectCatalog $catalog, array $projects): array
+    {
+        $protection = 'Encrypted with '.$this->encryptedWith();
+
+        $rows = [
+            "| Email address | waitlist_entries.email | {$protection}; looked up by a keyed hash |",
+            '| Consent per purpose: wording, version, granted and withdrawn at | waitlist_consents | Wording frozen at the moment of consent |',
+            '| Lifecycle log: step, purpose, date, reference of the mail your listener sent | waitlist_activity | Stripped to project, list, step, purpose, the status a departure left and date on erasure, so counts survive; one row per step, so not anonymous in a small list |',
+        ];
+
+        foreach ($projects as $project) {
+            foreach ($catalog->lists($project) as $list) {
+                $fields = array_keys($catalog->fields($project, $list));
+
+                if ($fields !== []) {
+                    $label = $list === '*' ? 'any other list' : "list {$list}";
+                    $rows[] = "| Metadata ({$project}, {$label}): ".implode(', ', $fields)." | waitlist_entries.metadata | {$protection} |";
+                }
+            }
+        }
+
+        foreach ([ConfigKey::StoreIp->value => 'IP address', ConfigKey::StoreUserAgent->value => 'User agent'] as $key => $label) {
+            if (Setting::enabled($key)) {
+                $rows[] = "| {$label} | waitlist_activity | {$protection} |";
+            }
+        }
+
+        return [
+            '## Personal data',
+            '',
+            '| Data | Stored in | Protection |',
+            '| --- | --- | --- |',
+            ...$rows,
+            '',
+        ];
+    }
+
+    /**
+     * @param  list<string>  $projects
+     * @return list<string>
+     */
+    protected function purposes(PurposeRegistry $registry, ProjectCatalog $catalog, array $projects): array
+    {
+        $lines = [
+            '## Purposes',
+            '',
+            '| Project | List | Purpose | Required | Current version | Wording | Double opt-in |',
+            '| --- | --- | --- | --- | --- | --- | --- |',
+        ];
+
+        foreach ($projects as $project) {
+            foreach ($catalog->lists($project) as $list) {
+                $label = $list === '*' ? 'any other list' : $list;
+
+                // Typically a stored catalog before its first waitlist:wording;
+                // report it rather than fail.
+                try {
+                    $policy = $registry->policy($project, $list);
+                } catch (MissingWordingException $exception) {
+                    $lines[] = sprintf('| %s | %s | — | — | — | %s | — |', $project, $label, $exception->getMessage());
+
+                    continue;
+                }
+
+                $current = $registry->current($policy);
+
+                foreach ($current as $wording) {
+                    $texts = $registry->versions($project, $wording->purpose)[$wording->version];
+
+                    foreach (is_array($texts) ? $texts : ['' => $texts] as $locale => $text) {
+                        $lines[] = sprintf(
+                            '| %s | %s | %s | %s | %s | %s | %s |',
+                            $project,
+                            $label,
+                            $wording->purpose,
+                            $wording->required ? 'yes' : 'no',
+                            $locale === '' ? $wording->version : "{$wording->version} ({$locale})",
+                            str_replace(["\r\n", "\n", "\r", '|'], [' ', ' ', ' ', '\|'], $text),
+                            $policy->doubleOptIn ? 'yes' : 'no',
+                        );
+                    }
+                }
+
+                $sent = array_map(fn (PurposeWording $wording): string => $wording->purpose, $current);
+
+                foreach (array_diff($policy->purposes(), $sent) as $purpose) {
+                    $lines[] = sprintf(
+                        '| %s | %s | %s | %s | — | %s | %s |',
+                        $project,
+                        $label,
+                        $purpose,
+                        $purpose === $policy->primary ? 'yes' : 'no',
+                        "None yet: the project's servers send it with the first signup.",
+                        $policy->doubleOptIn ? 'yes' : 'no',
+                    );
+                }
+            }
+        }
+
+        return [...$lines, '', 'The package records consent choices per purpose, each withdrawable on its own. The operator must determine the lawful basis and assess whether consent is valid; storing a record does not establish this.', ''];
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function retention(): array
+    {
+        $period = fn (?int $days, string $text): string => $days !== null
+            ? "- {$text}: after {$days} days"
+            : "- {$text}: kept until erased";
+
+        $schedule = Setting::value(ConfigKey::RetentionSchedule->value);
+
+        return [
+            '## Retention',
+            '',
+            'Configured periods are technical settings, not statutory periods or legal recommendations. The operator must justify them and monitor cleanup.',
+            '',
+            $period(PruneEntries::days(ConfigKey::RetentionPendingDays->value), 'Unconfirmed signups erased'),
+            $period(PruneEntries::days(ConfigKey::RetentionUnsubscribedDays->value), 'Addresses that left erased'),
+            $period(PruneEntries::days(ConfigKey::RetentionRequestMetadataDays->value), 'IP and user agent cleared from the log'),
+            is_string($schedule) && $schedule !== ''
+                ? "- Applied by waitlist:prune on the schedule `{$schedule}`; Laravel's scheduler must run"
+                : '- Not scheduled by the package: run waitlist:prune yourself',
+            '- On request (Art. 17): waitlist:forget, or the person via a manage link sent to their address',
+            '- Active confirmed entries and remaining reporting rows have no automatic expiry; the remaining log is not guaranteed anonymous',
+            '- Backups, queues, logs, exports and external provider copies require separate retention and erasure handling',
+            '',
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function measures(): array
+    {
+        $cooldown = ResendConfirmation::cooldown();
+        $cap = ResendConfirmation::maxConfirmations();
+
+        return [
+            '## Technical and organisational measures (Art. 32)',
+            '',
+            'Implemented by the package:',
+            '',
+            '- Address, metadata, IP, user agent and mail references encrypted at rest with '.$this->encryptedWith(),
+            '- Addresses looked up by an HMAC-SHA256 hash with a subkey of the '.$this->encryptedWith().' key, never by the address itself',
+            '- Tokens stored as SHA-256 hashes, the unsubscribe token additionally encrypted; none exported',
+            '- Mails carry an unsubscribe token that can only remove; access to the data and erasure needs a manage link that is mailed to the address on request and expires after '.$this->manageTtl(),
+            '- Confirmation mails limited to one per '.($cooldown !== null ? "{$cooldown} minutes" : 'request')
+                .($cap !== null ? " and {$cap} per cycle" : ''),
+            ...(($pending = ResendConfirmation::maxPendingPerAddress()) !== null
+                ? ["- At most {$pending} confirmation requests per address and day for unconfirmed lists of a project; further ones are held back"]
+                : []),
+            Setting::enabled(ConfigKey::RoutesEnabled->value)
+                ? '- Rate limits: signups '.$this->rateLimit(ConfigKey::SignupLimiter->value, Setting::integer(ConfigKey::SignupPerMinute->value).' per minute and IP')
+                    .', token links '.$this->rateLimit(ConfigKey::LinksLimiter->value, Setting::integer(ConfigKey::LinkPerMinute->value).' per minute and token')
+                    .'; GET never changes state'
+                : '- No public endpoints (package routes disabled)',
+            '- Consent records immutable; lifecycle log rows never deleted, only stripped on erasure',
+            '- Erasure strips the log: only project, list, step, purpose, the status a departure left and date remain',
+            '- No mail sent and no outbound requests made by the package',
+            '',
+            'Yours to add: access control to the database, its backups and the queue; protection of APP_KEY; bot protection on public forms.',
+            '',
+        ];
+    }
+
+    protected function encryptedWith(): string
+    {
+        $encrypter = app(WaitlistManager::class)->encrypter();
+
+        return $encrypter === app('encrypter') ? 'APP_KEY' : 'a custom encrypter ('.$encrypter::class.')';
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function recipients(): array
+    {
+        $lines = [
+            '## Recipients',
+            '',
+            'The package sends no mail and makes no outbound requests. The listeners below are possible integration points, not a complete list of recipients. Review API responses, exports, queues, logs, backups and other application data flows separately.',
+            '',
+        ];
+
+        $listeners = Event::getRawListeners();
+        $found = false;
+
+        foreach (self::EVENTS as $event) {
+            foreach (Arr::wrap($listeners[$event] ?? []) as $listener) {
+                $lines[] = '- '.class_basename($event).': '.$this->describe($listener);
+                $found = true;
+            }
+        }
+
+        if (! $found) {
+            $lines[] = '- No listeners registered.';
+        }
+
+        return [...$lines, '', 'Wildcard listeners are not included.'];
+    }
+
+    protected function describe(mixed $listener): string
+    {
+        return match (true) {
+            is_string($listener) => $listener,
+            is_array($listener) && count($listener) === 2 => $this->part($listener[0]).'@'.$this->part($listener[1]),
+            $listener instanceof Closure => $this->describeClosure($listener),
+            default => get_debug_type($listener),
+        };
+    }
+
+    protected function part(mixed $part): string
+    {
+        return match (true) {
+            is_object($part) => $part::class,
+            is_string($part) => $part,
+            default => get_debug_type($part),
+        };
+    }
+
+    protected function describeClosure(Closure $listener): string
+    {
+        $reflection = new ReflectionFunction($listener);
+        $file = $reflection->getFileName();
+
+        return $file === false
+            ? 'Closure'
+            : 'Closure in '.str_replace(base_path().DIRECTORY_SEPARATOR, '', $file).':'.$reflection->getStartLine();
+    }
+
+    /**
+     * @param  string  $key  ConfigKey::SignupLimiter or LinksLimiter, by value
+     */
+    protected function rateLimit(string $key, string $packageLimit): string
+    {
+        $limiter = Setting::value($key);
+        $packageLimiter = ConfigKey::from($key)->default();
+
+        return match (true) {
+            ! is_string($limiter) || $limiter === '' => 'not limited by the package',
+            $limiter === $packageLimiter => $packageLimit,
+            default => "by your [{$limiter}] limiter",
+        };
+    }
+
+    protected function manageTtl(): string
+    {
+        $minutes = IssueManageLink::ttl();
+
+        return $minutes === 1 ? '1 minute' : "{$minutes} minutes";
+    }
+}
