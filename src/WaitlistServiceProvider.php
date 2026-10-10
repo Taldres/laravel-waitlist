@@ -132,8 +132,6 @@ class WaitlistServiceProvider extends ServiceProvider
         $visitor = WaitlistCaller::forwardedIp($request);
         $cap = Limit::perMinute(Setting::integer(ConfigKey::CallerSignupPerMinute->value))->by("{$server}|{$endpoint}");
 
-        // Visitor first: Laravel 12 counts each limit as it passes it, and a
-        // refused visitor must not use up the server's cap.
         return $visitor === null ? [$cap] : [
             Limit::perMinute(Setting::integer(ConfigKey::SignupPerMinute->value))->by("{$server}|{$visitor}|{$endpoint}"),
             $cap,
