@@ -154,7 +154,8 @@ Laravel discovers the listener in `app/Listeners` by itself.
 - **`requiresConfirmation` false.** The list has no double opt-in, the cycle
   started confirmed, and `EntryConfirmed` follows right away.
 - **The reference.** `confirmationMailed()` records the reference your listener
-  reports next to the consent wording; keep the text of each version of the mail.
+  reports next to the consent wording, once per request; keep the text of each
+  version of the mail.
   See [GDPR in practice](gdpr.md#proof-of-the-double-opt-in).
 - **A mail that could not be sent.** A request counts against the resend cooldown
   and the caps as soon as it is issued, before any mail exists. When your queued
@@ -169,8 +170,21 @@ Laravel discovers the listener in `app/Listeners` by itself.
   ```
 
   The request stops counting, so the person's own retry gets a mail, and the log
-  shows `confirmation_failed`. It answers `false` and changes nothing when a
-  newer request was issued since, the cycle ended or the entry was erased.
+  shows `confirmation_failed`.
+
+  Report with `$event->subscription`: it names the request by the hash of its
+  confirm link, which a new request replaces. Each request takes one report, and
+  the first one counts:
+
+  - A repeat of the report, or one about an earlier request that a newer one
+    replaced, answers `false` and changes nothing, so it cannot free the cooldown
+    of the request that is running now.
+  - A failure after `confirmationMailed()` answers `false`: the mail is out.
+  - `confirmationMailed()` after a failure is accepted once, as when you retry
+    the failed job and the provider accepts the mail: it records the mail and takes
+    the cooldown and the count back.
+  - A cycle that was confirmed or has ended, an entry that was erased, and a
+    cycle that started without a request have nothing to fail.
 - **The link.** `confirmUrl` points at your confirm page, the `confirm` page of
   the project's [`urls()`](projects.md#pages), or at the package route. A plain
   GET must never confirm, since mail scanners follow every link: the page posts

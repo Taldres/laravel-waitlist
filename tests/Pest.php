@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Event;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Enums\ActivityType;
+use Taldres\Waitlist\Enums\ConfirmationOutcome;
 use Taldres\Waitlist\Enums\EntryStatus;
 use Taldres\Waitlist\Events\EntrySubscribed;
 use Taldres\Waitlist\Facades\Waitlist;
@@ -66,6 +67,23 @@ function subscribeAndCapture(string $list, string $email, ?array $purposes = nul
 }
 
 /**
+ * What a listener holds when it reports: the subscription as the event carried
+ * it, copied because the package refreshes the model it works on.
+ *
+ * @return ArrayObject<int, WaitlistSubscription>
+ */
+function captureRequests(): ArrayObject
+{
+    $requests = new ArrayObject;
+
+    Event::listen(EntrySubscribed::class, function (EntrySubscribed $event) use ($requests): void {
+        $requests->append((new WaitlistSubscription)->newFromBuilder($event->subscription->getAttributes()));
+    });
+
+    return $requests;
+}
+
+/**
  * @param  list<string>  $previousKeys
  */
 function rotateAppKey(array $previousKeys = [], ?string $key = null): void
@@ -122,9 +140,30 @@ function assertWaitlistInvariants(): void
                 expect($cycle->confirmed_at->lessThanOrEqualTo($cycle->ended_at))->toBeTrue();
             }
 
-            $ofCycle = $entry->activity->where('waitlist_subscription_id', $cycle->getKey());
-            $sent = $ofCycle->where('type', ActivityType::ConfirmationRequested)->count() - $ofCycle->where('type', ActivityType::ConfirmationFailed)->count();
+            // A request counts from when it is issued until its failure is reported,
+            // and again if its mail went out after all.
+            $sent = 0;
+            $last = null;
+
+            foreach ($entry->activity->where('waitlist_subscription_id', $cycle->getKey()) as $row) {
+                match ($row->type) {
+                    ActivityType::ConfirmationRequested => $sent++,
+                    ActivityType::ConfirmationFailed => $sent--,
+                    ActivityType::ConfirmationMailed => $last === ActivityType::ConfirmationFailed ? $sent++ : null,
+                    default => null,
+                };
+
+                if (in_array($row->type, [ActivityType::ConfirmationRequested, ActivityType::ConfirmationFailed, ActivityType::ConfirmationMailed], true)) {
+                    $last = $row->type;
+                }
+            }
+
             expect($sent)->toBe($cycle->confirmation_count, "cycle {$cycle->id}: confirmation_count does not match the log");
+            expect($cycle->confirmation_outcome)->toBe(match ($last) {
+                ActivityType::ConfirmationFailed => ConfirmationOutcome::Failed,
+                ActivityType::ConfirmationMailed => ConfirmationOutcome::Mailed,
+                default => null,
+            }, "cycle {$cycle->id}: confirmation_outcome does not match the log");
 
             $signups = $entry->activity
                 ->where('waitlist_subscription_id', $cycle->getKey())

@@ -23,7 +23,7 @@ use Taldres\Waitlist\WaitlistManager;
  * @method static \Taldres\Waitlist\Models\WaitlistEntry unsubscribe(string $plainToken, ?\Taldres\Waitlist\Support\RequestContext $context = null)
  * @method static \Taldres\Waitlist\Models\WaitlistEntry grantConsent(string $plainToken, string $purpose, string $version, ?string $locale = null, ?\Taldres\Waitlist\Support\RequestContext $context = null)
  * @method static \Taldres\Waitlist\Models\WaitlistEntry withdrawConsent(string $plainToken, string $purpose, ?\Taldres\Waitlist\Support\RequestContext $context = null)
- * @method static void confirmationMailed(\Taldres\Waitlist\Models\WaitlistSubscription $subscription, string $reference, ?\Taldres\Waitlist\Support\RequestContext $context = null)
+ * @method static bool confirmationMailed(\Taldres\Waitlist\Models\WaitlistSubscription $subscription, string $reference, ?\Taldres\Waitlist\Support\RequestContext $context = null)
  * @method static bool confirmationFailed(\Taldres\Waitlist\Models\WaitlistSubscription $subscription, ?string $reference = null, ?\Taldres\Waitlist\Support\RequestContext $context = null)
  * @method static \Taldres\Waitlist\Models\WaitlistSubscription|null findByConfirmToken(string $plainToken)
  * @method static \Taldres\Waitlist\Models\WaitlistEntry|null findByUnsubscribeToken(string $plainToken)

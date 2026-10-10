@@ -33,7 +33,7 @@
 - Config keys and frontend pages as enums: `ConfigKey` names every key of `config/waitlist.php`, which a test keeps in step with the file, and `Page` the pages a project defines
 - Fields per project and list: a signup accepts only the metadata its project and list define, validated with any Laravel rule, rule objects included, built anew for every request; `Waitlist::for($list)->fields()` hands the same rules to your own controllers, and `waitlist:privacy` lists them
 - One withdrawal rule: lists that share a primary purpose are separate waitlists, an optional purpose such as a newsletter is withdrawn on every list of the project, and leaving a list withdraws its primary purpose
-- Recording of the confirmation mail reference via `Waitlist::confirmationMailed()`, next to the consent wording
+- Recording of the confirmation mail reference via `Waitlist::confirmationMailed()`, next to the consent wording, and of a mail that could not be sent via `Waitlist::confirmationFailed()`, which takes the request's cooldown and count back; each report counts once per request, bound to it by the hash of its confirm link, so a repeated, late or contradicting report changes nothing and a mail that went out after its failure is accepted once
 - `waitlist:rekey` moves every stored value onto the current key, so old keys can be retired
 - RFC 8058 one-click unsubscribe
 - Rate limits per route group with named limiters (`waitlist`, `waitlist-links`) that can be tuned, replaced or turned off; token links are limited per token rather than per IP
