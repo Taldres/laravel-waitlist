@@ -23,6 +23,8 @@ early access or launch notifications with `taldres/laravel-waitlist`.
 
 ### 1. Install
 
+Requires PHP 8.3+ and Laravel 13.
+
 ```bash
 composer require taldres/laravel-waitlist
 php artisan waitlist:install   # provider, config and migrations; registers the provider
@@ -81,9 +83,10 @@ Waitlist::define(function (ProjectDefinition $project): void {
   `unsubscribed`, `erased` (where a browser lands after posting).
 - Rate limits per group in `routes.limiters`: `signup` → `waitlist` (per IP),
   `links` → `waitlist-links` (per token). Tune `routes.rate_limits`, point a group at
-  your own `RateLimiter::for()` name, or set it to `null`. An own limiter decides
-  the key (`->by()`), the limits, exemptions (`Limit::none()`), per-route rules
-  (`$request->routeIs()`) and the response; `rate_limits` does not apply to it.
+  your own `RateLimiter::for()` name (a name nothing defines is refused), or set it
+  to `null`. An own limiter decides the key (`->by()`), the limits, exemptions
+  (`Limit::none()`), per-route rules (`$request->routeIs()`) and the response;
+  `rate_limits` does not apply to it.
   Never key `links` by IP alone: one-click unsubscribes share mail providers' IPs.
   A caller acting for a project (`HasWaitlistProject`) is a server: it is capped
   as a whole (`rate_limits.caller_signup_per_minute`) and limits its visitors
@@ -94,7 +97,8 @@ Waitlist::define(function (ProjectDefinition $project): void {
   `Waitlist::purposes($list, locale: $locale)` (or `GET /waitlist/purposes?locale=`)
   and post back `{version, locale}` as served; such a version needs the locale.
 - A form rendering its own copy of the text (CMS) adds `hash` = sha256 of the shown
-  text; a mismatch is a 422. `WAITLIST_REQUIRE_WORDING_HASH=true` requires it.
+  text; a mismatch is a 422. `WAITLIST_REQUIRE_WORDING_HASH=true` requires it
+  for every consent newly recorded, not for keeping or withdrawing one.
 - Wording written in the frontend or CMS: set `waitlist.catalog` to
   `StoredWordingCatalog` and register it on deploy with
   `php artisan waitlist:wording wording.json` (purpose => version => text; first
@@ -121,7 +125,9 @@ $result = Waitlist::for('default')->add($email, ['waitlist' => '2026-10', 'newsl
 Over HTTP (with `WAITLIST_ROUTES_ENABLED=true`): `GET /waitlist/purposes?list=default`,
 then `POST /waitlist` with `email`, `list`, and `purposes` as `{purpose: version}`.
 Fields beyond the address go under `metadata`, and only those the project or list
-defines are accepted.
+defines are accepted. While the routes are off every route answers `404`, before
+any rate limit or session; an empty `WAITLIST_ROUTES_ENABLED=` is a config error,
+`false` turns them off.
 
 ### 4. Mails come from your listeners
 
@@ -150,6 +156,9 @@ public function handle(EntrySubscribed $event): void
 - `$event->confirmUrl` comes from the `confirm` page of the project's `urls()` or,
   with `WAITLIST_ROUTES_ENABLED=true`, the package route. With neither it is
   `null`: set one before the first signup, or the mail goes out without a link.
+  A link that cannot be built (the package routes are on but not registered, as
+  after a stale route cache) throws `InvalidConfigurationException` and undoes the
+  signup or confirmation: nothing is committed and no event fires.
 - Every later mail carries a link that withdraws exactly its purpose:
   `Waitlist::unsubscribeUrl($entry, 'newsletter')` and
   `Waitlist::listUnsubscribeHeaders($entry, 'newsletter')`.
@@ -189,6 +198,21 @@ $entry->hasConsentFor('newsletter');
 - Events: `EntrySubscribed`, `EntryConfirmed`, `ConsentGranted`, `ConsentWithdrawn`,
   `EntryUnsubscribed`, `SubscriptionExpired`, `EntryForgotten`, `ManageLinkRequested`;
   all dispatch after commit.
+- Config is read where it is used and refused when it does not read, with an
+  `InvalidConfigurationException` that names the key. `.env` takes `true`/`false`,
+  `on`/`off`, `yes`/`no`, `1`/`0` and whole numbers (`05` is 5); anything else is
+  refused, an empty `KEY=` line included: delete the line to keep the default.
+  `null` says never or off (`double_opt_in.token_ttl`, retention periods, cooldowns,
+  caps, a limiter, `retention.schedule`); a manage link always expires. A confirm or
+  manage link may not end after 2038-01-19, and a retention period or cooldown may
+  not reach back before 1970, so a 36500-day "forever" is refused: write `null`. A
+  cron expression that can never run and a route `prefix` with `{}` are refused too.
+- Leaving, withdrawing, confirming an issued link, erasing and pruning keep working
+  when a setting they only pass by does not read (privacy, guards or client IP
+  header on token links, the email normalizer sweep over other lists, the
+  catalog behind a redirect, link rate limits, which fall back to 10 and 600):
+  the mistake is reported to the logs instead. The signup, the gate and the
+  reports stay strict.
 - Personal data is always encrypted with Laravel's `encrypted` casts. When
   rotating `APP_KEY`, keep the old key in `APP_PREVIOUS_KEYS`, then run
   `php artisan waitlist:rekey` before retiring it.
@@ -196,6 +220,16 @@ $entry->hasConsentFor('newsletter');
   included. A key for the package only goes in a service provider's `boot()`:
   `Waitlist::encryptUsing($encrypter)` with any `Illuminate\Contracts\Encryption\Encrypter`.
   Its keys also make the lookup hash, so they must stay stable.
+- Supported extension points: your own models, the contracts with their config keys
+  (`catalog`, `url_generator`, `project_resolver`, `email_normalizer`,
+  `spam_protector`), container bindings, the `useWaitlist` gate, events and macros.
+  A binding names a class that implements the contract, or an interface or abstract
+  class your app binds; the contract itself and a class the container cannot build
+  are refused. Other public classes (actions, `SubscriptionLifecycle`, controllers,
+  the default implementations) are open but promise nothing, and a subclass only
+  takes effect where the package resolves the class from the container or the
+  config, not where it creates it with `new`.
+  Guide: https://github.com/Taldres/laravel-waitlist/blob/main/docs/extending.md
 - `php artisan waitlist:privacy` prints the facts for the record of processing.
 - The operator is responsible for lawful processing, valid consent, notices,
   justified retention, infrastructure security and provider agreements. The

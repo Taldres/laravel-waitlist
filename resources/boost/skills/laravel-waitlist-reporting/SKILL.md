@@ -99,9 +99,12 @@ Exact as far as the log reaches back, to the day. Today's value equals
 
 ## Rules, References, and Templates
 
-- `waitlist.reporting.timezone` (`WAITLIST_REPORTING_TIMEZONE`, else
-  `app.timezone`) decides where a day ends; rows already dated are not rewritten,
-  so set it before collecting.
+- A day always ends in `app.timezone`: each row stores its day (`occurred_on`)
+  when written, and reports group on it and resolve their periods in that zone.
+  An erasure clears the exact time, so set `app.timezone` before the first
+  signup; changing it later does not redate existing rows, only later ones. With
+  UTC, a signup at 23:30 in Berlin in summer belongs to the next UTC day: a
+  defined boundary, not a miscount.
 - Reports are one grouped query; cache them in the application if a dashboard
   polls often.
 - The remaining log is minimized, not anonymous: keep reports for the people who

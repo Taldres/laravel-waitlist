@@ -129,7 +129,8 @@ try {
 Over HTTP: `POST /waitlist/confirm/{token}` with `Accept: application/json`
 answers `{"data": {..., "status": "confirmed"}}`, `404` unknown, `410` expired;
 the package's own refusals name an `error`, e.g. `invalid_token`, and a `404`
-without one means a wrong URL.
+without one means a wrong URL, routes that are off or a `useWaitlist` gate that
+keeps the caller out.
 
 ### 4. Unsubscribe page
 
@@ -152,13 +153,17 @@ Over HTTP: `POST /waitlist/unsubscribe/{token}[?purpose=]` and
 ### 5. Preference page
 
 Behind the manage token from the mailed link (expires after
-`waitlist.manage.token_ttl` minutes, 60 by default):
+`waitlist.manage.token_ttl` minutes, 60 by default, at least 1, never unlimited):
 `GET /waitlist/manage/{token}` (status, purposes in force),
 `PUT .../purposes` with the complete wanted set (the primary purpose must stay),
 `POST .../data` (JSON copy), `POST .../unsubscribe`, `POST .../erase` with
 `{"confirm": true}`. On `410`, offer to send a new link. Ask for an explicit
 confirmation before erasing. In PHP: `Waitlist::findByManageToken($token)`,
 `Waitlist::grantConsent($token, $purpose, $version, $locale)`.
+
+Shape the `purposes` of that `PUT` like the signup's. With
+`WAITLIST_REQUIRE_WORDING_HASH=true`, only a purpose being added needs its `hash`;
+keeping or dropping one does not.
 
 ### 6. Protect the public endpoints
 
@@ -178,6 +183,15 @@ confirmation before erasing. In PHP: `Waitlist::findByManageToken($token)`,
   `config/cors.php`.
 - Behind a proxy or CDN: configure trusted proxies, or all visitors share one rate
   limit bucket.
+- Routes that are off (the default) answer `404` before any rate limit or session
+  starts. Laravel still answers `405` for a method a route does not take and
+  `OPTIONS` with the allowed methods before any middleware runs; neither acts. An
+  empty `WAITLIST_ROUTES_ENABLED=` is a config error; `false` turns the routes off.
+  The package puts its check, `CheckRouteConfig`, at the head of Laravel's middleware
+  priority. An app that replaces that list later (`setMiddlewarePriority()` in a
+  provider booting after the package, or in `booted()`) must list
+  `Taldres\Waitlist\Http\Middleware\CheckRouteConfig` first; `priority()` in
+  `bootstrap/app.php` needs nothing.
 
 ## Rules, References, and Templates
 

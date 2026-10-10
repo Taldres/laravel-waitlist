@@ -125,7 +125,9 @@ The package asks Laravel's gate `useWaitlist` before the signup, the wording and
 manage link by address (never for token links), with
 `(?Authenticatable $caller, string $project, WaitlistAction $action, ?string $list)`.
 The caller comes from the first guard in `waitlist.authentication.guards` that
-authenticates the request; `Waitlist::caller($request)` returns the same one.
+authenticates the request; `Waitlist::caller($request)` returns the same one. A guard
+`config/auth.php` does not define is refused, naming it; token links do not wait for
+it and are limited as a guest's request then.
 
 - Default: everyone may; a caller implementing `HasWaitlistProject` only for its
   own project (`404` otherwise). With `waitlist.authentication.required`: guests
@@ -146,7 +148,8 @@ authenticates the request; `Waitlist::caller($request)` returns the same one.
   cap each server (`rate_limits.caller_signup_per_minute`, 120) and leave the
   limit per visitor to it, e.g. in a Next.js Server Action. Set
   `authentication.client_ip_header` (e.g. `X-Waitlist-Client-Ip`) to also limit
-  per forwarded visitor; the header is never read from guests.
+  per forwarded visitor; the header is never read from guests, and a value that is
+  not an IP address is ignored.
 - `$project->wordingFromCallers()` lets them send the consent text with the
   version (`{version, locale?, text}`), so it lives only on the site: the first
   signup registers it with the server; a known version must read the same. The
@@ -188,6 +191,9 @@ your own replaces the definitions. Projects register wording with
   isolation. Serving other companies' waitlists needs contracts, separation and
   per-customer keys that projects do not provide.
 - A withdrawal never reaches another project.
+- `waitlist.project_resolver` and `waitlist.catalog` name a class that implements
+  the contract, or an interface or abstract class your app binds in the container;
+  the contract itself and a class the container cannot build are refused.
 - Guides: https://github.com/Taldres/laravel-waitlist/blob/main/docs/projects.md,
   https://github.com/Taldres/laravel-waitlist/blob/main/docs/examples/several-products.md,
   https://github.com/Taldres/laravel-waitlist/blob/main/docs/examples/central-waitlist-api.md

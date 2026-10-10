@@ -74,7 +74,10 @@ class SendWaitlistConfirmationMail implements ShouldQueue, ShouldBeEncrypted
 - `confirmationMailed()` records the reference of the mail next to the consent;
   use a template name and version, and keep each version's text.
 - `$event->confirmUrl` is `null` while the project's `urls()` sets no `confirm` page
-  and the package routes are off.
+  and the package routes are off. A link that cannot be built (the routes are on
+  but not registered, as after a stale route cache) throws
+  `InvalidConfigurationException` and undoes the signup or confirmation: nothing is
+  committed, so no event fires and no mail is due.
 
 ### 3. Preference page link listener
 
