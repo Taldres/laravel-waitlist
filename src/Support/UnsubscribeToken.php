@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Support;
 
+use Illuminate\Support\Str;
+
 /**
  * The entry's unsubscribe token and its URL. The token can only remove:
  * unsubscribe, withdraw a purpose, or ask for a manage link to be mailed. The
@@ -23,9 +25,8 @@ final readonly class UnsubscribeToken
      */
     public static function withPurpose(string $url, string $purpose): string
     {
-        $hash = strpos($url, '#');
-        $fragment = $hash === false ? '' : substr($url, $hash);
-        $url = $hash === false ? $url : substr($url, 0, $hash);
+        $fragment = str_contains($url, '#') ? '#'.Str::after($url, '#') : '';
+        $url = Str::before($url, '#');
 
         return $url.(str_contains($url, '?') ? '&' : '?').http_build_query(['purpose' => $purpose]).$fragment;
     }

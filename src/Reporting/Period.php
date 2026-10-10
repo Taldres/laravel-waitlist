@@ -6,12 +6,9 @@ namespace Taldres\Waitlist\Reporting;
 
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
-use Taldres\Waitlist\Enums\ConfigKey;
-use Taldres\Waitlist\Support\Setting;
 
 /**
- * A closed range of days in waitlist.reporting.timezone, the zone activity rows
- * are dated in.
+ * A closed range of days in app.timezone, the zone activity rows are dated in.
  */
 final readonly class Period
 {
@@ -54,12 +51,9 @@ final readonly class Period
         return $dates;
     }
 
-    /**
-     * An empty WAITLIST_REPORTING_TIMEZONE arrives as "", which means unset.
-     */
     public static function timezone(): string
     {
-        $timezone = Setting::value(ConfigKey::ReportingTimezone->value) ?: config('app.timezone', 'UTC');
+        $timezone = config('app.timezone', 'UTC');
 
         return is_string($timezone) && $timezone !== '' ? $timezone : 'UTC';
     }

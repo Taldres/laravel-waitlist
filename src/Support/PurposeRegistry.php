@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Taldres\Waitlist\Support;
 
 use Taldres\Waitlist\Actions\RegisterWording;
+use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
-use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Exceptions\MissingConsentException;
 use Taldres\Waitlist\Exceptions\MissingWordingException;
 use Taldres\Waitlist\Exceptions\UnknownPurposeException;
@@ -49,14 +49,7 @@ class PurposeRegistry
             fn (string $purpose): bool => $this->versions($project, $purpose) !== [],
         ));
 
-        return $offered === $policy->optional ? $policy : new ListPolicy(
-            project: $policy->project,
-            list: $policy->list,
-            primary: $policy->primary,
-            optional: $offered,
-            doubleOptIn: $policy->doubleOptIn,
-            wordingFromCallers: $policy->wordingFromCallers,
-        );
+        return $offered === $policy->optional ? $policy : $policy->withOptional($offered);
     }
 
     /**
@@ -98,6 +91,8 @@ class PurposeRegistry
      * change must still record what it showed.
      *
      * @param  array<array-key, mixed>  $requested  purpose => version, or purpose => {version, locale, hash, text}
+     * @param  array<array-key, string>  $held  purposes whose consent is already in force: nothing new is recorded
+     *                                          for them, so they need no hash
      * @return list<PurposeWording>
      *
      * @throws UnknownPurposeException
@@ -106,7 +101,7 @@ class PurposeRegistry
      * @throws WordingConflictException
      * @throws MissingConsentException
      */
-    public function resolve(ListPolicy $policy, array $requested, bool $acceptWording = false, ?string $caller = null): array
+    public function resolve(ListPolicy $policy, array $requested, bool $acceptWording = false, ?string $caller = null, array $held = []): array
     {
         $wordings = [];
 
@@ -121,8 +116,9 @@ class PurposeRegistry
                 ? $this->wording($policy, (string) $purpose, $version, $locale)
                 : $this->accept($policy, (string) $purpose, $version, $locale, $text, $caller);
 
-            // Sent along with its text, a hash proves nothing more.
-            if ($hash === null && $text === null && Setting::enabled(ConfigKey::WordingRequireHash->value)) {
+            // Sent along with its text, a hash proves nothing more. The switch is
+            // only read for a consent that gets recorded.
+            if ($hash === null && $text === null && ! in_array($wording->purpose, $held, true) && WaitlistConfig::requireWordingHash()) {
                 throw WordingMismatchException::hashRequired($wording->purpose);
             }
 
@@ -133,7 +129,7 @@ class PurposeRegistry
             $wordings[] = $wording;
         }
 
-        if (! in_array($policy->primary, array_map(fn (PurposeWording $wording): string => $wording->purpose, $wordings), true)) {
+        if (! in_array($policy->primary, array_column($wordings, 'purpose'), true)) {
             throw MissingConsentException::forPurpose($policy->primary);
         }
 

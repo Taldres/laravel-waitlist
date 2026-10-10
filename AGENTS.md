@@ -16,6 +16,8 @@ This repository is a Laravel package. Keep the package focused, idiomatic, and e
 - Privacy is a design constraint: personal data is stored with Laravel's `encrypted` casts and goes through the access and erasure paths, a retention period, and `waitlist:privacy`.
 - Never write subscriptions, consents or activity directly; go through the actions and `SubscriptionLifecycle`, so transitions stay conditional and events fire once.
 - The package ships no legal texts and never sends mail or makes outbound requests.
+- Use `Illuminate\Support\Str` and `Arr` where they state the intent more clearly or replace a compound native operation, such as `Str::before()`, `Str::after()`, `Str::chopStart()` or `Arr::last()`; no blanket migration, and no collections for simple array work. Keep keys, order, strict comparisons, null handling, byte versus Unicode semantics and PHPStan's types (`Arr::only()` is typed as a bare `array` and loses the key type), and check that the helper exists in the lowest Laravel version `composer.json` allows. `Arr::some()` and `Arr::every()` need a closure that takes `mixed`, as PHPStan rejects a narrower one.
+- Public classes with behavior stay open, not `final`: apps have needs the package cannot foresee. Value and result objects and classes marked `@internal` may be `final`. Open is no promise: the supported customizations are models, contracts with their config keys, container bindings, the `useWaitlist` gate, events and macros, as `docs/extending.md` lists them. A class is only swappable where the package resolves it from the container or the config, not where it creates it with `new`; do not add new `final` classes or remove `final` without that in mind.
 
 ## Attribution
 

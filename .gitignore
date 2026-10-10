@@ -10,3 +10,4 @@ composer.lock
 .idea
 .vscode
 graphify-out
+/CLAUDE.local.md

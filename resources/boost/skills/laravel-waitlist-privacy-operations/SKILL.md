@@ -68,11 +68,15 @@ Waitlist::for('beta')->forgetAll();
 ### Retention
 
 `waitlist:prune` runs on the package's schedule (`waitlist.retention.schedule`,
-`15 3 * * *`); Laravel's scheduler must run (`php artisan schedule:run` every
+`15 3 * * *`; `null` leaves scheduling to you, a cron expression that can never run
+is refused); Laravel's scheduler must run (`php artisan schedule:run` every
 minute). Periods in `waitlist.retention`: `pending_days` (30), `unsubscribed_days`
-(1095), `request_metadata_days` (30); `null` keeps data. These are technical
-defaults, not legal recommendations. Active confirmed entries and the remaining
-reporting rows do not expire automatically.
+(1095), `request_metadata_days` (30); `null` keeps data, while a period reaching
+back before 1970 (a 36500-day "forever") is refused. `waitlist:prune` applies every
+period that reads, then reports the ones that do not and fails the run: watch the
+logs and the exit code. These are technical defaults, not legal recommendations.
+Active confirmed entries and the remaining reporting rows do not expire
+automatically.
 
 ### Rotate `APP_KEY`
 
@@ -109,6 +113,10 @@ complete record: it does not audit infrastructure or find every recipient.
 - double opt-in on; IP and user agent off unless needed
 - fields per project and list (`->fields()`) as few as possible, none if in doubt
 - scheduler running; retention periods chosen and justified
+- config reads: no empty `WAITLIST_*=` line in `.env` (an empty value is refused;
+  delete the line for the default), `php artisan config:cache` run again after a
+  package update (and `route:cache` after a routes setting changed), no
+  `InvalidConfigurationException` in the logs
 - signup form renders `Waitlist::purposes()` or `GET /waitlist/purposes`; optional
   purposes unticked
 - confirmation listener records `Waitlist::confirmationMailed()`
@@ -123,6 +131,11 @@ complete record: it does not audit infrastructure or find every recipient.
 - Commands without `--project` cover every project for `show`, `forget`, `prune`
   and `privacy`; a `--list` without `--project` means that list of the default
   project.
+- Withdrawing, leaving, erasing and pruning do not wait for settings they only pass
+  by (privacy, guards or client IP header on token links, the email normalizer's
+  sweep over the address's other lists, the catalog behind a redirect, link rate
+  limits): they fall back and report the mistake once per request, job or
+  command, so read the logs after a config change.
 - The operator is responsible for lawful processing, identity checks, deadlines
   and complete answers; the package offers no legal advice or compliance
   warranty: https://github.com/Taldres/laravel-waitlist/blob/main/docs/responsibility.md

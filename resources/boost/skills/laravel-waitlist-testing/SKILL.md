@@ -33,16 +33,21 @@ package itself.
   dispatch as usual.
 - Package routes are registered at boot. To test them, set
   `WAITLIST_ROUTES_ENABLED=true` in `phpunit.xml` or `.env.testing`;
-  `config()->set()` inside a test is too late.
+  `config()->set()` inside a test is too late. An empty `WAITLIST_ROUTES_ENABLED=`
+  is a config error; routes that are off answer `404`.
 - The app's `WaitlistServiceProvider` boots in tests, so its lists, fields and
   pages are there. `Waitlist::define()` inside a test replaces that project for
   that test only; the next test boots the app again with the provider's
   definitions.
 - Set other package config by key from the enum, not a string:
   `config()->set(ConfigKey::DoubleOptIn->value, false)`
-  (`Taldres\Waitlist\Enums\ConfigKey`, which also holds each default).
+  (`Taldres\Waitlist\Enums\ConfigKey`; the defaults live in the package's
+  `config/waitlist.php`).
 - A setup mistake throws `InvalidConfigurationException`, never a
-  `WaitlistException`; assert it, do not catch it in app code.
+  `WaitlistException`; assert it, do not catch it in app code. So does a config
+  value that does not read, naming the key: `null` says never or off, and a number
+  standing for "forever" is refused (a link may not end after 2038-01-19, a
+  retention period may not reach back before 1970).
 
 ### 2. Post back what the form showed
 
@@ -133,8 +138,13 @@ $this->postJson('/waitlist', [
 $token = Event::dispatched(EntrySubscribed::class)->first()[0]->confirmToken;
 
 $this->postJson("/waitlist/confirm/{$token}")->assertOk()->assertJsonPath('data.status', 'confirmed');
-$this->getJson('/waitlist/confirm/unknown')->assertNotFound();
+$this->getJson('/waitlist/confirm/unknown')->assertNotFound()->assertJsonPath('error', 'invalid_token');
 ```
+
+The package's own refusals name an `error` (`invalid_token`, `expired_token`,
+`unknown_list`, `not_subscribed`, `list_unavailable`). Assert it: a `404` without
+one is a wrong URL, routes that are off or the `useWaitlist` gate, and would pass
+`assertNotFound()` for an unknown token.
 
 Only the HTTP signup applies a project's fields; `add()` trusts its caller. Define
 them in the test to assert the `422`:

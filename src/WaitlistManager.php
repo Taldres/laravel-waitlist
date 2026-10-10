@@ -21,12 +21,12 @@ use Taldres\Waitlist\Actions\RequestManageLink;
 use Taldres\Waitlist\Actions\UnsubscribeEntry;
 use Taldres\Waitlist\Actions\WithdrawConsent;
 use Taldres\Waitlist\Auth\WaitlistCaller;
+use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\SpamProtector;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Definitions\ProjectDefinitions;
 use Taldres\Waitlist\Enums\ActivityType;
-use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\Page;
 use Taldres\Waitlist\Exceptions\ExpiredTokenException;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
@@ -48,7 +48,6 @@ use Taldres\Waitlist\Support\PurposeWording;
 use Taldres\Waitlist\Support\Recipient;
 use Taldres\Waitlist\Support\RequestContext;
 use Taldres\Waitlist\Support\ResolvesModel;
-use Taldres\Waitlist\Support\Setting;
 use Taldres\Waitlist\Support\SubscribeResult;
 use Taldres\Waitlist\Support\UnsubscribeToken;
 
@@ -367,7 +366,7 @@ class WaitlistManager
      */
     public function listUnsubscribeHeaders(WaitlistEntry $entry, ?string $purpose = null): array
     {
-        if (! Setting::enabled(ConfigKey::RoutesEnabled->value)) {
+        if (! WaitlistConfig::routesEnabled()) {
             return [];
         }
 
@@ -417,7 +416,7 @@ class WaitlistManager
 
     public function forget(string $email, ?string $list = null): int
     {
-        return $this->project(WaitlistEntry::DEFAULT_PROJECT)->forget($email, $list);
+        return $this->defaultProject()->forget($email, $list);
     }
 
     /**
@@ -425,6 +424,15 @@ class WaitlistManager
      */
     public function personalData(string $email, ?string $list = null): Collection
     {
-        return $this->project(WaitlistEntry::DEFAULT_PROJECT)->personalData($email, $list);
+        return $this->defaultProject()->personalData($email, $list);
+    }
+
+    /**
+     * Not through project(): the default project always exists, and erasing or
+     * exporting its data must not wait for the catalog.
+     */
+    protected function defaultProject(): ProjectWaitlist
+    {
+        return new ProjectWaitlist(WaitlistEntry::DEFAULT_PROJECT);
     }
 }

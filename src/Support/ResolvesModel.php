@@ -6,8 +6,7 @@ namespace Taldres\Waitlist\Support;
 
 use Illuminate\Database\Connection;
 use Illuminate\Support\Facades\DB;
-use Taldres\Waitlist\Enums\ConfigKey;
-use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
+use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Models\WaitlistActivity;
 use Taldres\Waitlist\Models\WaitlistConsent;
 use Taldres\Waitlist\Models\WaitlistEntry;
@@ -30,8 +29,7 @@ trait ResolvesModel
      */
     protected static function modelClass(): string
     {
-        /** @var class-string<WaitlistEntry> */
-        return self::resolveModel(ConfigKey::Model->value, WaitlistEntry::class);
+        return WaitlistConfig::entryModel();
     }
 
     /**
@@ -39,8 +37,7 @@ trait ResolvesModel
      */
     protected static function subscriptionModelClass(): string
     {
-        /** @var class-string<WaitlistSubscription> */
-        return self::resolveModel(ConfigKey::SubscriptionModel->value, WaitlistSubscription::class);
+        return WaitlistConfig::subscriptionModel();
     }
 
     /**
@@ -48,8 +45,7 @@ trait ResolvesModel
      */
     protected static function consentModelClass(): string
     {
-        /** @var class-string<WaitlistConsent> */
-        return self::resolveModel(ConfigKey::ConsentModel->value, WaitlistConsent::class);
+        return WaitlistConfig::consentModel();
     }
 
     /**
@@ -57,22 +53,6 @@ trait ResolvesModel
      */
     protected static function activityModelClass(): string
     {
-        /** @var class-string<WaitlistActivity> */
-        return self::resolveModel(ConfigKey::ActivityModel->value, WaitlistActivity::class);
-    }
-
-    /**
-     * @param  class-string  $base
-     * @return class-string
-     */
-    private static function resolveModel(string $key, string $base): string
-    {
-        $class = config($key, $base);
-
-        if (! is_string($class) || ! is_a($class, $base, true)) {
-            throw new InvalidConfigurationException("The {$key} config must point to a {$base} subclass.");
-        }
-
-        return $class;
+        return WaitlistConfig::activityModel();
     }
 }

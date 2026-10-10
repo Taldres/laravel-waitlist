@@ -12,6 +12,7 @@ Add your own columns, methods and integrations without forking the package.
 | decide which spellings are the same address | `EmailNormalizer` (`waitlist.email_normalizer`), see [Encryption and keys](encryption-and-keys.md#the-email-normalizer) |
 | encrypt with a key of your own | `Model::encryptUsing()` for the whole app, `Waitlist::encryptUsing()` for the package only, see [Encryption and keys](encryption-and-keys.md#your-own-encrypter) |
 | put the tables on another database | `waitlist.connection` |
+| send the mails or react to a signup, confirmation or departure | the package's [events](reference/events.md), see [Mail](mail.md) |
 | add columns | [your own models](#your-own-models) |
 | add methods to the API | [macros](#macros) |
 
@@ -110,3 +111,28 @@ Waitlist::for('beta')->confirmedCount();
 
 [An invite flow](examples/invite-flow.md) puts both together: a column for the
 invitation and a macro that invites the next people in line.
+
+## What stays supported
+
+The table above, your own models, the events and the macros are the supported
+extension points. A change to one of them is a breaking change and is called
+out in the changelog. `DefinedProjectCatalog` and `StoredWordingCatalog` count
+among them as base classes for a catalog of your own, as
+[A central waitlist API](examples/central-waitlist-api.md) shows.
+
+Other public classes with behavior, such as the actions, `SubscriptionLifecycle`,
+the controllers and the default implementations of the contracts, are not
+`final` either, so a need the package does not cover can still be met by
+extending one. That is not covered by the promise above: their internals may
+change in any release. A subclass only takes effect where the package resolves
+the class from the container or the config, by a binding of your own for
+example; classes it creates with `new`, such as the fluent API objects, the
+reports and the events, cannot be swapped that way.
+
+If you replace `SubscriptionLifecycle`, keep what it guarantees: every
+transition is a conditional update inside a transaction, the activity row and
+the status move only when exactly one row changed, and each event is dispatched
+once, after the commit.
+
+Value objects and classes marked `@internal` are `final` and not meant to be
+extended.

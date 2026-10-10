@@ -108,8 +108,9 @@ instead of recorded:
 
 `PurposeWording::hash()` and `GET /waitlist/purposes` serve the expected hash,
 in lowercase hex; uppercase is accepted too.
-`WAITLIST_REQUIRE_WORDING_HASH=true` refuses any choice without one, except one
-that brings its [text](#wording-sent-by-your-servers).
+`WAITLIST_REQUIRE_WORDING_HASH=true` refuses a consent that is newly recorded
+without one, except one that brings its [text](#wording-sent-by-your-servers);
+keeping or withdrawing a purpose needs none.
 
 ## Who owns the wording
 

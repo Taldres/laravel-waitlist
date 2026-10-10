@@ -8,13 +8,13 @@ use Closure;
 use Illuminate\Console\Command;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Str;
 use ReflectionFunction;
 use Symfony\Component\Console\Output\OutputInterface;
 use Taldres\Waitlist\Actions\IssueManageLink;
-use Taldres\Waitlist\Actions\PruneEntries;
 use Taldres\Waitlist\Actions\ResendConfirmation;
+use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
-use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Events\ConsentGranted;
 use Taldres\Waitlist\Events\ConsentWithdrawn;
 use Taldres\Waitlist\Events\EntryConfirmed;
@@ -25,9 +25,8 @@ use Taldres\Waitlist\Events\ManageLinkRequested;
 use Taldres\Waitlist\Events\SubscriptionExpired;
 use Taldres\Waitlist\Exceptions\MissingWordingException;
 use Taldres\Waitlist\Support\PurposeRegistry;
-use Taldres\Waitlist\Support\PurposeWording;
-use Taldres\Waitlist\Support\Setting;
 use Taldres\Waitlist\WaitlistManager;
+use Taldres\Waitlist\WaitlistServiceProvider;
 
 class PrivacyCommand extends Command
 {
@@ -98,8 +97,10 @@ class PrivacyCommand extends Command
             }
         }
 
-        foreach ([ConfigKey::StoreIp->value => 'IP address', ConfigKey::StoreUserAgent->value => 'User agent'] as $key => $label) {
-            if (Setting::enabled($key)) {
+        $privacy = WaitlistConfig::privacy();
+
+        foreach (['IP address' => $privacy->storeIp, 'User agent' => $privacy->storeUserAgent] as $label => $stored) {
+            if ($stored) {
                 $rows[] = "| {$label} | waitlist_activity | {$protection} |";
             }
         }
@@ -160,7 +161,7 @@ class PrivacyCommand extends Command
                     }
                 }
 
-                $sent = array_map(fn (PurposeWording $wording): string => $wording->purpose, $current);
+                $sent = array_column($current, 'purpose');
 
                 foreach (array_diff($policy->purposes(), $sent) as $purpose) {
                     $lines[] = sprintf(
@@ -188,17 +189,18 @@ class PrivacyCommand extends Command
             ? "- {$text}: after {$days} days"
             : "- {$text}: kept until erased";
 
-        $schedule = Setting::value(ConfigKey::RetentionSchedule->value);
+        $retention = WaitlistConfig::retention();
+        $schedule = WaitlistConfig::pruneSchedule();
 
         return [
             '## Retention',
             '',
             'Configured periods are technical settings, not statutory periods or legal recommendations. The operator must justify them and monitor cleanup.',
             '',
-            $period(PruneEntries::days(ConfigKey::RetentionPendingDays->value), 'Unconfirmed signups erased'),
-            $period(PruneEntries::days(ConfigKey::RetentionUnsubscribedDays->value), 'Addresses that left erased'),
-            $period(PruneEntries::days(ConfigKey::RetentionRequestMetadataDays->value), 'IP and user agent cleared from the log'),
-            is_string($schedule) && $schedule !== ''
+            $period($retention->pendingDays, 'Unconfirmed signups erased'),
+            $period($retention->unsubscribedDays, 'Addresses that left erased'),
+            $period($retention->requestMetadataDays, 'IP and user agent cleared from the log'),
+            $schedule !== null
                 ? "- Applied by waitlist:prune on the schedule `{$schedule}`; Laravel's scheduler must run"
                 : '- Not scheduled by the package: run waitlist:prune yourself',
             '- On request (Art. 17): waitlist:forget, or the person via a manage link sent to their address',
@@ -230,9 +232,9 @@ class PrivacyCommand extends Command
             ...(($pending = ResendConfirmation::maxPendingPerAddress()) !== null
                 ? ["- At most {$pending} confirmation requests per address and day for unconfirmed lists of a project; further ones are held back"]
                 : []),
-            Setting::enabled(ConfigKey::RoutesEnabled->value)
-                ? '- Rate limits: signups '.$this->rateLimit(ConfigKey::SignupLimiter->value, Setting::integer(ConfigKey::SignupPerMinute->value).' per minute and IP')
-                    .', token links '.$this->rateLimit(ConfigKey::LinksLimiter->value, Setting::integer(ConfigKey::LinkPerMinute->value).' per minute and token')
+            WaitlistConfig::routesEnabled()
+                ? '- Rate limits: signups '.$this->rateLimit(WaitlistConfig::signupLimiter(), WaitlistServiceProvider::SIGNUP_LIMITER, WaitlistConfig::signupPerMinute().' per minute and IP')
+                    .', token links '.$this->rateLimit(WaitlistConfig::linksLimiter(), WaitlistServiceProvider::LINKS_LIMITER, WaitlistConfig::linkPerMinute().' per minute and token')
                     .'; GET never changes state'
                 : '- No public endpoints (package routes disabled)',
             '- Consent records immutable; lifecycle log rows never deleted, only stripped on erasure',
@@ -306,19 +308,13 @@ class PrivacyCommand extends Command
 
         return $file === false
             ? 'Closure'
-            : 'Closure in '.str_replace(base_path().DIRECTORY_SEPARATOR, '', $file).':'.$reflection->getStartLine();
+            : 'Closure in '.Str::chopStart($file, base_path().DIRECTORY_SEPARATOR).':'.$reflection->getStartLine();
     }
 
-    /**
-     * @param  string  $key  ConfigKey::SignupLimiter or LinksLimiter, by value
-     */
-    protected function rateLimit(string $key, string $packageLimit): string
+    protected function rateLimit(?string $limiter, string $packageLimiter, string $packageLimit): string
     {
-        $limiter = Setting::value($key);
-        $packageLimiter = ConfigKey::from($key)->default();
-
         return match (true) {
-            ! is_string($limiter) || $limiter === '' => 'not limited by the package',
+            $limiter === null => 'not limited by the package',
             $limiter === $packageLimiter => $packageLimit,
             default => "by your [{$limiter}] limiter",
         };

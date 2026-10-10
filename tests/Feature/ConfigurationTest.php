@@ -4,16 +4,14 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
-use Taldres\Waitlist\Actions\PruneEntries;
-use Taldres\Waitlist\Actions\ResendConfirmation;
+use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Contracts\EmailNormalizer;
 use Taldres\Waitlist\Enums\ConfigKey;
-use Taldres\Waitlist\Enums\EntryStatus;
+use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Facades\Waitlist;
 use Taldres\Waitlist\Models\WaitlistActivity;
 use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Models\WaitlistSubscription;
-use Taldres\Waitlist\Support\Setting;
 
 class CustomEntry extends WaitlistEntry {}
 
@@ -90,50 +88,22 @@ it('creates the tables on the configured connection when migrating', function ()
     Schema::dropIfExists($repository);
 });
 
-it('reads switches the way env() leaves them, keeping the default when empty', function (string $key, mixed $value, bool $expected) {
-    config()->set($key, $value);
+it('reads switches and numbers the way env() leaves them', function () {
+    config()->set(ConfigKey::DoubleOptIn->value, 'off');
+    config()->set(ConfigKey::StoreIp->value, '1');
+    config()->set(ConfigKey::RoutesEnabled->value, 'no');
+    config()->set(ConfigKey::MaxConfirmations->value, '3');
+    config()->set(ConfigKey::ResendCooldown->value, null);
 
-    $default = $key === ConfigKey::DoubleOptIn->value;
-
-    expect(Setting::enabled($key, $default))->toBe($expected);
-})->with([
-    'empty double opt-in stays on' => [ConfigKey::DoubleOptIn->value, '', true],
-    'double opt-in "off"' => [ConfigKey::DoubleOptIn->value, 'off', false],
-    'unreadable double opt-in stays on' => [ConfigKey::DoubleOptIn->value, 'maybe', true],
-    'store_ip "off" stays off' => [ConfigKey::StoreIp->value, 'off', false],
-    'store_ip "1"' => [ConfigKey::StoreIp->value, '1', true],
-    'routes "no" stay off' => [ConfigKey::RoutesEnabled->value, 'no', false],
-]);
-
-it('reads numbers the way env() leaves them: empty keeps the default, null switches off', function (mixed $value, ?int $expected) {
-    config()->set(ConfigKey::MaxConfirmations->value, $value);
-
-    expect(Setting::integerOrNull(ConfigKey::MaxConfirmations->value, 5))->toBe($expected)
-        ->and(Setting::integer(ConfigKey::MaxConfirmations->value, 5))->toBe($expected ?? 5);
-})->with([
-    'a number' => [3, 3],
-    'a numeric string, as from .env' => ['3', 3],
-    'empty' => ['', 5],
-    'unreadable' => ['three', 5],
-    'null' => [null, null],
-]);
-
-it('keeps the package defaults when retention and resend variables are empty', function () {
-    foreach ([ConfigKey::RetentionPendingDays, ConfigKey::RetentionUnsubscribedDays, ConfigKey::RetentionRequestMetadataDays] as $key) {
-        config()->set($key->value, '');
-    }
-    config()->set(ConfigKey::MaxConfirmations->value, '');
-
-    expect(PruneEntries::days(ConfigKey::RetentionPendingDays->value))->toBe(30)
-        ->and(PruneEntries::days(ConfigKey::RetentionUnsubscribedDays->value))->toBe(1095)
-        ->and(PruneEntries::days(ConfigKey::RetentionRequestMetadataDays->value))->toBe(30)
-        ->and(ResendConfirmation::maxConfirmations())->toBe(5);
+    expect(WaitlistConfig::doubleOptIn())->toBeFalse()
+        ->and(WaitlistConfig::privacy()->storeIp)->toBeTrue()
+        ->and(WaitlistConfig::routesEnabled())->toBeFalse()
+        ->and(WaitlistConfig::confirmation()->maxConfirmations)->toBe(3)
+        ->and(WaitlistConfig::confirmation()->resendCooldown)->toBeNull();
 });
 
-it('keeps asking for confirmation when its variable is empty', function () {
+it('refuses an empty double opt-in variable rather than turning confirmation off', function () {
     config()->set(ConfigKey::DoubleOptIn->value, '');
 
-    $entry = Waitlist::subscribe('beta', 'user@example.com', waitlistConsent())->entry;
-
-    expect($entry->status)->toBe(EntryStatus::Pending);
-});
+    Waitlist::subscribe('beta', 'user@example.com', waitlistConsent());
+})->throws(InvalidConfigurationException::class, 'The waitlist.double_opt_in.enabled config must be true or false, got an empty text; if it comes from an empty variable in .env, remove the variable to keep the default.');

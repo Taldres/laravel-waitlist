@@ -1,7 +1,6 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\Page;
 use Taldres\Waitlist\Http\Controllers\ConfirmController;
 use Taldres\Waitlist\Http\Controllers\ManageController;
@@ -9,31 +8,16 @@ use Taldres\Waitlist\Http\Controllers\ManageLinkController;
 use Taldres\Waitlist\Http\Controllers\PurposesController;
 use Taldres\Waitlist\Http\Controllers\SubscribeController;
 use Taldres\Waitlist\Http\Controllers\UnsubscribeController;
-use Taldres\Waitlist\Support\Setting;
+use Taldres\Waitlist\Http\RouteRegistration;
 
-// A missing key keeps the package limiter; only an explicit null turns a
-// group's limit off.
-$throttle = fn (string $limiterKey): array => is_string($limiter = Setting::value($limiterKey)) && $limiter !== ''
-    ? ["throttle:{$limiter}"]
-    : [];
-
-$group = fn (string $limiterKey, string $middlewareKey): array => [
-    ...$throttle($limiterKey),
-    ...(array) Setting::value($middlewareKey),
-];
-
-Route::group([
-    'prefix' => Setting::value(ConfigKey::RoutesPrefix->value),
-    'as' => Setting::value(ConfigKey::RoutesName->value),
-    'middleware' => Setting::value(ConfigKey::RoutesMiddleware->value),
-], function () use ($group) {
-    Route::middleware($group(ConfigKey::SignupLimiter->value, ConfigKey::SignupMiddleware->value))->group(function () {
+Route::group(RouteRegistration::attributes(), function () {
+    Route::middleware(RouteRegistration::signupMiddleware())->group(function () {
         Route::post('/', SubscribeController::class)->name('subscribe');
         Route::get('/purposes', PurposesController::class)->name('purposes');
         Route::post('/manage-link', ManageLinkController::class)->name('manage-link');
     });
 
-    Route::middleware($group(ConfigKey::LinksLimiter->value, ConfigKey::LinksMiddleware->value))->group(function () {
+    Route::middleware(RouteRegistration::linksMiddleware())->group(function () {
         // GET only reports state; POST acts, from your page or an RFC 8058 one-click request.
         Route::match(['GET', 'POST'], '/confirm/{token}', ConfirmController::class)->name(Page::Confirm->value);
         Route::match(['GET', 'POST'], '/unsubscribe/{token}', UnsubscribeController::class)->name(Page::Unsubscribe->value);

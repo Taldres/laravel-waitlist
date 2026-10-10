@@ -6,12 +6,11 @@ namespace Taldres\Waitlist\Actions;
 
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
+use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
-use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Support\ManageLink;
 use Taldres\Waitlist\Support\ResolvesModel;
-use Taldres\Waitlist\Support\Setting;
 
 class IssueManageLink
 {
@@ -28,7 +27,7 @@ class IssueManageLink
     public function __invoke(WaitlistEntry $entry): ManageLink
     {
         $token = Str::random(64);
-        $expiresAt = Carbon::now()->addMinutes(static::ttl());
+        $expiresAt = WaitlistConfig::manageTokenExpiresAt(Carbon::now());
 
         static::modelClass()::query()->whereKey($entry->getKey())->update([
             'manage_token_hash' => static::modelClass()::hashToken($token),
@@ -49,6 +48,6 @@ class IssueManageLink
      */
     public static function ttl(): int
     {
-        return max(1, Setting::integer(ConfigKey::ManageTokenTtl->value));
+        return WaitlistConfig::manageTokenTtl();
     }
 }

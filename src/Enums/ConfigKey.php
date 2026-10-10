@@ -4,19 +4,9 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Enums;
 
-use Taldres\Waitlist\Models\WaitlistActivity;
-use Taldres\Waitlist\Models\WaitlistConsent;
-use Taldres\Waitlist\Models\WaitlistEntry;
-use Taldres\Waitlist\Models\WaitlistSubscription;
-use Taldres\Waitlist\Support\DefaultConfirmationUrlGenerator;
-use Taldres\Waitlist\Support\DefaultEmailNormalizer;
-use Taldres\Waitlist\Support\DefaultProjectResolver;
-use Taldres\Waitlist\Support\DefinedProjectCatalog;
-use Taldres\Waitlist\Support\NullSpamProtector;
-
 /**
- * Every key of config/waitlist.php, with the package default. Read them with
- * Support\Setting, passing the value: Setting::enabled(ConfigKey::RoutesEnabled->value).
+ * Every key of config/waitlist.php. The defaults live in that file alone;
+ * read the values through Config\WaitlistConfig, which checks them.
  */
 enum ConfigKey: string
 {
@@ -41,8 +31,6 @@ enum ConfigKey: string
 
     case StoreIp = 'waitlist.privacy.store_ip';
     case StoreUserAgent = 'waitlist.privacy.store_user_agent';
-
-    case ReportingTimezone = 'waitlist.reporting.timezone';
 
     case RetentionPendingDays = 'waitlist.retention.pending_days';
     case RetentionUnsubscribedDays = 'waitlist.retention.unsubscribed_days';
@@ -72,44 +60,4 @@ enum ConfigKey: string
 
     case ExportSpreadsheetSafe = 'waitlist.export.spreadsheet_safe';
     case ExportColumns = 'waitlist.export.columns';
-
-    /**
-     * The same as config/waitlist.php without environment variables; a test
-     * keeps the two in step.
-     */
-    public function default(): mixed
-    {
-        return match ($this) {
-            self::Model => WaitlistEntry::class,
-            self::SubscriptionModel => WaitlistSubscription::class,
-            self::ConsentModel => WaitlistConsent::class,
-            self::ActivityModel => WaitlistActivity::class,
-            self::Connection, self::ReportingTimezone, self::ClientIpHeader => null,
-            self::DefaultList => 'default',
-            self::Catalog => DefinedProjectCatalog::class,
-            self::WordingRequireHash, self::InvalidateConfirmToken, self::StoreIp, self::StoreUserAgent, self::RoutesEnabled, self::AuthenticationRequired => false,
-            self::DoubleOptIn, self::ExportSpreadsheetSafe => true,
-            self::ConfirmTokenTtl => 60 * 24 * 7,
-            self::ResendCooldown, self::MaxConfirmations, self::MaxPendingPerAddress, self::ManageRequestCooldown => 5,
-            self::ManageTokenTtl => 60,
-            self::RetentionPendingDays, self::RetentionRequestMetadataDays => 30,
-            self::RetentionUnsubscribedDays => 1095,
-            self::RetentionSchedule => '15 3 * * *',
-            self::RoutesPrefix => 'waitlist',
-            self::RoutesName => 'waitlist.',
-            self::RoutesMiddleware => ['api'],
-            self::SignupMiddleware, self::LinksMiddleware => [],
-            self::SignupLimiter => 'waitlist',
-            self::LinksLimiter => 'waitlist-links',
-            self::SignupPerMinute, self::LinkPerMinute => 10,
-            self::LinksPerIpPerMinute => 600,
-            self::CallerSignupPerMinute => 120,
-            self::UrlGenerator => DefaultConfirmationUrlGenerator::class,
-            self::ProjectResolver => DefaultProjectResolver::class,
-            self::AuthenticationGuards => [null],
-            self::EmailNormalizer => DefaultEmailNormalizer::class,
-            self::SpamProtector => NullSpamProtector::class,
-            self::ExportColumns => ['id', 'list', 'email', 'status', 'purposes', 'confirmed_at', 'unsubscribed_at', 'metadata', 'created_at'],
-        };
-    }
 }

@@ -6,12 +6,11 @@ namespace Taldres\Waitlist\Actions;
 
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
-use Taldres\Waitlist\Enums\ConfigKey;
+use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Models\WaitlistSubscription;
 use Taldres\Waitlist\Support\RequestContext;
 use Taldres\Waitlist\Support\ResolvesModel;
-use Taldres\Waitlist\Support\Setting;
 use Taldres\Waitlist\Support\SubscriptionLifecycle;
 
 class ResendConfirmation
@@ -123,7 +122,7 @@ class ResendConfirmation
      */
     public static function cooldown(): ?int
     {
-        return Setting::integerOrNull(ConfigKey::ResendCooldown->value);
+        return WaitlistConfig::resendCooldown();
     }
 
     /**
@@ -131,7 +130,7 @@ class ResendConfirmation
      */
     public static function maxConfirmations(): ?int
     {
-        return Setting::integerOrNull(ConfigKey::MaxConfirmations->value);
+        return WaitlistConfig::maxConfirmations();
     }
 
     /**
@@ -140,6 +139,6 @@ class ResendConfirmation
      */
     public static function maxPendingPerAddress(): ?int
     {
-        return Setting::integerOrNull(ConfigKey::MaxPendingPerAddress->value);
+        return WaitlistConfig::maxPendingPerAddress();
     }
 }

@@ -43,7 +43,7 @@ return new class extends Migration
             // Cleared on erasure: a precise timestamp can single out a person
             // (a date can too, in a small list).
             $table->timestamp('occurred_at')->nullable();
-            // In the reporting timezone; a stored date keeps reports free of
+            // In app.timezone; a stored date keeps reports free of
             // engine-specific date functions.
             $table->date('occurred_on');
 

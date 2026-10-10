@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Actions;
 
+use Closure;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Carbon;
-use Taldres\Waitlist\Enums\ConfigKey;
+use Taldres\Waitlist\Config\ConfigFallback;
+use Taldres\Waitlist\Config\TimestampRange;
+use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Enums\EndReason;
 use Taldres\Waitlist\Enums\EntryStatus;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
@@ -14,7 +16,6 @@ use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Support\PruneResult;
 use Taldres\Waitlist\Support\RequestContext;
 use Taldres\Waitlist\Support\ResolvesModel;
-use Taldres\Waitlist\Support\Setting;
 use Taldres\Waitlist\Support\SubscriptionLifecycle;
 
 class PruneEntries
@@ -26,13 +27,50 @@ class PruneEntries
         protected EraseEntry $erase,
     ) {}
 
+    /**
+     * Applies each period it can read. One that does not read is thrown once
+     * the others are applied, so a typo in one setting never keeps the
+     * rest of the data past its period.
+     *
+     * @throws InvalidConfigurationException
+     */
     public function __invoke(?string $list = null, ?string $project = null): PruneResult
     {
-        return new PruneResult(
-            expired: ($days = static::days(ConfigKey::RetentionPendingDays->value)) === null ? 0 : $this->expirePending($days, $list, $project),
-            erased: ($days = static::days(ConfigKey::RetentionUnsubscribedDays->value)) === null ? 0 : $this->eraseUnsubscribed($days, $list, $project),
-            cleared: ($days = static::days(ConfigKey::RetentionRequestMetadataDays->value)) === null ? 0 : $this->clearRequestMetadata($days, $list, $project),
+        $failures = [];
+
+        $result = new PruneResult(
+            expired: $this->apply(WaitlistConfig::pendingDays(...), fn (int $days): int => $this->expirePending($days, $list, $project), $failures),
+            erased: $this->apply(WaitlistConfig::unsubscribedDays(...), fn (int $days): int => $this->eraseUnsubscribed($days, $list, $project), $failures),
+            cleared: $this->apply(WaitlistConfig::requestMetadataDays(...), fn (int $days): int => $this->clearRequestMetadata($days, $list, $project), $failures),
         );
+
+        if ($failures !== []) {
+            foreach (array_slice($failures, 1) as $exception) {
+                app(ConfigFallback::class)->report($exception);
+            }
+
+            throw $failures[0];
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param  Closure(): ?int  $period
+     * @param  Closure(int): int  $prune
+     * @param  list<InvalidConfigurationException>  $failures
+     */
+    private function apply(Closure $period, Closure $prune, array &$failures): int
+    {
+        try {
+            $days = $period();
+        } catch (InvalidConfigurationException $exception) {
+            $failures[] = $exception;
+
+            return 0;
+        }
+
+        return $days === null ? 0 : $prune($days);
     }
 
     /**
@@ -105,27 +143,8 @@ class PruneEntries
     {
         return static::activityModelClass()::query()
             ->within($list, $project)
-            ->where('occurred_at', '<', Carbon::now()->subDays($days))
+            ->where('occurred_at', '<', TimestampRange::daysAgo($days))
             ->where(fn (Builder $query) => $query->whereNotNull('ip')->orWhereNotNull('user_agent'))
             ->update(['ip' => null, 'user_agent' => null]);
-    }
-
-    /**
-     * A retention period in days, or null to keep. An empty variable keeps
-     * the package default rather than keeping data forever.
-     *
-     * @param  string  $key  ConfigKey::RetentionPendingDays, RetentionUnsubscribedDays or RetentionRequestMetadataDays, by value
-     */
-    public static function days(string $key): ?int
-    {
-        $days = Setting::integerOrNull($key);
-
-        // A negative period moves the cutoff into the future and would erase
-        // what was just collected.
-        if ($days !== null && $days < 0) {
-            throw new InvalidConfigurationException("{$key} must not be negative.");
-        }
-
-        return $days;
     }
 }

@@ -69,9 +69,9 @@ it('writes csv that RFC 4180 readers parse back', function () {
 });
 
 it('refuses to export a column that is not exportable', function () {
-    config()->set(ConfigKey::ExportColumns->value, ['email', 'unsubscribe_token']);
-
     WaitlistEntry::factory()->confirmed()->onList('beta')->create();
+
+    config()->set(ConfigKey::ExportColumns->value, ['email', 'unsubscribe_token']);
 
     expect(fn () => Waitlist::for('beta')->export(exportPath()))
         ->toThrow(InvalidArgumentException::class, 'unsubscribe_token');

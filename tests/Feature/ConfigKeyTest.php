@@ -2,10 +2,15 @@
 
 declare(strict_types=1);
 
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\RateLimiter;
+use Taldres\Waitlist\Config\PackageConfig;
+use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\Page;
-use Taldres\Waitlist\Support\Setting;
+use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 
 /**
  * The config file's values by key; a list is one value, a map is walked.
@@ -41,56 +46,104 @@ describe('ConfigKey', function () {
         expect($cases)->toBe($keys);
     });
 
-    it('has the defaults config/waitlist.php has without environment variables', function () {
-        foreach (ConfigKey::cases() as $key) {
-            expect($key->default())->toBe($this->file[$key->value], "{$key->name} has another default than config/waitlist.php");
+    it('is read by the full check, which names it when it holds something unreadable', function (ConfigKey $key) {
+        config()->set($key->value, new stdClass);
+
+        expect(fn () => WaitlistConfig::check())->toThrow(InvalidConfigurationException::class, "The {$key->value} config ");
+    })->with(ConfigKey::cases());
+
+    it('is reported by the full check when it is missing, as from a stale config cache', function (ConfigKey $key) {
+        $config = config()->array('waitlist');
+        Arr::forget($config, substr($key->value, strlen('waitlist.')));
+        config()->set('waitlist', $config);
+
+        expect(fn () => WaitlistConfig::check())
+            ->toThrow(InvalidConfigurationException::class, "The {$key->value} config is missing. If the config is cached, cache it again with php artisan config:cache.");
+    })->with(ConfigKey::cases());
+
+    // Several defaults are equal (5, 10, false), so only distinct values show a setting read from another one's place.
+    it('is read from its own place', function () {
+        RateLimiter::for('mine-signup', fn () => Limit::perMinute(1));
+        RateLimiter::for('mine-links', fn () => Limit::perMinute(1));
+
+        foreach ([
+            'connection' => 'side',
+            'default_list' => 'beta',
+            'wording.require_hash' => 'yes',
+            'double_opt_in.enabled' => 'no',
+            'double_opt_in.token_ttl' => 101,
+            'double_opt_in.resend_cooldown' => 102,
+            'double_opt_in.max_confirmations' => 103,
+            'double_opt_in.max_pending_per_address' => 104,
+            'double_opt_in.invalidate_confirm_token_after_confirmation' => 'on',
+            'manage.token_ttl' => 105,
+            'manage.request_cooldown' => 106,
+            'privacy.store_ip' => 'on',
+            'privacy.store_user_agent' => 'off',
+            'retention.pending_days' => 107,
+            'retention.unsubscribed_days' => 108,
+            'retention.request_metadata_days' => 109,
+            'retention.schedule' => '5 4 * * *',
+            'routes.enabled' => 'on',
+            'routes.prefix' => 'lists',
+            'routes.name' => 'lists.',
+            'routes.middleware' => ['web'],
+            'routes.group_middleware.signup' => ['csrf'],
+            'routes.group_middleware.links' => ['signed'],
+            'routes.limiters.signup' => 'mine-signup',
+            'routes.limiters.links' => 'mine-links',
+            'routes.rate_limits.signup_per_minute' => 111,
+            'routes.rate_limits.link_per_minute' => 112,
+            'routes.rate_limits.links_per_ip_per_minute' => 113,
+            'routes.rate_limits.caller_signup_per_minute' => 114,
+            'authentication.guards' => ['sanctum'],
+            'authentication.required' => 'yes',
+            'authentication.client_ip_header' => 'X-Visitor-Ip',
+            'export.spreadsheet_safe' => 'off',
+            'export.columns' => ['email', 'id'],
+        ] as $path => $value) {
+            config()->set("waitlist.{$path}", $value);
         }
+
+        $confirmation = WaitlistConfig::confirmation();
+        $manage = WaitlistConfig::manage();
+        $privacy = WaitlistConfig::privacy();
+        $retention = WaitlistConfig::retention();
+        $export = WaitlistConfig::export();
+
+        expect(WaitlistConfig::connection())->toBe('side')
+            ->and(WaitlistConfig::defaultList())->toBe('beta')
+            ->and(WaitlistConfig::requireWordingHash())->toBeTrue()
+            ->and(WaitlistConfig::doubleOptIn())->toBeFalse()
+            ->and([$confirmation->tokenTtl, $confirmation->resendCooldown, $confirmation->maxConfirmations, $confirmation->maxPendingPerAddress])->toBe([101, 102, 103, 104])
+            ->and(WaitlistConfig::singleUseConfirmTokens())->toBeTrue()
+            ->and([$manage->tokenTtl, $manage->requestCooldown])->toBe([105, 106])
+            ->and([$privacy->storeIp, $privacy->storeUserAgent])->toBe([true, false])
+            ->and([$retention->pendingDays, $retention->unsubscribedDays, $retention->requestMetadataDays])->toBe([107, 108, 109])
+            ->and(WaitlistConfig::pruneSchedule())->toBe('5 4 * * *')
+            ->and(WaitlistConfig::routesEnabled())->toBeTrue()
+            ->and([WaitlistConfig::routePrefix(), WaitlistConfig::routeName()])->toBe(['lists', 'lists.'])
+            ->and([WaitlistConfig::routeMiddleware(), WaitlistConfig::signupMiddleware(), WaitlistConfig::linksMiddleware()])->toBe([['web'], ['csrf'], ['signed']])
+            ->and([WaitlistConfig::signupLimiter(), WaitlistConfig::linksLimiter()])->toBe(['mine-signup', 'mine-links'])
+            ->and([WaitlistConfig::signupPerMinute(), WaitlistConfig::linkPerMinute(), WaitlistConfig::linksPerIpPerMinute(), WaitlistConfig::callerSignupPerMinute()])->toBe([111, 112, 113, 114])
+            ->and(WaitlistConfig::guards())->toBe(['sanctum'])
+            ->and(WaitlistConfig::authenticationRequired())->toBeTrue()
+            ->and(WaitlistConfig::clientIpHeader())->toBe('X-Visitor-Ip')
+            ->and([$export->spreadsheetSafe, $export->columns])->toBe([false, ['email', 'id']]);
+
+        WaitlistConfig::check();
     });
-});
 
-describe('Setting', function () {
-    it('takes the default from ConfigKey when none is passed', function () {
-        foreach ([ConfigKey::RoutesEnabled, ConfigKey::SignupPerMinute, ConfigKey::MaxConfirmations, ConfigKey::DefaultList] as $key) {
-            config()->set($key->value, '');
-        }
+    it('holds only what config:cache can write, and reads back from it as it went in', function () {
+        $config = PackageConfig::merge([]);
+        $types = [];
 
-        expect(Setting::enabled(ConfigKey::RoutesEnabled->value))->toBeFalse()
-            ->and(Setting::integer(ConfigKey::SignupPerMinute->value))->toBe(10)
-            ->and(Setting::integerOrNull(ConfigKey::MaxConfirmations->value))->toBe(5)
-            ->and(Setting::string(ConfigKey::DefaultList->value))->toBe('default');
-    });
+        array_walk_recursive($config, function (mixed $value) use (&$types): void {
+            $types[get_debug_type($value)] = true;
+        });
 
-    it('keeps a default that is passed', function () {
-        config()->set(ConfigKey::RoutesEnabled->value, '');
-
-        expect(Setting::enabled(ConfigKey::RoutesEnabled->value, true))->toBeTrue();
-    });
-
-    it('reads a key of another config with the default it is given', function () {
-        config()->set('services.example.enabled', 'on');
-
-        expect(Setting::enabled('services.example.enabled', false))->toBeTrue();
-    });
-
-    it('needs a default for a key it does not know', function () {
-        Setting::enabled('services.example.enabled');
-    })->throws(InvalidArgumentException::class, '[services.example.enabled] is not a waitlist setting; pass its default.');
-
-    it('refuses to read a key as another type than its default', function (Closure $read, string $message) {
-        expect($read)->toThrow(LogicException::class, $message);
-    })->with([
-        'a switch as a number' => [fn () => Setting::integer(ConfigKey::RoutesEnabled->value), '[waitlist.routes.enabled] is not read as int.'],
-        'a number as a switch' => [fn () => Setting::enabled(ConfigKey::SignupPerMinute->value), '[waitlist.routes.rate_limits.signup_per_minute] is not read as bool.'],
-        'a class as a number' => [fn () => Setting::integerOrNull(ConfigKey::Model->value), '[waitlist.model] is not read as int.'],
-        'a nullable value as a string' => [fn () => Setting::string(ConfigKey::Connection->value), '[waitlist.connection] is not read as string.'],
-    ]);
-
-    it('hands out a value as configured, the default only for a missing key', function () {
-        config()->set('waitlist.routes.limiters', ['links' => null]);
-
-        expect(Setting::value(ConfigKey::SignupLimiter->value))->toBe('waitlist')
-            ->and(Setting::value(ConfigKey::LinksLimiter->value))->toBeNull()
-            ->and(Setting::value(ConfigKey::RoutesMiddleware->value))->toBe(['api']);
+        expect(array_diff(array_keys($types), ['string', 'int', 'bool', 'null']))->toBe([])
+            ->and(eval('return '.var_export($config, true).';'))->toBe($config);
     });
 });
 

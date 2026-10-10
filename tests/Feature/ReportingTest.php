@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
+use Carbon\CarbonImmutable;
 use Taldres\ImmutableAttributes\Exceptions\ImmutableAttributeException;
+use Taldres\Waitlist\Actions\RecordActivity;
 use Taldres\Waitlist\Enums\ActivityType;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\EntryStatus;
@@ -89,8 +91,8 @@ it('counts people separately from events', function () {
         ->and(Waitlist::for('beta')->report()->totals()->signups())->toBe(2);
 });
 
-it('dates activity in the configured reporting timezone', function () {
-    config()->set(ConfigKey::ReportingTimezone->value, 'Pacific/Auckland');
+it('dates activity in the app timezone', function () {
+    config()->set('app.timezone', 'Pacific/Auckland');
 
     // 22:00 UTC is already the next day in Auckland.
     $this->travelTo('2026-03-01 22:00:00');
@@ -99,7 +101,24 @@ it('dates activity in the configured reporting timezone', function () {
     expect(Waitlist::for('beta')->report()->daily()->days[0]->date->toDateString())->toBe('2026-03-02');
 });
 
-it('builds periods in the reporting timezone', function () {
+it('dates any kind of moment alike, and leaves it as it was', function (Closure $make) {
+    config()->set('app.timezone', 'Pacific/Auckland');
+
+    // 22:00 UTC is already the next day in Auckland.
+    $moment = $make('2026-03-01 22:00:00.123456', new DateTimeZone('UTC'));
+    $before = $moment->format('Y-m-d H:i:s.u e');
+
+    expect(RecordActivity::dateFor($moment))->toBe('2026-03-02')
+        ->and($moment->format('Y-m-d H:i:s.u e'))->toBe($before);
+})->with([
+    'DateTime' => fn (string $time, DateTimeZone $zone) => new DateTime($time, $zone),
+    'DateTimeImmutable' => fn (string $time, DateTimeZone $zone) => new DateTimeImmutable($time, $zone),
+    'Carbon' => fn (string $time, DateTimeZone $zone) => new Carbon\Carbon($time, $zone),
+    'CarbonImmutable' => fn (string $time, DateTimeZone $zone) => new CarbonImmutable($time, $zone),
+    "Laravel's Carbon" => fn (string $time, DateTimeZone $zone) => new Illuminate\Support\Carbon($time, $zone),
+]);
+
+it('builds periods in the app timezone', function () {
     $period = Period::lastDays(7);
 
     expect($period->days())->toBe(7)
@@ -107,22 +126,14 @@ it('builds periods in the reporting timezone', function () {
         ->and($period->to->toDateString())->toBe(now()->toDateString());
 });
 
-it('counts today and a given day in the reporting timezone, not the app\'s', function () {
-    config()->set(ConfigKey::ReportingTimezone->value, 'Pacific/Auckland');
+it('counts today and a given day in the app timezone', function () {
+    config()->set('app.timezone', 'Pacific/Auckland');
 
     $this->travelTo('2026-10-08 20:00:00');
     subscribeAndCapture('beta', 'one@example.com');
 
     expect(Waitlist::report()->since(1)->totals()->signups())->toBe(1)
         ->and(Waitlist::report()->between(now(), now())->totals()->signups())->toBe(1);
-});
-
-it('reads an empty reporting timezone as unset', function () {
-    config()->set(ConfigKey::ReportingTimezone->value, '');
-
-    subscribeAndCapture('beta', 'one@example.com');
-
-    expect(Waitlist::report()->since(1)->totals()->signups())->toBe(1);
 });
 
 it('counts a list in every project when the report spans all projects', function () {

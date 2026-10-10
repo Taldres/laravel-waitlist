@@ -6,8 +6,12 @@ use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
+use Taldres\Waitlist\Config\PackageConfig;
 use Taldres\Waitlist\Enums\ConfigKey;
+use Taldres\Waitlist\Enums\EntryStatus;
+use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Models\WaitlistActivity;
+use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Tests\Fixtures\ProjectCaller;
 
 beforeEach(function () {
@@ -72,22 +76,81 @@ it('lets a group use a limiter of your own and leaves the other one alone', func
     }
 });
 
-it('switches a group off, e.g. behind a WAF that limits already', function () {
-    config()->set(ConfigKey::SignupLimiter->value, null);
+it('switches a group off, e.g. behind a WAF that limits already, and leaves the other one on', function (?string $off) {
+    config()->set(ConfigKey::SignupLimiter->value, $off);
     ($this->loadRoutes)();
 
     foreach (range(1, 5) as $n) {
         ($this->subscribe)('10.0.0.1', "user{$n}@example.com")->assertStatus(202);
     }
-});
+
+    $token = subscribeAndCapture('beta', 'link@example.com')['unsubscribe'];
+
+    ($this->oneClick)($token)->assertOk();
+    ($this->oneClick)($token)->assertOk();
+    ($this->oneClick)($token)->assertStatus(429);
+})->with([null, '']);
 
 it('keeps limiting with the default limits when the published config has no limiters key', function () {
-    config()->set('waitlist.routes', array_diff_key(config('waitlist.routes'), ['limiters' => true]));
+    $published = config()->array('waitlist');
+    unset($published['routes']['limiters']);
+    config()->set('waitlist', PackageConfig::merge($published));
     ($this->loadRoutes)();
 
     ($this->subscribe)('10.0.0.1', 'one@example.com')->assertStatus(202);
     ($this->subscribe)('10.0.0.1', 'two@example.com')->assertStatus(202);
     ($this->subscribe)('10.0.0.1', 'three@example.com')->assertStatus(429);
+});
+
+describe('the limiter of a group that no limiter answers to', function () {
+    it('names the config key instead of Laravel\'s message without it', function (ConfigKey $key, string $url) {
+        config()->set($key->value, 'not-defined');
+        ($this->loadRoutes)();
+
+        $this->withoutExceptionHandling();
+
+        expect(fn () => $this->getJson($url))->toThrow(InvalidConfigurationException::class, $key->value);
+    })->with([
+        'signup' => [ConfigKey::SignupLimiter, '/waitlist/purposes?list=beta'],
+        'links' => [ConfigKey::LinksLimiter, '/waitlist/confirm/some-token'],
+    ]);
+
+    it('refuses a one-click unsubscribe, naming the key, without unsubscribing', function () {
+        $token = subscribeAndCapture('beta', 'user@example.com')['unsubscribe'];
+        config()->set(ConfigKey::LinksLimiter->value, 'not-defined');
+        ($this->loadRoutes)();
+
+        $this->withoutExceptionHandling();
+
+        expect(fn () => ($this->oneClick)($token))->toThrow(InvalidConfigurationException::class, ConfigKey::LinksLimiter->value)
+            ->and(WaitlistEntry::query()->sole()->status)->toBe(EntryStatus::Pending);
+    });
+
+    it('does not matter while the routes are off', function () {
+        config()->set(ConfigKey::SignupLimiter->value, 'not-defined');
+        ($this->loadRoutes)();
+        config()->set(ConfigKey::RoutesEnabled->value, false);
+
+        $this->getJson('/waitlist/purposes?list=beta')->assertNotFound();
+    });
+
+    it('finds a limiter that an app defines after the package booted', function () {
+        config()->set(ConfigKey::SignupLimiter->value, 'defined-later');
+        ($this->loadRoutes)();
+        RateLimiter::for('defined-later', fn (Request $request) => Limit::perMinute(1)->by($request->ip()));
+
+        $this->getJson('/waitlist/purposes?list=beta')->assertOk();
+        $this->getJson('/waitlist/purposes?list=beta')->assertStatus(429);
+    });
+
+    it('takes a number as the limit of a group, which is what throttle:2 means', function () {
+        config()->set(ConfigKey::SignupLimiter->value, '2');
+        ($this->loadRoutes)();
+
+        $this->getJson('/waitlist/purposes?list=beta')->assertOk();
+        $this->getJson('/waitlist/purposes?list=beta')->assertOk();
+        $this->getJson('/waitlist/purposes?list=beta')->assertStatus(429);
+    });
 });
 
 it('registers its limiters for your own routes too, also with the package routes off', function () {

@@ -14,20 +14,19 @@ class GetUnsubscribeToken
 {
     use ResolvesModel;
 
-    public function __construct(
-        protected ConfirmationUrlGenerator $urls,
-    ) {}
-
     /**
      * Returns the stored token so links already sent stay valid. A fresh one
      * is minted, invalidating older links, only when none can be recovered,
      * e.g. after an APP_KEY rotation without the old key.
+     *
+     * The URL generator is resolved here rather than injected, so the steps
+     * that build no link never depend on its settings.
      */
     public function __invoke(WaitlistEntry $entry): UnsubscribeToken
     {
         $token = $entry->plainUnsubscribeToken() ?? $this->mint($entry);
 
-        return new UnsubscribeToken(token: $token, url: $this->urls->unsubscribeUrl($entry, $token));
+        return new UnsubscribeToken(token: $token, url: app(ConfirmationUrlGenerator::class)->unsubscribeUrl($entry, $token));
     }
 
     protected function mint(WaitlistEntry $entry): string

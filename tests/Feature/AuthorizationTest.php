@@ -17,6 +17,7 @@ use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\WaitlistAction;
 use Taldres\Waitlist\Events\ManageLinkRequested;
+use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Facades\Waitlist;
 use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Support\AuthenticatedProjectResolver;
@@ -208,11 +209,17 @@ describe('several guards', function () {
             ->assertExactJson(['first' => 'project:acme', 'again' => 'project:acme']);
     });
 
+    it('names a guard the app does not define as a configuration error', function () {
+        config()->set(ConfigKey::AuthenticationGuards->value, ['first', 'missing']);
+
+        Waitlist::caller(request());
+    })->throws(InvalidConfigurationException::class, 'The waitlist.authentication.guards config names a guard config/auth.php does not define: missing.');
+
     it('refuses guards that are not names', function () {
         config()->set(ConfigKey::AuthenticationGuards->value, 'first');
 
         Waitlist::caller(request());
-    })->throws(InvalidArgumentException::class, ConfigKey::AuthenticationGuards->value.' must list guard names, or null for the default guard.');
+    })->throws(InvalidArgumentException::class, 'The '.ConfigKey::AuthenticationGuards->value.' config must list guard names, or null for the default guard, got string.');
 });
 
 describe('a gate of your own', function () {

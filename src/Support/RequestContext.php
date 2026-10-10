@@ -6,7 +6,8 @@ namespace Taldres\Waitlist\Support;
 
 use Illuminate\Http\Request;
 use Taldres\Waitlist\Auth\WaitlistCaller;
-use Taldres\Waitlist\Enums\ConfigKey;
+use Taldres\Waitlist\Config\ConfigFallback;
+use Taldres\Waitlist\Config\WaitlistConfig;
 
 /**
  * Where a lifecycle step came from. stored() returns IP and user agent only
@@ -28,14 +29,22 @@ final readonly class RequestContext
     /**
      * The user agent is scrubbed of invalid UTF-8: anyone can send one, and it
      * would break every JSON copy of the person's data later.
+     *
+     * Guards or a client IP header that do not read record the step as a
+     * guest's, from the address the request came from: leaving by a link must
+     * not wait for them. The signup still refuses them in the gate.
      */
     public static function fromRequest(Request $request): self
     {
         $userAgent = $request->userAgent();
-        $caller = WaitlistCaller::of($request);
+
+        [$ip, $caller] = ConfigFallback::read(
+            fn (): array => [WaitlistCaller::ip($request), WaitlistCaller::of($request)],
+            fallback: [$request->ip(), null],
+        );
 
         return new self(
-            ip: WaitlistCaller::ip($request),
+            ip: $ip,
             userAgent: $userAgent === null ? null : mb_scrub($userAgent, 'UTF-8'),
             caller: $caller === null ? null : WaitlistCaller::key($caller),
         );
@@ -50,13 +59,20 @@ final readonly class RequestContext
     }
 
     /**
+     * Privacy settings that do not read keep neither: the step still goes
+     * through, without what nobody could tell was meant to be stored.
+     *
      * @return array{ip: string|null, user_agent: string|null}
      */
     public function stored(): array
     {
+        $privacy = $this->ip === null && $this->userAgent === null
+            ? null
+            : ConfigFallback::read(WaitlistConfig::privacy(...), fallback: null);
+
         return [
-            'ip' => Setting::enabled(ConfigKey::StoreIp->value) ? $this->ip : null,
-            'user_agent' => Setting::enabled(ConfigKey::StoreUserAgent->value) ? $this->userAgent : null,
+            'ip' => $privacy?->storeIp ? $this->ip : null,
+            'user_agent' => $privacy?->storeUserAgent ? $this->userAgent : null,
         ];
     }
 }
