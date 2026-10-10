@@ -85,6 +85,10 @@ numeric primary keys. If you override `booted()`, call `parent::booted()`: those
 guards are what keep consent evidence from being rewritten and the log from
 being edited.
 
+The registered wording (`WaitlistWording`) is not swappable: the package reads and
+writes it itself, in the actions and in `waitlist:wording`. Keep what you want to
+add in a table of your own, keyed by project, purpose and version.
+
 A subscription is one opt-in cycle, a consent is agreement to one purpose within
 it, and activity is the log behind reporting, whose rows are never deleted. None
 of these should be written directly: go through the actions, so transitions stay
