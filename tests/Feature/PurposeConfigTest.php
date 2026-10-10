@@ -116,7 +116,7 @@ describe('the manage page', function () {
         config()->set(ConfigKey::WordingRequireHash->value, 'maybe');
 
         expect(fn () => $this->putJson("/waitlist/manage/{$manage}/purposes", ['purposes' => [...waitlistConsent(), 'newsletter' => '2026-10']]))
-            ->toThrow(InvalidConfigurationException::class, 'The waitlist.wording.require_hash config must be true or false, got string.');
+            ->toThrow(InvalidConfigurationException::class, 'The waitlist.wording.require_hash config must be true or false, got a text it does not read.');
 
         expect(newsletterGranted())->toBeFalse();
     });
@@ -159,7 +159,7 @@ describe('a signup', function () {
         config()->set(ConfigKey::DoubleOptIn->value, 'maybe');
 
         expect(fn () => Waitlist::for('beta')->add('user@example.com', waitlistConsent()))
-            ->toThrow(InvalidConfigurationException::class, 'The waitlist.double_opt_in.enabled config must be true or false, got string.');
+            ->toThrow(InvalidConfigurationException::class, 'The waitlist.double_opt_in.enabled config must be true or false, got a text it does not read.');
 
         expect(WaitlistEntry::query()->count())->toBe(0);
     });
@@ -195,7 +195,7 @@ describe('a signup', function () {
         config()->set(ConfigKey::WordingRequireHash->value, 'maybe');
 
         expect(fn () => Waitlist::for('beta')->add('user@example.com', waitlistConsent()))
-            ->toThrow(InvalidConfigurationException::class, 'The waitlist.wording.require_hash config must be true or false, got string.');
+            ->toThrow(InvalidConfigurationException::class, 'The waitlist.wording.require_hash config must be true or false, got a text it does not read.');
 
         expect(WaitlistEntry::query()->count())->toBe(0);
     });
@@ -266,7 +266,7 @@ describe('a list policy', function () {
         $policy = app(ProjectCatalog::class)->policy('default', 'beta');
 
         expect($policy)->toBeInstanceOf(ListPolicy::class)
-            ->and(fn () => $policy->doubleOptIn)->toThrow(InvalidConfigurationException::class, 'The waitlist.double_opt_in.enabled config must be true or false, got string.');
+            ->and(fn () => $policy->doubleOptIn)->toThrow(InvalidConfigurationException::class, 'The waitlist.double_opt_in.enabled config must be true or false, got a text it does not read.');
     });
 
     it('takes the default as it is when it reads', function (bool $default) {

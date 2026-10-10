@@ -158,7 +158,7 @@ describe('values the app sets', function () {
         config()->set(ConfigKey::StoreIp->value, 'maybe');
 
         WaitlistConfig::privacy();
-    })->throws(InvalidConfigurationException::class, 'The waitlist.privacy.store_ip config must be true or false, got string.');
+    })->throws(InvalidConfigurationException::class, 'The waitlist.privacy.store_ip config must be true or false, got a text it does not read.');
 });
 
 describe('a value that does not fit', function () {
@@ -167,11 +167,11 @@ describe('a value that does not fit', function () {
 
         expect(fn () => WaitlistConfig::check())->toThrow(InvalidConfigurationException::class, $message);
     })->with([
-        'an unreadable switch' => [ConfigKey::DoubleOptIn, 'maybe', 'The waitlist.double_opt_in.enabled config must be true or false, got string.'],
+        'an unreadable switch' => [ConfigKey::DoubleOptIn, 'maybe', 'The waitlist.double_opt_in.enabled config must be true or false, got a text it does not read.'],
         'an empty switch' => [ConfigKey::StoreIp, '', 'The waitlist.privacy.store_ip config must be true or false, got an empty text; if it comes from an empty variable in .env, remove the variable to keep the default.'],
         'a number for a switch' => [ConfigKey::StoreIp, 2, 'The waitlist.privacy.store_ip config must be true or false, got int.'],
-        'an unreadable number' => [ConfigKey::MaxConfirmations, 'three', 'The waitlist.double_opt_in.max_confirmations config must be a whole number or null, got string.'],
-        'a number too large for an int' => [ConfigKey::ManageTokenTtl, '99999999999999999999', 'The waitlist.manage.token_ttl config must be a whole number, got string.'],
+        'an unreadable number' => [ConfigKey::MaxConfirmations, 'three', 'The waitlist.double_opt_in.max_confirmations config must be a whole number or null, got a text it does not read.'],
+        'a number too large for an int' => [ConfigKey::ManageTokenTtl, '99999999999999999999', 'The waitlist.manage.token_ttl config must be a whole number, got a text it does not read.'],
         'a fraction' => [ConfigKey::SignupPerMinute, 2.5, 'The waitlist.routes.rate_limits.signup_per_minute config must be a whole number, got float.'],
         'null where none is allowed' => [ConfigKey::ManageTokenTtl, null, 'The waitlist.manage.token_ttl config must be a whole number, got null.'],
         'an empty number' => [ConfigKey::LinkPerMinute, '', 'The waitlist.routes.rate_limits.link_per_minute config must be a whole number, got an empty text; if it comes from an empty variable in .env, remove the variable to keep the default.'],
@@ -193,8 +193,8 @@ describe('a value that does not fit', function () {
         'a model that is not a waitlist model' => [ConfigKey::ConsentModel, stdClass::class, 'The waitlist.consent_model config must point to a '.WaitlistConsent::class.' subclass.'],
         'the contract itself for a class' => [ConfigKey::EmailNormalizer, EmailNormalizer::class, 'The waitlist.email_normalizer config must name a class that implements '.EmailNormalizer::class.', not the contract itself.'],
         'a class that does not implement its contract' => [ConfigKey::ProjectResolver, stdClass::class, 'The waitlist.project_resolver config must point to a Taldres\Waitlist\Contracts\ProjectResolver implementation.'],
-        'a schedule that is not a cron expression' => [ConfigKey::RetentionSchedule, 'not-a-cron', 'The waitlist.retention.schedule config must be a cron expression or null, got one that is not.'],
-        'a schedule that parses but never runs' => [ConfigKey::RetentionSchedule, '0 0 30 2 *', 'The waitlist.retention.schedule config must be a cron expression that can run, or null, got one that never does.'],
+        'a schedule that is not a cron expression' => [ConfigKey::RetentionSchedule, 'not-a-cron', 'The waitlist.retention.schedule config must be a cron expression such as 15 3 * * *, or null, got one that is not.'],
+        'a schedule that parses but never runs' => [ConfigKey::RetentionSchedule, '0 0 30 2 *', 'The waitlist.retention.schedule config must be a cron expression that can run, such as 15 3 * * *, or null, got one that never does.'],
         'a group that is not an array' => ['waitlist.double_opt_in', 'on', 'The waitlist.double_opt_in config must be an array of settings, got string.'],
         'a nested group that is null' => ['waitlist.routes.rate_limits', null, 'The waitlist.routes.rate_limits config must be an array of settings, got null.'],
     ]);
@@ -466,7 +466,7 @@ describe('a mistake in the config while the app boots', function () {
 
         expect(fn () => $this->postJson("/waitlist/unsubscribe/{$this->tokens['unsubscribe']}"))->toThrow(InvalidConfigurationException::class, $message);
     })->with([
-        'their switch' => [ConfigKey::RoutesEnabled, 'maybe', 'The waitlist.routes.enabled config must be true or false, got string.'],
+        'their switch' => [ConfigKey::RoutesEnabled, 'maybe', 'The waitlist.routes.enabled config must be true or false, got a text it does not read.'],
         'their prefix' => [ConfigKey::RoutesPrefix, ['waitlist'], 'The waitlist.routes.prefix config must be a text, got array.'],
         'a prefix with a placeholder' => [ConfigKey::RoutesPrefix, 'p/{project}/waitlist', 'The waitlist.routes.prefix config must be a path without placeholders, such as waitlist or api/waitlist, got one with braces.'],
         'their middleware' => [ConfigKey::RoutesMiddleware, 5, 'The waitlist.routes.middleware config must be a list of middleware names, got int.'],
@@ -569,8 +569,8 @@ describe('a mistake in the retention config', function () {
 
         Exceptions::assertReported(fn (InvalidConfigurationException $exception) => $exception->getMessage() === $message);
     })->with([
-        'not a cron expression' => ['not-a-cron', 'The waitlist.retention.schedule config must be a cron expression or null, got one that is not.'],
-        'the 30th of February' => ['0 0 30 2 *', 'The waitlist.retention.schedule config must be a cron expression that can run, or null, got one that never does.'],
+        'not a cron expression' => ['not-a-cron', 'The waitlist.retention.schedule config must be a cron expression such as 15 3 * * *, or null, got one that is not.'],
+        'the 30th of February' => ['0 0 30 2 *', 'The waitlist.retention.schedule config must be a cron expression that can run, such as 15 3 * * *, or null, got one that never does.'],
     ]);
 
     it('is reported for the schedule itself, without failing the app\'s other tasks', function () {
