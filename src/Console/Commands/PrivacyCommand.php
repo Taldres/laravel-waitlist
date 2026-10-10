@@ -209,6 +209,7 @@ class PrivacyCommand extends Command
             $period($retention->pendingDays, 'Unconfirmed signups erased'),
             $period($retention->unsubscribedDays, 'Addresses that left erased'),
             $period($retention->requestMetadataDays, 'IP and user agent cleared from the log'),
+            ...$this->projectRetention($catalog, $projects),
             $schedule !== null
                 ? "- Applied by waitlist:prune on the schedule `{$schedule}`; Laravel's scheduler must run"
                 : '- Not scheduled by the package: run waitlist:prune yourself',
@@ -221,6 +222,34 @@ class PrivacyCommand extends Command
             '- Backups, queues, logs, exports and external provider copies require separate retention and erasure handling',
             '',
         ];
+    }
+
+    /**
+     * The periods a project promises itself, which replace the configured ones
+     * for that project.
+     *
+     * @param  list<string>  $projects
+     * @return list<string>
+     */
+    protected function projectRetention(ProjectCatalog $catalog, array $projects): array
+    {
+        $lines = [];
+
+        foreach ($projects as $project) {
+            $periods = $catalog->periods($project);
+
+            foreach ([
+                'Unconfirmed signups erased' => $periods->pendingDays,
+                'Addresses that left erased' => $periods->unsubscribedDays,
+                'IP and user agent cleared from the log' => $periods->requestMetadataDays,
+            ] as $text => $days) {
+                if ($days !== null) {
+                    $lines[] = "- {$text} in project [{$project}]: after {$days} days";
+                }
+            }
+        }
+
+        return $lines === [] ? [] : ['- The periods above apply to every project except where one of these replaces them:', ...$lines];
     }
 
     /**

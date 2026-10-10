@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace Taldres\Waitlist\Contracts;
 
 use Taldres\Waitlist\Support\ListPolicy;
+use Taldres\Waitlist\Support\ProjectPeriods;
 
 /**
  * Everything project-specific: lists, the wording of their purposes, the
- * fields a signup may carry, the frontend URL patterns and whether manage
- * links are offered. The default reads the projects registered with
+ * fields a signup may carry, the frontend URL patterns, whether manage
+ * links are offered and the periods that differ from the configuration. The default reads the projects registered with
  * Waitlist::define(); bind your own to keep them in a database.
  *
  * The package snapshots the wording a person agreed to, so later catalog
@@ -55,6 +56,14 @@ interface ProjectCatalog
      * throws ManageLinksDisabledException, and the HTTP request is refused.
      */
     public function manageLinks(string $project): bool;
+
+    /**
+     * The retention periods and the confirm link lifetime the project promises
+     * where they differ from the configuration; each one it leaves out is read
+     * from waitlist.retention and waitlist.double_opt_in.token_ttl. A central
+     * API serves sites that promise different periods in their privacy notices.
+     */
+    public function periods(string $project): ProjectPeriods;
 
     /**
      * Must include "default": the facade acts on that project when no

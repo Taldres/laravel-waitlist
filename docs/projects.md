@@ -283,6 +283,32 @@ No manage link is mailed then, and a request for one is refused (see
 leave through the unsubscribe link in every mail; requests for access or erasure
 reach you and go through `waitlist:export` and `waitlist:forget`.
 
+### Periods a project promises itself
+
+`waitlist.retention` and `waitlist.double_opt_in.token_ttl` are global. In a
+central API, one site may tell its visitors that unconfirmed signups are deleted
+within seven days, while another keeps the thirty days of the configuration. A
+project says so in its definition:
+
+```php
+$project
+    ->retention(pendingDays: 7, unsubscribedDays: 365, requestMetadataDays: 14)
+    ->confirmLinkLifetime(60 * 24 * 7);   // minutes
+```
+
+Each period is optional and falls back to the configuration when left out. A
+project cannot say "never" for one; to keep data longer than the configuration
+does, give a longer period. The values are checked when the project is defined,
+against the same bounds as the configuration (no earlier than 1970, no later
+than 2038 for a link).
+
+`waitlist:prune` applies a project's own periods to that project and the
+configured ones to every other, also with `--project`. `waitlist:privacy` lists
+the periods that differ, and a confirm link issued for the project lives as long
+as the project says. A catalog of your own answers with `periods($project)`, a
+`ProjectPeriods`. A catalog that does not read is reported and `waitlist:prune`
+falls back to the configured periods for every project.
+
 ## When the definition runs
 
 `Waitlist::define()` only registers the callback. It runs when the waitlist first
@@ -560,7 +586,9 @@ shows both. A catalog of your own replaces the definitions entirely, the fields
 included: its `fields($project, $list)` returns the rules the HTTP signup applies,
 `urlPattern($project, $action)` is asked for a page by its
 `Taldres\Waitlist\Enums\Page` value, such as `Page::Confirm->value`, and
-`manageLinks($project)` says whether the project mails manage links.
+`manageLinks($project)` says whether the project mails manage links, and
+`periods($project)` the retention periods and the confirm link lifetime that
+differ from the configuration (`new ProjectPeriods` for none).
 
 ## Privacy across projects
 

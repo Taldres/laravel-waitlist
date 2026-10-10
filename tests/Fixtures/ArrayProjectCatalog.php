@@ -7,6 +7,7 @@ namespace Taldres\Waitlist\Tests\Fixtures;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Enums\Page;
 use Taldres\Waitlist\Support\ListPolicy;
+use Taldres\Waitlist\Support\ProjectPeriods;
 
 final class ArrayProjectCatalog implements ProjectCatalog
 {
@@ -35,6 +36,11 @@ final class ArrayProjectCatalog implements ProjectCatalog
     public function manageLinks(string $project): bool
     {
         return true;
+    }
+
+    public function periods(string $project): ProjectPeriods
+    {
+        return new ProjectPeriods;
     }
 
     public function projects(): array

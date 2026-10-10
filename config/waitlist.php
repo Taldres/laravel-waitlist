@@ -188,6 +188,8 @@ return [
     |   disputed; agree on the period with your data protection officer
     | - request_metadata_days: IP and user agent on the log, when stored at all
     |
+    | A project can promise periods of its own, see ProjectDefinition::retention().
+    |
     | The package schedules waitlist:prune with this cron expression; null, or
     | an empty value, leaves scheduling to you. One that can never run, such as the 30th of
     | February, is refused. Either way, Laravel's scheduler must run.

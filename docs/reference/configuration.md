@@ -127,7 +127,9 @@ come from.
 | `retention.schedule` | `WAITLIST_RETENTION_SCHEDULE` | `15 3 * * *` | when `waitlist:prune` runs; `null` or empty schedules nothing; one that can never run, such as the 30th of February, is refused |
 
 The retention periods are technical defaults, not legal recommendations; see
-[GDPR in practice](../gdpr.md#retention).
+[GDPR in practice](../gdpr.md#retention). A project can promise its own periods,
+which replace these for that project, see [Periods a project promises
+itself](../projects.md#periods-a-project-promises-itself).
 
 ## HTTP routes: `routes`
 
