@@ -69,6 +69,8 @@ The retention periods are technical defaults, not legal recommendations; see
 | `prefix` | | `waitlist` | the path the routes live under |
 | `name` | | `waitlist.` | the route name prefix |
 | `middleware` | | `['api']` | applies to every route, token links included: no authentication here |
+| `group_middleware.signup` | | `[]` | added to signup, wording and manage links only, after the rate limit: checks for your forms, such as CSRF or an origin check, see [Checks for your forms only](../securing-the-endpoints.md#checks-for-your-forms-only) |
+| `group_middleware.links` | | `[]` | added to everything with a token only |
 | `limiters.signup` | | `waitlist` | named limiter for signup, wording and manage links; `null` off |
 | `limiters.links` | | `waitlist-links` | named limiter for everything with a token; `null` off |
 | `rate_limits.signup_per_minute` | `WAITLIST_RATE_LIMIT_SIGNUP` | 10 | per visitor and endpoint: a guest's IP, or the address a server forwards |

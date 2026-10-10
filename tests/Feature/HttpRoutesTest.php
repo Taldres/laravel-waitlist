@@ -10,6 +10,7 @@ use Taldres\Waitlist\Enums\EntryStatus;
 use Taldres\Waitlist\Events\EntrySubscribed;
 use Taldres\Waitlist\Facades\Waitlist;
 use Taldres\Waitlist\Models\WaitlistEntry;
+use Taldres\Waitlist\Tests\Fixtures\RequireFormCheck;
 
 beforeEach(function () {
     // The provider registers routes at boot, before this flag is set, so register them again.
@@ -215,6 +216,33 @@ it('answers 404 and 410 for bad confirm tokens on both methods, naming the error
 
 it('names no error on a 404 that did not come from a package route', function () {
     $this->postJson('/waitlist/nope/unknown')->assertNotFound()->assertJsonMissingPath('error');
+});
+
+it('adds middleware to the signup group only, so token links skip checks meant for forms', function (array|string $middleware) {
+    $tokens = ($this->tokens)();
+    config()->set(ConfigKey::SignupMiddleware->value, $middleware);
+
+    require __DIR__.'/../../routes/waitlist.php';
+
+    $signUp = ['email' => 'other@example.com', 'list' => 'beta', 'purposes' => waitlistConsent()];
+
+    $this->postJson('/waitlist', $signUp)->assertStatus(419);
+    $this->postJson("/waitlist/confirm/{$tokens['confirm']}")->assertOk();
+    $this->post("/waitlist/unsubscribe/{$tokens['unsubscribe']}", ['List-Unsubscribe' => 'One-Click'])->assertOk();
+    $this->withHeaders(['X-Form-Check' => 'passed'])->postJson('/waitlist', $signUp)->assertStatus(202);
+})->with([
+    'a list' => [[RequireFormCheck::class]],
+    'a single one' => [RequireFormCheck::class],
+]);
+
+it('adds middleware to the token links only', function () {
+    $tokens = ($this->tokens)();
+    config()->set(ConfigKey::LinksMiddleware->value, [RequireFormCheck::class]);
+
+    require __DIR__.'/../../routes/waitlist.php';
+
+    $this->postJson("/waitlist/confirm/{$tokens['confirm']}")->assertStatus(419);
+    $this->getJson('/waitlist/purposes?list=beta')->assertOk();
 });
 
 it('never unsubscribes on GET, only on POST', function () {

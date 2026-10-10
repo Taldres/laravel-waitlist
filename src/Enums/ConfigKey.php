@@ -53,6 +53,8 @@ enum ConfigKey: string
     case RoutesPrefix = 'waitlist.routes.prefix';
     case RoutesName = 'waitlist.routes.name';
     case RoutesMiddleware = 'waitlist.routes.middleware';
+    case SignupMiddleware = 'waitlist.routes.group_middleware.signup';
+    case LinksMiddleware = 'waitlist.routes.group_middleware.links';
     case SignupLimiter = 'waitlist.routes.limiters.signup';
     case LinksLimiter = 'waitlist.routes.limiters.links';
     case SignupPerMinute = 'waitlist.routes.rate_limits.signup_per_minute';
@@ -96,6 +98,7 @@ enum ConfigKey: string
             self::RoutesPrefix => 'waitlist',
             self::RoutesName => 'waitlist.',
             self::RoutesMiddleware => ['api'],
+            self::SignupMiddleware, self::LinksMiddleware => [],
             self::SignupLimiter => 'waitlist',
             self::LinksLimiter => 'waitlist-links',
             self::SignupPerMinute, self::LinkPerMinute => 10,

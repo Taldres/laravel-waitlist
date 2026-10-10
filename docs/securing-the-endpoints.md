@@ -167,7 +167,9 @@ path in `config/cors.php`:
 mails and one-click requests from mail providers, which carry no credentials.
 Never put authentication there. Decide in the `useWaitlist` gate instead: it runs
 for the signup, the wording and manage links requested by address, after the
-project is resolved and before the body is validated.
+project is resolved and before the body is validated. Checks that only your
+forms have to pass go into `routes.group_middleware.signup`, see
+[Checks for your forms only](#checks-for-your-forms-only).
 
 ```php
 // app/Providers/WaitlistServiceProvider.php
@@ -182,6 +184,66 @@ Gate::define('useWaitlist', fn (?User $user) => $user?->can('join-beta') === tru
 The project a request acts for comes from the `ProjectResolver`; for servers that
 call with credentials of their own, `AuthenticatedProjectResolver` takes it from
 them. See [Who may call](projects.md#who-may-call-the-usewaitlist-gate).
+
+## Checks for your forms only
+
+`routes.group_middleware` adds middleware to one group, after its rate limit.
+Checks that only your own forms can pass belong on `signup`: the token links in
+your mails, and the one-click requests mail providers send without cookies or
+credentials, never face them.
+
+```php
+// config/waitlist.php
+'routes' => [
+    'group_middleware' => [
+        'signup' => ['web'], // sessions and CSRF for the signup, the wording and manage links
+        'links' => [],
+    ],
+],
+```
+
+**CSRF** fits a form that the same app serves, or a site whose requests carry
+the app's cookies. `GET /purposes` then sets the `XSRF-TOKEN` cookie, and the
+form sends it back in the `X-XSRF-TOKEN` header; axios does that on its own,
+`fetch` needs the header set. A site on a subdomain also needs
+`credentials: "include"` and `supports_credentials` in your CORS config. A
+frontend on another domain gets no cookie of yours at all: give it an origin
+check and bot protection instead.
+
+CSRF keeps other websites from posting your form in their visitors' browsers.
+It does not stop a script, which fetches the token first; that is what the
+[`SpamProtector`](#bot-protection-via-spamprotector) and the rate limits are for.
+
+**An origin check** keeps browsers on other websites out:
+
+```php
+// app/Http/Middleware/OwnOrigins.php
+namespace App\Http\Middleware;
+
+use Closure;
+use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
+
+class OwnOrigins
+{
+    public function handle(Request $request, Closure $next): Response
+    {
+        $origin = $request->headers->get('Origin');
+
+        // Browsers always send it on a POST; servers calling the API do not.
+        abort_unless($origin === null || in_array($origin, config('services.waitlist.origins'), true), 403);
+
+        return $next($request);
+    }
+}
+```
+
+```php
+'group_middleware' => ['signup' => [App\Http\Middleware\OwnOrigins::class], 'links' => []],
+```
+
+A browser cannot fake its `Origin`; a script outside one can, so this, too,
+keeps out other websites, not bots.
 
 ## Rate limits
 
@@ -270,8 +332,9 @@ public function boot(): void
 ```
 
 Fixed is only which routes belong to which group. Within a group, `routeIs()`
-covers the rest; for a different split altogether, add middleware to every route
-with `routes.middleware`, or keep the package routes off and call the actions
+covers the rest; for a different split altogether, add middleware to one group
+with `routes.group_middleware` or to every route with `routes.middleware`, or keep
+the package routes off and call the actions
 from routes of your own, each with any `throttle:` you like (pattern B above).
 
 Think twice before replacing `links`: a limiter keyed by IP alone brings back

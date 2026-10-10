@@ -226,6 +226,10 @@ return [
     | and RFC 8058 one-click requests, which carry no credentials. Put
     | authentication into the project resolver below instead.
     |
+    | group_middleware adds middleware to one group only, after its rate limit:
+    | "signup" for checks on your forms, such as CSRF ("web") or an origin
+    | check, which the token links that mail providers call must not face.
+    |
     | Rate limits apply per group: "signup" (signup, wording, manage links)
     | and "links" (everything with a token). Each names a limiter: the
     | package's "waitlist" and "waitlist-links", tuned by rate_limits, or one
@@ -240,6 +244,10 @@ return [
         'prefix' => 'waitlist',
         'name' => 'waitlist.',
         'middleware' => ['api'],
+        'group_middleware' => [
+            'signup' => [],
+            'links' => [],
+        ],
         'limiters' => [
             'signup' => 'waitlist',
             'links' => 'waitlist-links',
