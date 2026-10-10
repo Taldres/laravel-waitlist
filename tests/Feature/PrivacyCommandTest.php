@@ -50,6 +50,50 @@ it('describes data, purposes and retention from the configuration', function () 
     expect(privacyRecord())->toContain('- Rate limits: signups by your [signup-strict] limiter, token links not limited by the package;');
 });
 
+it('names the limit of servers calling for a project and where their visitors come from', function () {
+    config()->set(ConfigKey::RoutesEnabled->value, true);
+
+    expect(privacyRecord())
+        ->not->toContain('servers calling for a project')
+        ->not->toContain('header of servers');
+
+    config()->set(ConfigKey::AuthenticationRequired->value, true);
+
+    expect(privacyRecord())
+        ->toContain('- Rate limits for servers calling for a project: signups 120 per minute and server'.PHP_EOL)
+        ->not->toContain('header of servers');
+
+    config()->set(ConfigKey::ClientIpHeader->value, 'X-Visitor-Ip');
+
+    expect(privacyRecord())
+        ->toContain('signups 120 per minute and server, and 10 per minute and visitor')
+        ->toContain("- A visitor's address is read from the `X-Visitor-Ip` header of servers calling for a project, never of guests");
+});
+
+it('leaves out the limit of servers where your limiter replaces the package\'s, and where the routes are off', function () {
+    config()->set(ConfigKey::ClientIpHeader->value, 'X-Visitor-Ip');
+
+    expect(privacyRecord())->not->toContain('servers calling for a project');
+
+    config()->set(ConfigKey::RoutesEnabled->value, true);
+    config()->set(ConfigKey::SignupLimiter->value, 'signup-strict');
+
+    expect(privacyRecord())
+        ->not->toContain('Rate limits for servers calling for a project')
+        ->toContain('header of servers calling for a project');
+});
+
+it('needs the limit of servers only where it describes it', function () {
+    config()->set(ConfigKey::RoutesEnabled->value, true);
+    config()->set(ConfigKey::CallerSignupPerMinute->value, 'soon');
+
+    expect(Artisan::call('waitlist:privacy'))->toBe(0);
+
+    config()->set(ConfigKey::AuthenticationRequired->value, true);
+
+    expect(fn () => Artisan::call('waitlist:privacy'))->toThrow(InvalidConfigurationException::class, ConfigKey::CallerSignupPerMinute->value);
+});
+
 it('reports disabled periods and scheduling', function () {
     config()->set(ConfigKey::RetentionUnsubscribedDays->value, null);
     config()->set(ConfigKey::RetentionSchedule->value, null);
