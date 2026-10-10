@@ -6,6 +6,7 @@ namespace Taldres\Waitlist\Support;
 
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Expression;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Taldres\Waitlist\Actions\GetUnsubscribeToken;
@@ -14,6 +15,7 @@ use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Enums\ActivityType;
+use Taldres\Waitlist\Enums\ConfirmationOutcome;
 use Taldres\Waitlist\Enums\EndReason;
 use Taldres\Waitlist\Enums\EntryStatus;
 use Taldres\Waitlist\Events\ConsentGranted;
@@ -130,22 +132,66 @@ class SubscriptionLifecycle
     }
 
     /**
-     * Takes back what a confirmation request held, because no mail left: the
-     * cooldown and the count of requests. False when the cycle was confirmed or
-     * has ended, or a newer request was issued since, which holds its own.
+     * The listener's report that no mail left. It takes back what the request
+     * held, the cooldown and one in the count, and only for the request the
+     * snapshot is about, whose confirm link hash is its identity: the count
+     * cannot be, as it goes down again. The condition is part of one UPDATE, so
+     * of two reports of the same request exactly one counts, and a report that
+     * contradicts an earlier one (the mail went out) or is about an earlier
+     * request changes nothing. False then, and when the cycle was confirmed or
+     * has ended.
      */
-    public function confirmationFailed(WaitlistSubscription $subscription, RequestContext $context, ?string $reference = null): bool
+    public function confirmationFailed(WaitlistSubscription $snapshot, RequestContext $context, ?string $reference = null): bool
     {
-        $expected = $subscription->confirmation_count;
+        $request = $snapshot->confirm_token_hash;
 
-        return $this->transition($subscription, [
+        if ($request === null) {
+            return false;
+        }
+
+        return $this->transition($snapshot, [
             'confirmation_sent_at' => null,
-            'confirmation_count' => max($expected - 1, 0),
+            'confirmation_count' => new Expression('confirmation_count - 1'),
+            'confirmation_outcome' => ConfirmationOutcome::Failed,
         ], fn (Builder $query): Builder => $query
+            ->where('confirm_token_hash', $request)
+            ->whereNull('confirmation_outcome')
             ->whereNull('confirmed_at')
             ->whereNull('ended_at')
-            ->where('confirmation_count', $expected)
             ->where('confirmation_count', '>', 0), ActivityType::ConfirmationFailed, $context, reference: $reference);
+    }
+
+    /**
+     * The listener's report that the mail went out, once per request and bound
+     * to it by its confirm link hash like a failure. A mail that went out after
+     * its failure was reported, as when a failed job is retried, is accepted
+     * once more and takes the cooldown and the count back. A repeat, or a report
+     * about an earlier request, changes nothing and answers false. The
+     * request of a cycle that has ended has no link left to name it.
+     */
+    public function confirmationMailed(WaitlistSubscription $snapshot, RequestContext $context, string $reference): bool
+    {
+        $request = $snapshot->confirm_token_hash;
+
+        if ($request === null) {
+            return false;
+        }
+
+        if ($this->transition($snapshot, [
+            'confirmation_outcome' => ConfirmationOutcome::Mailed,
+        ], fn (Builder $query): Builder => $query
+            ->where('confirm_token_hash', $request)
+            ->whereNull('confirmation_outcome'), ActivityType::ConfirmationMailed, $context, reference: $reference)) {
+            return true;
+        }
+
+        return $this->transition($snapshot, [
+            'confirmation_sent_at' => Carbon::now(),
+            'confirmation_count' => new Expression('confirmation_count + 1'),
+            'confirmation_outcome' => ConfirmationOutcome::Mailed,
+        ], fn (Builder $query): Builder => $query
+            ->where('confirm_token_hash', $request)
+            ->where('confirmation_outcome', ConfirmationOutcome::Failed), ActivityType::ConfirmationMailed, $context, reference: $reference);
     }
 
     /**
@@ -209,6 +255,7 @@ class SubscriptionLifecycle
             'confirm_token_expires_at' => $expiresAt,
             'confirmation_sent_at' => $now,
             'confirmation_count' => $expected + 1,
+            'confirmation_outcome' => null,
         ], fn (Builder $query): Builder => $query
             ->whereNull('confirmed_at')
             ->whereNull('ended_at')

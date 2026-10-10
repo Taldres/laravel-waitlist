@@ -35,6 +35,9 @@ return new class extends Migration
             $table->timestamp('started_at')->useCurrent();
             $table->timestamp('confirmation_sent_at')->nullable();
             $table->unsignedInteger('confirmation_count')->default(0);
+            // What the listener reported about the latest request, mailed or
+            // failed; null until it does, and again for every new request.
+            $table->string('confirmation_outcome')->nullable();
             $table->timestamp('confirmed_at')->nullable();
             $table->timestamp('ended_at')->nullable();
             $table->string('end_reason')->nullable();

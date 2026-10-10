@@ -15,6 +15,7 @@ use RuntimeException;
 use Taldres\ImmutableAttributes\Attributes\Immutable;
 use Taldres\ImmutableAttributes\Concerns\GuardsImmutableAttributes;
 use Taldres\Waitlist\Database\Factories\WaitlistSubscriptionFactory;
+use Taldres\Waitlist\Enums\ConfirmationOutcome;
 use Taldres\Waitlist\Enums\EndReason;
 use Taldres\Waitlist\Enums\EntryStatus;
 use Taldres\Waitlist\Support\ResolvesModel;
@@ -33,6 +34,7 @@ use Taldres\Waitlist\Support\ResolvesModel;
  * @property Carbon $started_at
  * @property Carbon|null $confirmation_sent_at
  * @property int $confirmation_count
+ * @property ConfirmationOutcome|null $confirmation_outcome
  * @property Carbon|null $confirmed_at
  * @property Carbon|null $ended_at
  * @property EndReason|null $end_reason
@@ -62,6 +64,7 @@ class WaitlistSubscription extends Model
         'started_at',
         'confirmation_sent_at',
         'confirmation_count',
+        'confirmation_outcome',
         'confirmed_at',
         'ended_at',
         'end_reason',
@@ -80,6 +83,7 @@ class WaitlistSubscription extends Model
     {
         return [
             'end_reason' => EndReason::class,
+            'confirmation_outcome' => ConfirmationOutcome::class,
             'confirm_token_expires_at' => 'datetime',
             'started_at' => 'datetime',
             'confirmation_sent_at' => 'datetime',

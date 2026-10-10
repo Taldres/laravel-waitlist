@@ -142,8 +142,8 @@ Waitlist::listUnsubscribeHeaders($entry, 'newsletter');  // RFC 8058 one-click, 
 | cycle starts after leaving | `resubscribed`, `confirmation_requested` | `EntrySubscribed` (`isNewCycle: true`) |
 | another confirmation request | `confirmation_requested` | `EntrySubscribed` (`isNewCycle: false`) |
 | the held-back first request of a deferred cycle | `confirmation_requested` | `EntrySubscribed` (`isNewCycle: true`) |
-| your listener reports the mail, `Waitlist::confirmationMailed()` | `confirmation_mailed` (with reference) | — |
-| your listener reports that it could not send the mail, `Waitlist::confirmationFailed()` | `confirmation_failed` (with reference), cooldown and count taken back | — |
+| your listener reports the mail, `Waitlist::confirmationMailed()` | `confirmation_mailed` (with reference), once per request | — |
+| your listener reports that it could not send the mail, `Waitlist::confirmationFailed()` | `confirmation_failed` (with reference), once per request; cooldown and count taken back | — |
 | confirmed | `confirmed` | `EntryConfirmed` |
 | optional purpose granted | `consent_granted` (with purpose) | `ConsentGranted` |
 | optional purpose withdrawn | `consent_withdrawn` (with purpose) | `ConsentWithdrawn` |

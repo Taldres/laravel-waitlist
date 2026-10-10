@@ -15,14 +15,15 @@ enum ActivityType: string
 
     /**
      * Reported by your listener after it mailed the confirmation request, with a
-     * reference to what it sent. Not independent delivery verification.
+     * reference to what it sent, once per request. Not independent delivery
+     * verification.
      */
     case ConfirmationMailed = 'confirmation_mailed';
 
     /**
      * Reported by your listener when it could not mail the confirmation
-     * request. The request no longer counts against the resend cooldown and
-     * the caps, so the person's own retry gets a mail.
+     * request, once per request. The request no longer counts against the
+     * resend cooldown and the caps, so the person's own retry gets a mail.
      */
     case ConfirmationFailed = 'confirmation_failed';
 

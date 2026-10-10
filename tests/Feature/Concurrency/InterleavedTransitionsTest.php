@@ -8,6 +8,7 @@ use Taldres\Waitlist\Actions\ResendConfirmation;
 use Taldres\Waitlist\Actions\UnsubscribeEntry;
 use Taldres\Waitlist\Enums\ActivityType;
 use Taldres\Waitlist\Enums\ConfigKey;
+use Taldres\Waitlist\Enums\ConfirmationOutcome;
 use Taldres\Waitlist\Enums\EndReason;
 use Taldres\Waitlist\Enums\EntryStatus;
 use Taldres\Waitlist\Events\ConsentGranted;
@@ -20,6 +21,7 @@ use Taldres\Waitlist\Facades\Waitlist;
 use Taldres\Waitlist\Models\WaitlistActivity;
 use Taldres\Waitlist\Models\WaitlistConsent;
 use Taldres\Waitlist\Models\WaitlistEntry;
+use Taldres\Waitlist\Models\WaitlistSubscription;
 use Taldres\Waitlist\Support\PurposeRegistry;
 use Taldres\Waitlist\Support\RequestContext;
 use Taldres\Waitlist\Support\SubscriptionLifecycle;
@@ -247,3 +249,46 @@ it('keeps a confirmation that crossed an expiry', function () {
 
     assertWaitlistInvariants();
 });
+
+it('counts one of two crossing failure reports of a request, whichever client sends it first', function () {
+    $requests = captureRequests();
+    subscribeAndCapture('beta', 'user@example.com');
+    $this->travel(10)->minutes();
+    Waitlist::resendConfirmation('beta', 'user@example.com');
+
+    $onA = $this->as('a', fn () => (new WaitlistSubscription)->newFromBuilder($requests[1]->getAttributes()));
+    $onB = $this->as('b', fn () => (new WaitlistSubscription)->newFromBuilder($requests[1]->getAttributes()));
+
+    $wonA = $this->as('a', fn () => Waitlist::confirmationFailed($onA, 'from a'));
+    $wonB = $this->as('b', fn () => Waitlist::confirmationFailed($onB, 'from b'));
+
+    expect([$wonA, $wonB])->toBe([true, false])
+        ->and(WaitlistSubscription::query()->sole()->confirmation_count)->toBe(1)
+        ->and(WaitlistActivity::query()->where('type', ActivityType::ConfirmationFailed)->count())->toBe(1);
+
+    assertWaitlistInvariants();
+});
+
+it('settles a mail report and a failure report that cross on the first of them', function (string $first) {
+    $requests = captureRequests();
+    subscribeAndCapture('beta', 'user@example.com');
+
+    $onA = $this->as('a', fn () => (new WaitlistSubscription)->newFromBuilder($requests[0]->getAttributes()));
+    $onB = $this->as('b', fn () => (new WaitlistSubscription)->newFromBuilder($requests[0]->getAttributes()));
+
+    $mailed = fn () => $this->as('a', fn () => Waitlist::confirmationMailed($onA, 'mail-1'));
+    $failed = fn () => $this->as('b', fn () => Waitlist::confirmationFailed($onB, 'http-500'));
+
+    [$result, $other] = $first === 'mailed' ? [$mailed(), $failed()] : [$failed(), $mailed()];
+
+    // The failure first leaves room for the mail after all; the mail first closes the request.
+    expect($result)->toBeTrue()
+        ->and($other)->toBe($first === 'failed');
+
+    $subscription = WaitlistSubscription::query()->sole();
+
+    expect($subscription->confirmation_count)->toBe(1)
+        ->and($subscription->confirmation_outcome)->toBe(ConfirmationOutcome::Mailed);
+
+    assertWaitlistInvariants();
+})->with(['mailed first' => 'mailed', 'failed first' => 'failed']);
