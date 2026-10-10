@@ -224,3 +224,24 @@ notice names every product the service collects for;
 
 Serving other companies' waitlists makes you their processor instead. That needs
 contracts, strict separation and per-customer keys, which projects do not provide.
+
+## 6. Deploying and updating
+
+Two things cost debugging time on a first deploy and on updates:
+
+- **A site on the same host.** A container that calls the API through its public
+  domain on its own host can time out: a firewall that lets only the SSH port
+  through, or container networks isolated from each other, stop a request that
+  leaves the host and comes back. Give the site an internal address instead, such
+  as the API container's name on a network both share, and use it as the site's
+  API URL. The request IP is then the site container's, so a site that forwards
+  its visitors' addresses needs `authentication.client_ip_header`, see
+  [Securing the endpoints](../securing-the-endpoints.md). When a signup never
+  shows in the API's access log, look at the site's own log first: the JS client
+  reports the reason there, such as `timeout`.
+- **Workers and the scheduler after an update.** Queue workers and the scheduler
+  run the code they started with until they restart, so jobs dispatched before an
+  update still run against the old classes. Run `php artisan queue:restart` or
+  recreate the containers after every update. Jobs queued before the restart carry
+  their event as the old code serialized it, so check the changelog for changed
+  event payloads before you update with a full queue.

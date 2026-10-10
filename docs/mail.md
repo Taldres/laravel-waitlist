@@ -322,6 +322,19 @@ after an `APP_KEY` rotation without `APP_PREVIOUS_KEYS`.
 Never put a manage link into these mails. It opens the person's data, and mails
 get forwarded; your unsubscribe page offers to mail one instead.
 
+## Unsubscribe headers and your provider
+
+The one-click headers are mail headers like any other, and a provider may
+restrict custom headers by plan: its API can refuse a mail that carries its own
+`List-Unsubscribe` header, with an error that never mentions the header.
+MailerSend, for example, answered such a mail with a `422` on a plan below its
+Professional plan. Check what your provider allows before you rely on them.
+
+The confirmation mail needs none of them, so it cannot fail for this reason. To
+switch them off for a welcome mail, a launch mail or a newsletter, leave
+`headers()` out of its mailable. The unsubscribe link in the body stays. Some
+providers offer their own unsubscribe handling instead; see their documentation.
+
 ## Several projects
 
 Each project is its own product, usually with its own sender. Listeners see the

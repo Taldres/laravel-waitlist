@@ -129,7 +129,9 @@ public function headers(): Headers
 `Recipient` has `entry`, `email`, `purpose`, `locale` (the consent's language, or
 null) and `leavesList`. Queued Mailables carry the address and token links: let
 them implement `ShouldBeEncrypted` too. One-click headers need the package routes and an `https`
-`APP_URL`; without routes they are empty.
+`APP_URL`; without routes they are empty. A provider may refuse custom headers on
+some plans (MailerSend answers a `422` below its Professional plan): the
+confirmation mail needs none, and a mailable without `headers()` sends none.
 
 ### 5. A link outside events
 
