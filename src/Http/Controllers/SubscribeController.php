@@ -6,6 +6,7 @@ namespace Taldres\Waitlist\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
 use Taldres\Waitlist\Contracts\SpamProtector;
+use Taldres\Waitlist\Enums\ApiError;
 use Taldres\Waitlist\Exceptions\InvalidEmailException;
 use Taldres\Waitlist\Exceptions\MissingConsentException;
 use Taldres\Waitlist\Exceptions\UnknownPurposeException;
@@ -27,7 +28,7 @@ class SubscribeController
         $project = $request->project();
 
         if (! $protector->passes($request)) {
-            return new JsonResponse(['message' => 'Spam check failed.'], 422);
+            return new JsonResponse(['message' => 'Spam check failed.', 'error' => ApiError::SpamCheckFailed->value], 422);
         }
 
         $input = $request->safe();

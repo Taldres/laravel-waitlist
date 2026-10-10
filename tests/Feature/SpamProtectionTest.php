@@ -39,7 +39,7 @@ it('rejects the http subscribe with 422 when the protector fails', function () {
 
     $this->postJson('/waitlist', ['email' => 'user@example.com', 'purposes' => waitlistConsent()])
         ->assertStatus(422)
-        ->assertJson(['message' => 'Spam check failed.']);
+        ->assertExactJson(['message' => 'Spam check failed.', 'error' => 'spam_check_failed']);
 
     expect(WaitlistEntry::query()->count())->toBe(0);
 });
@@ -64,7 +64,7 @@ it('rejects the http subscribe when a verifySpamUsing closure denies', function 
 
     $this->postJson('/waitlist', ['email' => 'user@example.com', 'purposes' => waitlistConsent()])
         ->assertStatus(422)
-        ->assertJson(['message' => 'Spam check failed.']);
+        ->assertExactJson(['message' => 'Spam check failed.', 'error' => 'spam_check_failed']);
 
     expect(WaitlistEntry::query()->count())->toBe(0);
 });

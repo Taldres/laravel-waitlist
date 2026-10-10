@@ -54,6 +54,7 @@ A refusal the package answers itself names it in `error`, next to the
 | `404` | `manage_links_disabled` | `POST /manage-link` for a project without manage links; by address, the same for every address. |
 | `409` | `list_unavailable` | `PUT /manage/{token}/purposes` for a list removed since. |
 | `410` | `expired_token` | The confirm or manage link has expired. |
+| `422` | `spam_check_failed` | `POST /waitlist` or `POST /manage-link` by address, when the [spam check](../securing-the-endpoints.md#bot-protection-via-spamprotector) refuses; the `message` is `Spam check failed.` and there are no `errors`. |
 
 A `404` without `error` did not come from the package: there is no such route,
 often a URL without the routes' prefix, the routes are switched off, or the
@@ -71,7 +72,7 @@ Statuses besides the package's own `error` codes, as a client sees them:
 | `403` | The `useWaitlist` gate refused the caller: a project that is not its own, or wording from a guest. | No | Yes |
 | `404` without `error` | Not the package: a URL without the routes' prefix, routes switched off, or the gate keeping the caller from the project. | No | Yes, as a setup error |
 | `419` | A CSRF or form check of your own on the signup group, such as `web`. | No, send what the check wants | Yes |
-| `422` | Validation (`errors`), or `Spam check failed.` | No, fix the input | No, show it to the person |
+| `422` | Validation (`errors`), or `spam_check_failed` | No, fix the input | No, show it to the person |
 | `429` | A rate limit. `Retry-After` says when. | After the wait | Count it |
 | `500` | A setting that does not read, or an error in your app. The log names the key. | Only after a fix | Yes |
 | no answer | A timeout, a refused connection or a dead network. | Yes, with a limit | Yes, with the reason |

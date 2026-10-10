@@ -522,7 +522,8 @@ class TurnstileProtector implements SpamProtector
 'spam_protector' => App\Waitlist\TurnstileProtector::class,
 ```
 
-Either way, a failed check returns `422 {"message": "Spam check failed."}`.
+Either way, a failed check returns `422 {"message": "Spam check failed.", "error": "spam_check_failed"}`,
+so a client can ask for a new challenge without matching the message.
 The same pattern works for reCAPTCHA, hCaptcha, or a simple honeypot field
 (the check returns false when the hidden field is filled).
 
