@@ -23,6 +23,7 @@ optional newsletter, end to end, over HTTP or in your own controllers.
 - [Securing the endpoints](securing-the-endpoints.md): architectures, CORS, rate limits, bot protection
 - [Encryption and keys](encryption-and-keys.md): `APP_KEY`, rotation, your own encrypter
 - [Extending](extending.md): your own models, contracts and macros
+- [Upgrading](upgrading.md): the routine, how schema changes ship, what changed since the development branch
 
 ## Examples
 

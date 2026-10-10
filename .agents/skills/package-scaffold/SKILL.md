@@ -52,6 +52,7 @@ Provider wiring anti-patterns:
 ## Examples
 
 - Add an Artisan command: create the command class under `src/Console/Commands`, register it in the `commands` array inside the `runningInConsole()` guard, add a feature test for observable console output, and document the command if it is user-facing.
+- Change the schema: before the first release edit the create migration; from the first release on never touch it, add a new migration guarded with `Schema::hasColumn`/`hasTable`, and list it in `docs/upgrading.md` and the release notes.
 - Add a publishable migration: place the migration in `database/migrations`, wire it through a console-guarded `publishesMigrations` call with a `waitlist-migrations` tag, and test publish behavior with Testbench.
 - Wire a new publish tag by adding a `publishes` map inside the existing console-guarded publishing method and naming the tag with `waitlist-*`.
 
