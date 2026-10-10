@@ -32,6 +32,11 @@ final class ArrayProjectCatalog implements ProjectCatalog
         return $project === 'shop' && $action === Page::Confirm->value ? 'https://shop.test/confirm/{token}' : null;
     }
 
+    public function manageLinks(string $project): bool
+    {
+        return true;
+    }
+
     public function projects(): array
     {
         return ['shop'];

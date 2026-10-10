@@ -272,6 +272,17 @@ leaves a page as it is. See [HTTP API](reference/http-api.md#where-mail-links-po
 A link with an unknown token belongs to no project, so it lands on the default
 project's `invalid` page.
 
+A project without a preference page turns manage links off:
+
+```php
+$project->manageLinks(false);
+```
+
+No manage link is mailed then, and a request for one is refused (see
+[The preference page link](mail.md#the-preference-page-link)). People still
+leave through the unsubscribe link in every mail; requests for access or erasure
+reach you and go through `waitlist:export` and `waitlist:forget`.
+
 ## When the definition runs
 
 `Waitlist::define()` only registers the callback. It runs when the waitlist first
@@ -547,8 +558,9 @@ wording, implement a `ProjectCatalog` that reads your tables, and a resolver
 that maps a publishable key to a project. [A central waitlist API](examples/central-waitlist-api.md)
 shows both. A catalog of your own replaces the definitions entirely, the fields
 included: its `fields($project, $list)` returns the rules the HTTP signup applies,
-and `urlPattern($project, $action)` is asked for a page by its
-`Taldres\Waitlist\Enums\Page` value, such as `Page::Confirm->value`.
+`urlPattern($project, $action)` is asked for a page by its
+`Taldres\Waitlist\Enums\Page` value, such as `Page::Confirm->value`, and
+`manageLinks($project)` says whether the project mails manage links.
 
 ## Privacy across projects
 

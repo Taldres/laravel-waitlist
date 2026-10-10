@@ -79,6 +79,11 @@ class DefinedProjectCatalog implements ProjectCatalog
         return $this->definitions->get($project)?->getUrl($action);
     }
 
+    public function manageLinks(string $project): bool
+    {
+        return $this->definitions->get($project)?->getManageLinks() ?? true;
+    }
+
     public function projects(): array
     {
         return array_values(array_unique([WaitlistEntry::DEFAULT_PROJECT, ...$this->definitions->names()]));

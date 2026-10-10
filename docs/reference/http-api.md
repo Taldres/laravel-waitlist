@@ -23,7 +23,7 @@ Leave the routes off and call the facade from your controllers;
 | POST | `/waitlist/confirm/{token}` | Confirm. |
 | GET | `/waitlist/unsubscribe/{token}` | Reports the entry. `404` invalid. |
 | POST | `/waitlist/unsubscribe/{token}[?purpose=]` | Unsubscribe, or withdraw one purpose; including [RFC 8058](https://www.rfc-editor.org/rfc/rfc8058) one-click. |
-| POST | `/waitlist/manage-link` | Mail a manage link, with `token` (the unsubscribe token) or `email` and optional `list`. `202` with an identical body whether or not anything was sent. With `email`, the project resolver and the `useWaitlist` gate decide first, then the spam check applies. |
+| POST | `/waitlist/manage-link` | Mail a manage link, with `token` (the unsubscribe token) or `email` and optional `list`. `202` with an identical body whether or not anything was sent. With `email`, the project resolver and the `useWaitlist` gate decide first, then the spam check applies. `404` with `manage_links_disabled` for a project [without manage links](../projects.md#pages). |
 | GET | `/waitlist/manage/{token}` | Status and purposes in force, for the preference page. `404` invalid, `410` expired. |
 | PUT | `/waitlist/manage/{token}/purposes` | Set the purposes; the primary one must be included, else `422`. `409` once the address has left. |
 | POST | `/waitlist/manage/{token}/unsubscribe` | Leave this list, keeping the consent records for the configured retention period. |
@@ -39,7 +39,7 @@ Validation errors are always `422` JSON, also for a plain form post.
 
 Nothing looks up data by address over HTTP: access and erasure by address exist
 only as commands and PHP APIs. A person reaches their own data only through a
-manage link mailed to their address.
+manage link mailed to their address, unless the project turns manage links off.
 
 ## Errors
 
@@ -51,6 +51,7 @@ A refusal the package answers itself names it in `error`, next to the
 | `404` | `invalid_token` | The token belongs to no entry. |
 | `404` | `unknown_list` | `GET /purposes` for a list the project does not have. |
 | `409` | `not_subscribed` | `PUT /manage/{token}/purposes` once the address has left. |
+| `404` | `manage_links_disabled` | `POST /manage-link` for a project without manage links; by address, the same for every address. |
 | `409` | `list_unavailable` | `PUT /manage/{token}/purposes` for a list removed since. |
 | `410` | `expired_token` | The confirm or manage link has expired. |
 

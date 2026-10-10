@@ -9,7 +9,9 @@ use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Events\EntryForgotten;
 use Taldres\Waitlist\Events\ManageLinkRequested;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
+use Taldres\Waitlist\Facades\Waitlist;
 use Taldres\Waitlist\Support\StoredWordingCatalog;
+use Taldres\Waitlist\Tests\TestCase;
 
 function privacyRecord(): string
 {
@@ -113,6 +115,22 @@ it('describes the manage link lifetime and the resend rules it reads', function 
         ->toContain('- Confirmation mails limited to one per 15 minutes')
         ->not->toContain('per cycle')
         ->not->toContain('At most');
+});
+
+it('sends access and erasure through the operator where a project has no manage links', function () {
+    defineDefaultProject();
+    Waitlist::define('acme', fn (ProjectDefinition $project) => TestCase::defineTestProject($project->manageLinks(false)));
+
+    expect(privacyRecord())
+        ->toContain('- On request (Art. 17): waitlist:forget, or the person via a manage link sent to their address, except in projects without manage links (acme)')
+        ->toContain('expires after 60 minutes; projects without manage links (acme) handle both through you (waitlist:export, waitlist:forget)');
+
+    Artisan::call('waitlist:privacy', ['--project' => 'acme']);
+
+    expect(Artisan::output())
+        ->toContain('- On request (Art. 17): waitlist:forget'.PHP_EOL)
+        ->toContain('no manage links are sent, so access to the data and erasure go through you (waitlist:export, waitlist:forget)')
+        ->not->toContain('expires after');
 });
 
 it('still fails on a setting it describes that does not read', function (string $key) {

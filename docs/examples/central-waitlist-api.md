@@ -55,6 +55,11 @@ class DatabaseCatalog extends StoredWordingCatalog
         return Project::query()->where('key', $project)->value("{$action}_url");
     }
 
+    public function manageLinks(string $project): bool
+    {
+        return (bool) (Project::query()->where('key', $project)->value('manage_links') ?? true);
+    }
+
     public function projects(): array
     {
         // The facade acts on "default" when no project() is named.

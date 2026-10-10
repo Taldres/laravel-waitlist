@@ -61,8 +61,8 @@ class PrivacyCommand extends Command
             '',
             ...$this->data($catalog, $projects),
             ...$this->purposes($registry, $catalog, $projects),
-            ...$this->retention(),
-            ...$this->measures(),
+            ...$this->retention($catalog, $projects),
+            ...$this->measures($catalog, $projects),
             ...$this->recipients(),
         ];
 
@@ -181,9 +181,10 @@ class PrivacyCommand extends Command
     }
 
     /**
+     * @param  list<string>  $projects
      * @return list<string>
      */
-    protected function retention(): array
+    protected function retention(ProjectCatalog $catalog, array $projects): array
     {
         $period = fn (?int $days, string $text): string => $days !== null
             ? "- {$text}: after {$days} days"
@@ -203,7 +204,11 @@ class PrivacyCommand extends Command
             $schedule !== null
                 ? "- Applied by waitlist:prune on the schedule `{$schedule}`; Laravel's scheduler must run"
                 : '- Not scheduled by the package: run waitlist:prune yourself',
-            '- On request (Art. 17): waitlist:forget, or the person via a manage link sent to their address',
+            match ($without = $this->withoutManageLinks($catalog, $projects)) {
+                [] => '- On request (Art. 17): waitlist:forget, or the person via a manage link sent to their address',
+                $projects => '- On request (Art. 17): waitlist:forget',
+                default => '- On request (Art. 17): waitlist:forget, or the person via a manage link sent to their address, except in projects without manage links ('.implode(', ', $without).')',
+            },
             '- Active confirmed entries and remaining reporting rows have no automatic expiry; the remaining log is not guaranteed anonymous',
             '- Backups, queues, logs, exports and external provider copies require separate retention and erasure handling',
             '',
@@ -211,9 +216,10 @@ class PrivacyCommand extends Command
     }
 
     /**
+     * @param  list<string>  $projects
      * @return list<string>
      */
-    protected function measures(): array
+    protected function measures(ProjectCatalog $catalog, array $projects): array
     {
         $cooldown = ResendConfirmation::cooldown();
         $cap = ResendConfirmation::maxConfirmations();
@@ -226,7 +232,12 @@ class PrivacyCommand extends Command
             '- Address, metadata, IP, user agent and mail references encrypted at rest with '.$this->encryptedWith(),
             '- Addresses looked up by an HMAC-SHA256 hash with a subkey of the '.$this->encryptedWith().' key, never by the address itself',
             '- Tokens stored as SHA-256 hashes, the unsubscribe token additionally encrypted; none exported',
-            '- Mails carry an unsubscribe token that can only remove; access to the data and erasure needs a manage link that is mailed to the address on request and expires after '.$this->manageTtl(),
+            match ($without = $this->withoutManageLinks($catalog, $projects)) {
+                [] => '- Mails carry an unsubscribe token that can only remove; access to the data and erasure needs a manage link that is mailed to the address on request and expires after '.$this->manageTtl(),
+                $projects => '- Mails carry an unsubscribe token that can only remove; no manage links are sent, so access to the data and erasure go through you (waitlist:export, waitlist:forget)',
+                default => '- Mails carry an unsubscribe token that can only remove; access to the data and erasure needs a manage link that is mailed to the address on request and expires after '.$this->manageTtl()
+                    .'; projects without manage links ('.implode(', ', $without).') handle both through you (waitlist:export, waitlist:forget)',
+            },
             '- Confirmation mails limited to one per '.($cooldown !== null ? "{$cooldown} minutes" : 'request')
                 .($cap !== null ? " and {$cap} per cycle" : ''),
             ...(($pending = ResendConfirmation::maxPendingPerAddress()) !== null
@@ -318,6 +329,15 @@ class PrivacyCommand extends Command
             $limiter === $packageLimiter => $packageLimit,
             default => "by your [{$limiter}] limiter",
         };
+    }
+
+    /**
+     * @param  list<string>  $projects
+     * @return list<string>
+     */
+    protected function withoutManageLinks(ProjectCatalog $catalog, array $projects): array
+    {
+        return array_values(array_filter($projects, fn (string $project): bool => ! $catalog->manageLinks($project)));
     }
 
     protected function manageTtl(): string

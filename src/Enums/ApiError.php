@@ -16,4 +16,5 @@ enum ApiError: string
     case UnknownList = 'unknown_list';
     case NotSubscribed = 'not_subscribed';
     case ListUnavailable = 'list_unavailable';
+    case ManageLinksDisabled = 'manage_links_disabled';
 }

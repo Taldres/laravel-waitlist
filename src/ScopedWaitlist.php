@@ -12,6 +12,7 @@ use Taldres\Waitlist\Actions\EraseEntry;
 use Taldres\Waitlist\Actions\ExportPersonalData;
 use Taldres\Waitlist\Actions\FindRecipients;
 use Taldres\Waitlist\Actions\ForgetEmail;
+use Taldres\Waitlist\Actions\IssueManageLink;
 use Taldres\Waitlist\Actions\RequestManageLink;
 use Taldres\Waitlist\Actions\ResendConfirmation;
 use Taldres\Waitlist\Actions\SubscribeToWaitlist;
@@ -19,6 +20,7 @@ use Taldres\Waitlist\Actions\UnsubscribeEntry;
 use Taldres\Waitlist\Actions\WithdrawConsent;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Exceptions\InvalidEmailException;
+use Taldres\Waitlist\Exceptions\ManageLinksDisabledException;
 use Taldres\Waitlist\Exceptions\MissingConsentException;
 use Taldres\Waitlist\Exceptions\UnknownPurposeException;
 use Taldres\Waitlist\Exceptions\UnknownWaitlistException;
@@ -151,9 +153,13 @@ class ScopedWaitlist
      * Only for an address that confirmed at least once: anyone can type an
      * address in, and a mailbox that never opted in gets nothing. False when
      * nothing was sent; a public form must not tell the cases apart.
+     *
+     * @throws ManageLinksDisabledException before the lookup, so it tells nothing about the address
      */
     public function requestManageLink(string $email): bool
     {
+        app(IssueManageLink::class)->assertOffered($this->project);
+
         $entry = $this->find($email);
 
         return $entry !== null

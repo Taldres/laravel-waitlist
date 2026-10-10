@@ -139,7 +139,8 @@ return [
     | replaces the last one. Requested by address, it only goes to an address
     | that confirmed at least once. request_cooldown is the minimum number of
     | minutes between two such mails to one address, across the project's
-    | lists; 0 or null for none.
+    | lists; 0 or null for none. A project without a preference page turns
+    | manage links off in its definition: $project->manageLinks(false).
     |
     */
 

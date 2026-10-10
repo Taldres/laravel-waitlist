@@ -32,6 +32,7 @@ use Taldres\Waitlist\Exceptions\ExpiredTokenException;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Exceptions\InvalidEmailException;
 use Taldres\Waitlist\Exceptions\InvalidTokenException;
+use Taldres\Waitlist\Exceptions\ManageLinksDisabledException;
 use Taldres\Waitlist\Exceptions\MissingConsentException;
 use Taldres\Waitlist\Exceptions\UnknownProjectException;
 use Taldres\Waitlist\Exceptions\UnknownPurposeException;
@@ -323,6 +324,8 @@ class WaitlistManager
      * one. It opens the person's data and erasure: send it only to the address
      * itself, or where you have identified the person some other way. Never
      * put it into every mail; that is what the unsubscribe link is for.
+     *
+     * @throws ManageLinksDisabledException
      */
     public function manageLink(WaitlistEntry $entry): ManageLink
     {
@@ -333,6 +336,8 @@ class WaitlistManager
      * The manage link goes to the address via ManageLinkRequested and your
      * listener, never to whoever asked. False when the token is unknown or the
      * cooldown is running; a public endpoint must not tell the cases apart.
+     *
+     * @throws ManageLinksDisabledException
      */
     public function requestManageLink(string $unsubscribeToken): bool
     {

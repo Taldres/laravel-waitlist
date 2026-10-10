@@ -43,6 +43,8 @@ final class ProjectDefinition
 
     private bool $wordingFromCallers = false;
 
+    private bool $manageLinks = true;
+
     /**
      * @internal Created by ProjectDefinitions when the project is first needed.
      */
@@ -177,6 +179,19 @@ final class ProjectDefinition
     }
 
     /**
+     * False for a project without a preference page: no manage link is mailed,
+     * and a request for one is refused. The unsubscribe link in every mail
+     * still lets people leave; access and erasure go through you, with
+     * waitlist:export and waitlist:forget.
+     */
+    public function manageLinks(bool $offer = true): static
+    {
+        $this->manageLinks = $offer;
+
+        return $this;
+    }
+
+    /**
      * @return array<string, array<string, string|array<string, string>>> purpose => versions
      */
     public function getPurposes(): array
@@ -219,6 +234,11 @@ final class ProjectDefinition
     public function getWordingFromCallers(): bool
     {
         return $this->wordingFromCallers;
+    }
+
+    public function getManageLinks(): bool
+    {
+        return $this->manageLinks;
     }
 
     /**

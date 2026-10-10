@@ -8,9 +8,12 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Taldres\Waitlist\Auth\WaitlistGate;
 use Taldres\Waitlist\Config\WaitlistConfig;
+use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Contracts\SpamProtector;
+use Taldres\Waitlist\Enums\ApiError;
 use Taldres\Waitlist\Enums\WaitlistAction;
+use Taldres\Waitlist\Exceptions\ManageLinksDisabledException;
 use Taldres\Waitlist\Exceptions\UnknownWaitlistException;
 use Taldres\Waitlist\Http\Controllers\Concerns\ValidatesAsJson;
 use Taldres\Waitlist\WaitlistManager;
@@ -32,7 +35,11 @@ class ManageLinkController
             /** @var array{token: string} $validated */
             $validated = $this->validateAsJson($request, ['token' => ['required', 'string', 'max:255']]);
 
-            $waitlist->requestManageLink($validated['token']);
+            try {
+                $waitlist->requestManageLink($validated['token']);
+            } catch (ManageLinksDisabledException) {
+                return $this->disabled();
+            }
 
             return new JsonResponse(['message' => 'Requested.'], 202);
         }
@@ -44,6 +51,12 @@ class ManageLinkController
         $list = is_string($list) ? $list : WaitlistConfig::defaultList();
 
         WaitlistGate::inspect($request, $project, WaitlistAction::RequestManageLink, $list)->authorize();
+
+        // Per project, so the answer says nothing about the address; before the
+        // spam check, so no challenge is spent on a request that cannot succeed.
+        if (! app(ProjectCatalog::class)->manageLinks($project)) {
+            return $this->disabled();
+        }
 
         // Without either, the 422 names both alternatives.
         /** @var array{email: string, list?: string} $validated */
@@ -65,5 +78,10 @@ class ManageLinkController
         }
 
         return new JsonResponse(['message' => 'Requested.'], 202);
+    }
+
+    private function disabled(): JsonResponse
+    {
+        return new JsonResponse(['message' => 'This project offers no manage links.', 'error' => ApiError::ManageLinksDisabled->value], 404);
     }
 }
