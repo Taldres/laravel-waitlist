@@ -208,6 +208,7 @@ Setup
 - [ ] [Fields](projects.md#fields) per project and list as few as possible, none if in doubt
 - [ ] Retention periods agreed with your data protection officer
 - [ ] Laravel's scheduler running, so `waitlist:prune` applies
+- [ ] `php artisan waitlist:privacy` run on the production host prints no warnings: mail links are https and not localhost, `APP_DEBUG` is off, and guests are meant to call the signup
 
 Signup form
 

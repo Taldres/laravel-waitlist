@@ -15,6 +15,7 @@ use Taldres\Waitlist\Actions\IssueManageLink;
 use Taldres\Waitlist\Actions\ResendConfirmation;
 use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
+use Taldres\Waitlist\Enums\Page;
 use Taldres\Waitlist\Events\ConsentGranted;
 use Taldres\Waitlist\Events\ConsentWithdrawn;
 use Taldres\Waitlist\Events\EntryConfirmed;
@@ -23,6 +24,7 @@ use Taldres\Waitlist\Events\EntrySubscribed;
 use Taldres\Waitlist\Events\EntryUnsubscribed;
 use Taldres\Waitlist\Events\ManageLinkRequested;
 use Taldres\Waitlist\Events\SubscriptionExpired;
+use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Exceptions\MissingWordingException;
 use Taldres\Waitlist\Support\PurposeRegistry;
 use Taldres\Waitlist\WaitlistManager;
@@ -68,6 +70,11 @@ class PrivacyCommand extends Command
 
         // Raw: wording is stored text, and the console would read tags in it.
         $this->output->writeln(implode(PHP_EOL, $lines), OutputInterface::OUTPUT_RAW);
+
+        // On stderr, so redirecting the record into a file leaves them out of it.
+        foreach ($this->warnings($catalog, $projects) as $warning) {
+            $this->output->getErrorStyle()->writeln("Warning: {$warning}");
+        }
 
         return self::SUCCESS;
     }
@@ -290,6 +297,95 @@ class PrivacyCommand extends Command
         }
 
         return $lines;
+    }
+
+    /**
+     * What a launch would trip over, from the same settings the record reads:
+     * run it on the production host.
+     *
+     * @param  list<string>  $projects
+     * @return list<string>
+     */
+    protected function warnings(ProjectCatalog $catalog, array $projects): array
+    {
+        $warnings = $this->linkWarnings($catalog, $projects);
+
+        if (! WaitlistConfig::routesEnabled()) {
+            return $warnings;
+        }
+
+        if (config('app.debug') === true) {
+            $warnings[] = 'APP_DEBUG is on while the waitlist routes are enabled: error responses show exception messages and traces.';
+        }
+
+        try {
+            if (WaitlistConfig::guards() !== [null] && ! WaitlistConfig::authenticationRequired()) {
+                $warnings[] = 'authentication.guards names guards but authentication.required is off, so guests can call the signup too. Turn it on if only your own servers may.';
+            }
+        } catch (InvalidConfigurationException $exception) {
+            $warnings[] = $exception->getMessage();
+        }
+
+        return $warnings;
+    }
+
+    /**
+     * The links in mails are the pages' patterns, or APP_URL for a page left on
+     * the package routes.
+     *
+     * @param  list<string>  $projects
+     * @return list<string>
+     */
+    protected function linkWarnings(ProjectCatalog $catalog, array $projects): array
+    {
+        $found = [];
+
+        foreach ($projects as $project) {
+            if ($catalog->lists($project) === []) {
+                continue;
+            }
+
+            foreach ([Page::Confirm, Page::Unsubscribe, Page::Manage] as $page) {
+                if ($page === Page::Manage && ! $catalog->manageLinks($project)) {
+                    continue;
+                }
+
+                $pattern = $catalog->urlPattern($project, $page->value);
+                $url = $pattern ?? (WaitlistConfig::routesEnabled() ? config('app.url') : null);
+                $problem = is_string($url) ? $this->urlProblem($url) : null;
+
+                if ($problem !== null) {
+                    $found[$project][$problem.($pattern === null ? ', from APP_URL' : '')][] = $page->value;
+                }
+            }
+        }
+
+        $warnings = [];
+
+        foreach ($found as $project => $problems) {
+            foreach ($problems as $problem => $pages) {
+                $warnings[] = 'The '.implode(', ', $pages)." link of project [{$project}] {$problem}, so a link in a mail may not open for the person.";
+            }
+        }
+
+        return $warnings;
+    }
+
+    protected function urlProblem(string $url): ?string
+    {
+        $parts = parse_url($url);
+        $scheme = is_array($parts) ? ($parts['scheme'] ?? null) : null;
+        $host = is_array($parts) ? ($parts['host'] ?? null) : null;
+
+        if ($scheme === null || $host === null) {
+            return 'is not an absolute URL';
+        }
+
+        if (in_array($host, ['localhost', '127.0.0.1', '[::1]'], true) || Str::endsWith($host, ['.localhost', '.test'])) {
+            return "points at {$scheme}://{$host}";
+        }
+
+        return $scheme === 'https' ? null : "does not use https ({$scheme}://{$host})";
     }
 
     protected function encryptedWith(): string
