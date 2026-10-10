@@ -73,7 +73,9 @@ Waitlist::define(function (ProjectDefinition $project): void {
   it supplies lists, fields, wording versions and frontend URL patterns per project.
   Over HTTP, a `ProjectResolver` (`waitlist.project_resolver`) picks the project of
   a signup, e.g. from a publishable key; never put that check into
-  `routes.middleware`, which also guards the token links in mails.
+  `routes.middleware`, which also guards the token links in mails. Checks for
+  the forms only, such as CSRF or an origin check, go into
+  `routes.group_middleware.signup`.
 - Frontend pages per project in `$project->urls(...)`: `confirm`, `unsubscribe`,
   `manage` (mail links, `{token}` replaced) and `confirmed`, `expired`, `invalid`,
   `unsubscribed`, `erased` (where a browser lands after posting).

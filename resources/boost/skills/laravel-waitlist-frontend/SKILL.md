@@ -205,5 +205,6 @@ confirmation before erasing. In PHP: `Waitlist::findByManageToken($token)`,
 - Telling apart new and known addresses in the response.
 - Putting authentication into `waitlist.routes.middleware`: it also guards the
   token links and one-click unsubscribes. Use a `ProjectResolver` or own
-  controllers for closed signups.
+  controllers for closed signups, and `waitlist.routes.group_middleware.signup`
+  for checks on the forms only, such as CSRF or an origin check.
 - A pre-ticked checkbox for an optional purpose, or one checkbox for two purposes.

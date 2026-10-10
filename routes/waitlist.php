@@ -17,18 +17,23 @@ $throttle = fn (string $limiterKey): array => is_string($limiter = Setting::valu
     ? ["throttle:{$limiter}"]
     : [];
 
+$group = fn (string $limiterKey, string $middlewareKey): array => [
+    ...$throttle($limiterKey),
+    ...(array) Setting::value($middlewareKey),
+];
+
 Route::group([
     'prefix' => Setting::value(ConfigKey::RoutesPrefix->value),
     'as' => Setting::value(ConfigKey::RoutesName->value),
     'middleware' => Setting::value(ConfigKey::RoutesMiddleware->value),
-], function () use ($throttle) {
-    Route::middleware($throttle(ConfigKey::SignupLimiter->value))->group(function () {
+], function () use ($group) {
+    Route::middleware($group(ConfigKey::SignupLimiter->value, ConfigKey::SignupMiddleware->value))->group(function () {
         Route::post('/', SubscribeController::class)->name('subscribe');
         Route::get('/purposes', PurposesController::class)->name('purposes');
         Route::post('/manage-link', ManageLinkController::class)->name('manage-link');
     });
 
-    Route::middleware($throttle(ConfigKey::LinksLimiter->value))->group(function () {
+    Route::middleware($group(ConfigKey::LinksLimiter->value, ConfigKey::LinksMiddleware->value))->group(function () {
         // GET only reports state; POST acts, from your page or an RFC 8058 one-click request.
         Route::match(['GET', 'POST'], '/confirm/{token}', ConfirmController::class)->name(Page::Confirm->value);
         Route::match(['GET', 'POST'], '/unsubscribe/{token}', UnsubscribeController::class)->name(Page::Unsubscribe->value);
