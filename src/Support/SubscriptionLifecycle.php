@@ -12,6 +12,7 @@ use Taldres\Waitlist\Actions\GetUnsubscribeToken;
 use Taldres\Waitlist\Actions\RecordActivity;
 use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
+use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Enums\ActivityType;
 use Taldres\Waitlist\Enums\EndReason;
 use Taldres\Waitlist\Enums\EntryStatus;
@@ -63,7 +64,7 @@ class SubscriptionLifecycle
         ?string $confirmToken,
     ): WaitlistSubscription {
         $now = Carbon::now();
-        $expiresAt = $confirmToken !== null ? WaitlistConfig::confirmTokenExpiresAt($now) : null;
+        $expiresAt = $confirmToken !== null ? $this->confirmTokenExpiresAt($entry->project, $now) : null;
 
         [$subscription, $events] = static::waitlistConnection()->transaction(function () use ($entry, $purposes, $context, $doubleOptIn, $confirmToken, $now, $expiresAt): array {
             $last = static::subscriptionModelClass()::query()
@@ -147,6 +148,17 @@ class SubscriptionLifecycle
     }
 
     /**
+     * The project's own lifetime when it has one, else the configured one, which
+     * is then the only setting read.
+     */
+    protected function confirmTokenExpiresAt(string $project, Carbon $from): ?Carbon
+    {
+        $minutes = app(ProjectCatalog::class)->periods($project)->confirmLinkMinutes;
+
+        return $minutes === null ? WaitlistConfig::confirmTokenExpiresAt($from) : $from->copy()->addMinutes($minutes);
+    }
+
+    /**
      * Clearing `active` releases the unique slot, so a new cycle can start.
      * False when the cycle had already ended.
      */
@@ -178,7 +190,7 @@ class SubscriptionLifecycle
     {
         $expected = $subscription->confirmation_count;
         $now = Carbon::now();
-        $expiresAt = WaitlistConfig::confirmTokenExpiresAt($now);
+        $expiresAt = $this->confirmTokenExpiresAt($subscription->entry()->firstOrFail()->project, $now);
 
         return $this->transition($subscription, [
             'confirm_token_hash' => WaitlistEntry::hashToken($confirmToken),

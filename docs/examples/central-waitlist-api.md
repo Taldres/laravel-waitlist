@@ -34,6 +34,7 @@ projects, so override each one that should read your tables:
 
 ```php
 use Taldres\Waitlist\Support\ListPolicy;
+use Taldres\Waitlist\Support\ProjectPeriods;
 use Taldres\Waitlist\Support\StoredWordingCatalog;
 
 class DatabaseCatalog extends StoredWordingCatalog
@@ -58,6 +59,15 @@ class DatabaseCatalog extends StoredWordingCatalog
     public function manageLinks(string $project): bool
     {
         return (bool) (Project::query()->where('key', $project)->value('manage_links') ?? true);
+    }
+
+    public function periods(string $project): ProjectPeriods
+    {
+        // What the site promised in its privacy notice, null where the
+        // configuration applies.
+        $row = Project::query()->where('key', $project)->first();
+
+        return new ProjectPeriods(pendingDays: $row?->pending_days, confirmLinkMinutes: $row?->confirm_link_minutes);
     }
 
     public function projects(): array

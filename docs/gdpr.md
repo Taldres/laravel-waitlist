@@ -114,7 +114,10 @@ How to configure all of this: [Purposes and wording](purposes-and-wording.md).
 `waitlist:prune` applies three periods from `waitlist.retention`, and the package
 schedules it (`15 3 * * *` by default). Laravel's scheduler must run. These are
 technical defaults, not statutory periods or a recommendation for your use case.
-The operator must choose and justify them and monitor cleanup failures.
+The operator must choose and justify them and monitor cleanup failures. A project
+can promise periods of its own, see [Periods a project promises
+itself](projects.md#periods-a-project-promises-itself); `waitlist:privacy` lists
+the ones that differ.
 
 - **Unconfirmed signups** (30 days): counted from the start of the cycle, so
   resends never extend it. The cycle is closed as expired first, so the abandoned

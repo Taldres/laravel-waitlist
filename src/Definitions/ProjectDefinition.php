@@ -7,6 +7,7 @@ namespace Taldres\Waitlist\Definitions;
 use Closure;
 use Taldres\Waitlist\Enums\Page;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
+use Taldres\Waitlist\Support\ProjectPeriods;
 
 /**
  * One project as a Waitlist::define() callback describes it: what people can
@@ -45,6 +46,8 @@ final class ProjectDefinition
 
     private bool $manageLinks = true;
 
+    private ProjectPeriods $periods;
+
     /**
      * @internal Created by ProjectDefinitions when the project is first needed.
      */
@@ -52,6 +55,7 @@ final class ProjectDefinition
         public readonly string $name,
     ) {
         self::assertName('project', $name);
+        $this->periods = new ProjectPeriods;
     }
 
     /**
@@ -192,6 +196,47 @@ final class ProjectDefinition
     }
 
     /**
+     * The retention periods this project promises in its privacy notice, in
+     * days, where they differ from waitlist.retention: how long an address may
+     * stay unconfirmed, how long one is kept after it left, and how long the IP
+     * and user agent stay on the log. A period you leave out stays with the
+     * configuration; to keep data longer than it says, give a longer one. Meant
+     * for a central API whose sites promise different periods.
+     *
+     * @throws InvalidConfigurationException
+     */
+    public function retention(?int $pendingDays = null, ?int $unsubscribedDays = null, ?int $requestMetadataDays = null): static
+    {
+        $this->periods = new ProjectPeriods(
+            pendingDays: $pendingDays ?? $this->periods->pendingDays,
+            unsubscribedDays: $unsubscribedDays ?? $this->periods->unsubscribedDays,
+            requestMetadataDays: $requestMetadataDays ?? $this->periods->requestMetadataDays,
+            confirmLinkMinutes: $this->periods->confirmLinkMinutes,
+        );
+
+        return $this;
+    }
+
+    /**
+     * Minutes this project's confirm links work, where that differs from
+     * waitlist.double_opt_in.token_ttl. A site that promises to delete
+     * unconfirmed signups after seven days sets the same lifetime here.
+     *
+     * @throws InvalidConfigurationException
+     */
+    public function confirmLinkLifetime(int $minutes): static
+    {
+        $this->periods = new ProjectPeriods(
+            pendingDays: $this->periods->pendingDays,
+            unsubscribedDays: $this->periods->unsubscribedDays,
+            requestMetadataDays: $this->periods->requestMetadataDays,
+            confirmLinkMinutes: $minutes,
+        );
+
+        return $this;
+    }
+
+    /**
      * @return array<string, array<string, string|array<string, string>>> purpose => versions
      */
     public function getPurposes(): array
@@ -239,6 +284,11 @@ final class ProjectDefinition
     public function getManageLinks(): bool
     {
         return $this->manageLinks;
+    }
+
+    public function getPeriods(): ProjectPeriods
+    {
+        return $this->periods;
     }
 
     /**

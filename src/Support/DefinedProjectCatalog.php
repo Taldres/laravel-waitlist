@@ -84,6 +84,11 @@ class DefinedProjectCatalog implements ProjectCatalog
         return $this->definitions->get($project)?->getManageLinks() ?? true;
     }
 
+    public function periods(string $project): ProjectPeriods
+    {
+        return $this->definitions->get($project)?->getPeriods() ?? new ProjectPeriods;
+    }
+
     public function projects(): array
     {
         return array_values(array_unique([WaitlistEntry::DEFAULT_PROJECT, ...$this->definitions->names()]));
