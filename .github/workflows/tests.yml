@@ -61,11 +61,12 @@ jobs:
       - name: Linter
         run: composer lint:check
 
-      # Only where Pest 5 resolves: the type coverage plugin before 5.0.1
-      # writes its cache from parallel workers and corrupts it at random. The
-      # result does not depend on the lane anyway.
+      # Only where Pest 5 resolves, which needs PHP 8.4: the type coverage plugin
+      # before 5.0.1 writes its cache from parallel workers and corrupts it at
+      # random, and PHP 8.3 only gets Pest 4 with that plugin. The result does not
+      # depend on the lane anyway.
       - name: Type Coverage
-        if: runner.os != 'Windows' && matrix.stability == 'prefer-stable'
+        if: runner.os != 'Windows' && matrix.stability == 'prefer-stable' && matrix.php != '8.3'
         run: composer test:types
 
       - name: Test Suite
