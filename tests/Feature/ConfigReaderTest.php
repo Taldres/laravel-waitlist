@@ -125,15 +125,15 @@ describe('a switch', function () {
         expect(fn () => configReaderOf(ConfigKey::StoreIp, $value)->boolean(ConfigKey::StoreIp))
             ->toThrow(InvalidConfigurationException::class, "The waitlist.privacy.store_ip config must be true or false, got {$got}.");
     })->with([
-        'a decimal text' => ['1.0', 'string'],
+        'a decimal text' => ['1.0', 'a text it does not read'],
         'a float one' => [1.0, 'float'],
         'a float zero' => [0.0, 'float'],
-        'a leading zero' => ['01', 'string'],
-        'the text null' => ['null', 'string'],
-        'the text (true)' => ['(true)', 'string'],
-        'the text 2' => ['2', 'string'],
+        'a leading zero' => ['01', 'a text it does not read'],
+        'the text null' => ['null', 'a text it does not read'],
+        'the text (true)' => ['(true)', 'a text it does not read'],
+        'the text 2' => ['2', 'a text it does not read'],
         'the number -1' => [-1, 'int'],
-        'two words' => ['yes please', 'string'],
+        'two words' => ['yes please', 'a text it does not read'],
         'a list holding true' => [[true], 'array'],
         'an object' => [new stdClass, 'stdClass'],
         'a closure' => [fn () => true, 'Closure'],
@@ -173,9 +173,9 @@ describe('an environment variable', function () {
         '(null)' => ['(null)', 'null'],
         'empty' => ['empty', 'an empty text'],
         'nothing' => ['', 'an empty text'],
-        'maybe' => ['maybe', 'string'],
-        'a number past 1' => ['2', 'string'],
-        'blank' => [' ', 'string'],
+        'maybe' => ['maybe', 'a text it does not read'],
+        'a number past 1' => ['2', 'a text it does not read'],
+        'blank' => [' ', 'a text it does not read'],
     ]);
 
     it('reads as a number, around whitespace and with a leading zero', function (string $text, int $expected) {
@@ -196,9 +196,9 @@ describe('an environment variable', function () {
         '(null)' => ['(null)', 'must be a whole number, got null.'],
         'empty' => ['empty', 'must be a whole number, got an empty text'],
         'nothing' => ['', 'must be a whole number, got an empty text'],
-        'an exponent' => ['1e3', 'must be a whole number, got string.'],
-        'a fraction' => ['10.5', 'must be a whole number, got string.'],
-        'words' => ['ten', 'must be a whole number, got string.'],
+        'an exponent' => ['1e3', 'must be a whole number, got a text it does not read.'],
+        'a fraction' => ['10.5', 'must be a whole number, got a text it does not read.'],
+        'words' => ['ten', 'must be a whole number, got a text it does not read.'],
         'true, which env() makes a bool' => ['true', 'must be a whole number, got bool.'],
     ]);
 
@@ -218,7 +218,7 @@ describe('an environment variable', function () {
         'empty' => ['empty', 'an empty text'],
         '(empty)' => ['(empty)', 'an empty text'],
         'nothing' => ['', 'an empty text'],
-        'blank' => [' ', 'string'],
+        'blank' => [' ', 'a text it does not read'],
         'false, which env() makes a bool' => ['false', 'bool'],
     ]);
 
@@ -242,7 +242,7 @@ describe('an environment variable', function () {
             ->and(configReaderFromEnv('WAITLIST_RETENTION_SCHEDULE', 'null')->cronOrNull(ConfigKey::RetentionSchedule))->toBeNull()
             ->and(configReaderFromEnv('WAITLIST_RETENTION_SCHEDULE', '')->cronOrNull(ConfigKey::RetentionSchedule))->toBeNull()
             ->and(fn () => configReaderFromEnv('WAITLIST_RETENTION_SCHEDULE', 'nightly')->cronOrNull(ConfigKey::RetentionSchedule))
-            ->toThrow(InvalidConfigurationException::class, 'The waitlist.retention.schedule config must be a cron expression or null, got one that is not.');
+            ->toThrow(InvalidConfigurationException::class, 'The waitlist.retention.schedule config must be a cron expression such as 15 3 * * *, or null, got one that is not.');
     });
 });
 
@@ -346,7 +346,7 @@ describe('an export column list', function () {
 describe('a schedule', function () {
     it('is refused when it parses but can never run, as the prune it stands for would silently never happen', function (string $cron) {
         expect(fn () => configReaderOf(ConfigKey::RetentionSchedule, $cron)->cronOrNull(ConfigKey::RetentionSchedule))
-            ->toThrow(InvalidConfigurationException::class, 'The waitlist.retention.schedule config must be a cron expression that can run, or null, got one that never does.');
+            ->toThrow(InvalidConfigurationException::class, 'The waitlist.retention.schedule config must be a cron expression that can run, such as 15 3 * * *, or null, got one that never does.');
     })->with([
         'the 30th of February' => '0 0 30 2 *',
         'the 31st of February' => '0 0 31 2 *',
@@ -370,7 +370,7 @@ describe('a schedule', function () {
 
     it('is still told apart from one that does not parse', function (string $cron) {
         expect(fn () => configReaderOf(ConfigKey::RetentionSchedule, $cron)->cronOrNull(ConfigKey::RetentionSchedule))
-            ->toThrow(InvalidConfigurationException::class, 'must be a cron expression or null, got one that is not.');
+            ->toThrow(InvalidConfigurationException::class, 'must be a cron expression such as 15 3 * * *, or null, got one that is not.');
     })->with([
         'words' => 'not-a-cron',
         'blank' => ' ',

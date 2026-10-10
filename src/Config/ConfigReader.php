@@ -62,7 +62,7 @@ final class ConfigReader
             default => null,
         };
 
-        return $switch ?? throw self::invalid($key, 'be true or false', $value);
+        return $switch ?? throw self::invalid($key, 'be true or false', $value, readsText: true);
     }
 
     public function integer(ConfigKey $key, int $min): int
@@ -166,11 +166,11 @@ final class ConfigReader
         }
 
         if (! CronExpression::isValidExpression($cron)) {
-            throw new InvalidConfigurationException("The {$key->value} config must be a cron expression or null, got one that is not.");
+            throw new InvalidConfigurationException("The {$key->value} config must be a cron expression such as 15 3 * * *, or null, got one that is not.");
         }
 
         if (! self::comesDue($cron)) {
-            throw new InvalidConfigurationException("The {$key->value} config must be a cron expression that can run, or null, got one that never does.");
+            throw new InvalidConfigurationException("The {$key->value} config must be a cron expression that can run, such as 15 3 * * *, or null, got one that never does.");
         }
 
         return $cron;
@@ -286,7 +286,7 @@ final class ConfigReader
         };
 
         if (! is_int($number) && ! ($number === null && $value === null)) {
-            throw self::invalid($key, $nullable ? 'be a whole number or null' : 'be a whole number', $value);
+            throw self::invalid($key, $nullable ? 'be a whole number or null' : 'be a whole number', $value, readsText: true);
         }
 
         if ($number !== null && $number < $min) {
@@ -358,11 +358,16 @@ final class ConfigReader
     }
 
     /**
-     * Names the type only: a config value may be a secret.
+     * Names the type only: a config value may be a secret. Where a text is a
+     * form the setting reads, "string" would read as a wrong type.
      */
-    private static function invalid(ConfigKey $key, string $expected, mixed $value): InvalidConfigurationException
+    private static function invalid(ConfigKey $key, string $expected, mixed $value, bool $readsText = false): InvalidConfigurationException
     {
-        $got = $value === '' ? 'an empty text; if it comes from an empty variable in .env, remove the variable to keep the default' : get_debug_type($value);
+        $got = match (true) {
+            $value === '' => 'an empty text; if it comes from an empty variable in .env, remove the variable to keep the default',
+            $readsText && is_string($value) => 'a text it does not read',
+            default => get_debug_type($value),
+        };
 
         return new InvalidConfigurationException("The {$key->value} config must {$expected}, got {$got}.");
     }
