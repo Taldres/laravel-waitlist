@@ -41,3 +41,4 @@ Prove package behavior with Pest 4/5, Orchestra Testbench, and the local `tests/
 - Relying only on smoke tests when behavior needs assertions.
 - Testing implementation details when observable package behavior is available.
 - Keeping throwaway scaffolding experiment tests in the package test suite.
+- Fake secrets shaped like a provider's live key (`sk_live_...`): GitHub push protection rejects the push. Use an obviously fake value such as `secret-value-that-must-not-leak-4242`.
