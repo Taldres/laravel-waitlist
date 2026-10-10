@@ -9,6 +9,7 @@ use Taldres\Waitlist\Support\DefaultEmailNormalizer;
 use Taldres\Waitlist\Support\DefaultProjectResolver;
 use Taldres\Waitlist\Support\DefinedProjectCatalog;
 use Taldres\Waitlist\Support\NullSpamProtector;
+use Taldres\Waitlist\WaitlistServiceProvider;
 
 return [
 
@@ -87,7 +88,9 @@ return [
     |
     | When enabled, a new cycle starts as "pending" and must be confirmed via
     | token. Override it per list with ->doubleOptIn() in the list's
-    | definition. The token TTL is in minutes; set it to null to never expire.
+    | definition. The token TTL is in minutes, at least 1; set it to null to
+    | never expire. A link may not expire after 2038-01-19 03:14:07 UTC, where
+    | a MySQL or MariaDB timestamp column ends, so a longer TTL is refused.
     |
     */
 
@@ -95,7 +98,8 @@ return [
         'enabled' => env('WAITLIST_DOUBLE_OPT_IN', true),
         'token_ttl' => 60 * 24 * 7,
         /*
-        | Minimum minutes between two confirmation requests for the same cycle,
+        | Minimum minutes between two confirmation requests for the same cycle
+        | (0 or null for none; at most the minutes since 1970),
         | and how many may go out in total. Subscribing again while a cycle is
         | pending counts as a resend request, so these two caps stop a public
         | form from mailing the same person repeatedly. Past the cap, one more
@@ -130,11 +134,12 @@ return [
     | Every mail carries an unsubscribe token, which can only remove. The
     | preference page (data, purposes, erasure) needs a manage token instead:
     | requested with the unsubscribe token or the address, mailed to the
-    | address via ManageLinkRequested, and valid for token_ttl minutes. A new
-    | link replaces the last one. Requested by address, it only goes to an
-    | address that confirmed at least once. request_cooldown is the minimum
-    | number of minutes between two such mails to one address, across the
-    | project's lists; null for none.
+    | address via ManageLinkRequested, and valid for token_ttl minutes, at
+    | least 1 and, like the confirm link, not past 2038-01-19. A new link
+    | replaces the last one. Requested by address, it only goes to an address
+    | that confirmed at least once. request_cooldown is the minimum number of
+    | minutes between two such mails to one address, across the project's
+    | lists; 0 or null for none.
     |
     */
 
@@ -161,28 +166,16 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Reporting
-    |--------------------------------------------------------------------------
-    |
-    | Activity rows are dated in this timezone, and reports resolve their day
-    | boundaries in it. Null follows app.timezone. Changing it later does not
-    | rewrite rows that are already dated.
-    |
-    */
-
-    'reporting' => [
-        'timezone' => env('WAITLIST_REPORTING_TIMEZONE'),
-    ],
-
-    /*
-    |--------------------------------------------------------------------------
     | Retention
     |--------------------------------------------------------------------------
     |
     | Technical defaults, not statutory periods or legal recommendations. You
     | must justify your retention periods and monitor the cleanup. Values are
-    | days; null keeps the data. waitlist:prune applies them. Active confirmed
-    | entries and the remaining activity rows never expire automatically.
+    | days; null keeps the data. A period reaching back before 1970, which
+    | would never match a row, is refused: write null to keep. waitlist:prune
+    | applies the periods; one that does not read is reported and fails the
+    | run once the others are applied. Active confirmed entries and the
+    | remaining activity rows never expire automatically.
     |
     | - pending_days: addresses whose confirmation stayed outstanding, counted
     |   from the start of the cycle, so resends never extend it
@@ -192,7 +185,8 @@ return [
     | - request_metadata_days: IP and user agent on the log, when stored at all
     |
     | The package schedules waitlist:prune with this cron expression; null
-    | leaves scheduling to you. Either way, Laravel's scheduler must run.
+    | leaves scheduling to you. One that can never run, such as the 30th of
+    | February, is refused. Either way, Laravel's scheduler must run.
     |
     */
 
@@ -212,7 +206,8 @@ return [
     | GET|POST {prefix}/confirm/{token}, GET|POST {prefix}/unsubscribe/{token},
     | POST {prefix}/manage-link, and the preference page behind the manage
     | token: GET {prefix}/manage/{token}, POST .../data, PUT .../purposes,
-    | POST .../unsubscribe, POST .../erase.
+    | POST .../unsubscribe, POST .../erase. The prefix is a plain path, with no
+    | placeholder in it: the links in mails are built from the route name alone.
     |
     | Disabled by default so installing the package never silently exposes a
     | public write endpoint.
@@ -226,14 +221,16 @@ return [
     | and RFC 8058 one-click requests, which carry no credentials. Put
     | authentication into the project resolver below instead.
     |
-    | group_middleware adds middleware to one group only, after its rate limit:
+    | group_middleware adds middleware to one group only, after its rate limit
+    | (Laravel still sorts the cookies and session of "web" ahead of it):
     | "signup" for checks on your forms, such as CSRF ("web") or an origin
     | check, which the token links that mail providers call must not face.
     |
     | Rate limits apply per group: "signup" (signup, wording, manage links)
     | and "links" (everything with a token). Each names a limiter: the
     | package's "waitlist" and "waitlist-links", tuned by rate_limits, or one
-    | you define with RateLimiter::for(). Null turns a group's limit off.
+    | you define with RateLimiter::for(); a name nothing defines is refused.
+    | Null turns a group's limit off.
     | Guests are limited per IP; a server calling for its project (see
     | "authentication") per server, since all its visitors share its address.
     |
@@ -254,8 +251,10 @@ return [
         ],
         'rate_limits' => [
             'signup_per_minute' => env('WAITLIST_RATE_LIMIT_SIGNUP', 10),           // per visitor and endpoint
-            'link_per_minute' => env('WAITLIST_RATE_LIMIT_LINK', 10),               // per token
-            'links_per_ip_per_minute' => env('WAITLIST_RATE_LIMIT_LINKS_PER_IP', 600), // bounds made-up tokens
+            // The package's own link limits, 10 and 600, are also what stands in
+            // for a value here that does not read.
+            'link_per_minute' => env('WAITLIST_RATE_LIMIT_LINK', WaitlistServiceProvider::LINK_PER_MINUTE), // per token
+            'links_per_ip_per_minute' => env('WAITLIST_RATE_LIMIT_LINKS_PER_IP', WaitlistServiceProvider::LINKS_PER_IP_PER_MINUTE), // bounds made-up tokens
             'caller_signup_per_minute' => env('WAITLIST_RATE_LIMIT_CALLER_SIGNUP', 120), // per server with a project and endpoint
         ],
     ],
@@ -316,9 +315,10 @@ return [
     |--------------------------------------------------------------------------
     |
     | Columns are limited to CsvExporter::EXPORTABLE, so an export can never
-    | contain tokens. Keep spreadsheet_safe on unless you post-process the file:
-    | it prefixes cells starting with = + - @ tab or CR with an apostrophe, so
-    | spreadsheet applications treat them as text instead of formulas.
+    | contain tokens. Keep spreadsheet_safe on unless you post-process the
+    | file: it prefixes cells starting with = + - @ tab or CR with an
+    | apostrophe, so spreadsheet applications treat them as text instead of
+    | formulas.
     |
     */
 

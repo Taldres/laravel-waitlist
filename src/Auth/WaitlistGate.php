@@ -8,10 +8,9 @@ use Illuminate\Auth\Access\Response;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Contracts\HasWaitlistProject;
-use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\WaitlistAction;
-use Taldres\Waitlist\Support\Setting;
 
 /**
  * The useWaitlist gate: whether the caller may sign up, read the wording or
@@ -41,7 +40,7 @@ final class WaitlistGate
             return $caller->waitlistProject() === $project ? Response::allow() : Response::denyAsNotFound();
         }
 
-        if (! Setting::enabled(ConfigKey::AuthenticationRequired->value)) {
+        if (! WaitlistConfig::authenticationRequired()) {
             return Response::allow();
         }
 

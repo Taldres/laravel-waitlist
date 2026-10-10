@@ -102,7 +102,7 @@ class WaitlistReport
     }
 
     /**
-     * Confirmed entries at the end of a day in the reporting timezone. Exact as
+     * Confirmed entries at the end of a day in app.timezone. Exact as
      * far as the log reaches back; any period or forPurpose() is ignored.
      */
     public function confirmedOn(DateTimeInterface|string $day): int

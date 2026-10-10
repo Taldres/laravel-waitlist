@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Taldres\Waitlist\Actions;
 
 use Illuminate\Database\Eloquent\Collection;
+use Taldres\Waitlist\Config\ConfigFallback;
 use Taldres\Waitlist\Enums\EndReason;
 use Taldres\Waitlist\Exceptions\InvalidTokenException;
 use Taldres\Waitlist\Models\WaitlistConsent;
@@ -96,8 +97,10 @@ class WithdrawConsent
 
     /**
      * Found by address rather than by email_hash, so entries hashed under
-     * another key are included. Without a readable address only the entry
-     * itself can be reached.
+     * another key are included. Without a readable address, or with an email
+     * normalizer that does not work, only the entry itself can be reached: the
+     * token still ends what it names, and the failed sweep over the other
+     * lists is reported.
      *
      * @return Collection<int, WaitlistEntry>
      */
@@ -109,10 +112,13 @@ class WithdrawConsent
             return new Collection([$entry]);
         }
 
-        return static::modelClass()::query()
-            ->with('currentSubscription')
-            ->inProject($entry->project)
-            ->forEmail($email)
-            ->get();
+        return ConfigFallback::read(
+            fn (): Collection => static::modelClass()::query()
+                ->with('currentSubscription')
+                ->inProject($entry->project)
+                ->forEmail($email)
+                ->get(),
+            new Collection([$entry]),
+        );
     }
 }

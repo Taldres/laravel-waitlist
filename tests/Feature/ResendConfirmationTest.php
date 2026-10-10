@@ -3,8 +3,10 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Event;
+use Taldres\Waitlist\Config\TimestampRange;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Events\EntrySubscribed;
+use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Facades\Waitlist;
 use Taldres\Waitlist\Models\WaitlistEntry;
 
@@ -98,3 +100,17 @@ it('sends one more past the cap once the last link has expired, so nobody locks 
         ->and(Waitlist::resendConfirmation('beta', 'user@example.com'))->toBeNull()
         ->and($this->entry->fresh()->currentSubscription->hasExpiredToken())->toBeFalse();
 });
+
+it('keeps the throttle for the longest cooldown that fits', function () {
+    config()->set(ConfigKey::ResendCooldown->value, TimestampRange::minutesBack());
+
+    expect(Waitlist::resendConfirmation('beta', 'user@example.com'))->toBeNull()
+        ->and($this->entry->fresh()->currentSubscription->confirmation_count)->toBe(1);
+});
+
+it('refuses a cooldown so long that it would wrap around, rather than resending without one', function (mixed $cooldown) {
+    config()->set(ConfigKey::ResendCooldown->value, $cooldown);
+
+    expect(fn () => Waitlist::resendConfirmation('beta', 'user@example.com'))->toThrow(InvalidConfigurationException::class, ConfigKey::ResendCooldown->value)
+        ->and($this->entry->fresh()->currentSubscription->confirmation_count)->toBe(1);
+})->with([PHP_INT_MAX, (string) PHP_INT_MAX]);

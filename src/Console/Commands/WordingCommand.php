@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Taldres\Waitlist\Console\Commands;
 
 use Illuminate\Console\Command;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Taldres\Waitlist\Actions\RegisterWording;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
@@ -129,7 +130,7 @@ class WordingCommand extends Command
             }
 
             foreach ($versions as $texts) {
-                if (! is_string($texts) && ! (is_array($texts) && array_filter($texts, 'is_string') === $texts)) {
+                if (! is_string($texts) && ! (is_array($texts) && Arr::every($texts, fn (mixed $text): bool => is_string($text)))) {
                     return false;
                 }
             }

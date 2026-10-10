@@ -180,7 +180,7 @@ visitor as a form error. Fix it in code or config instead of catching it:
 
 | Exception | Thrown when |
 | --- | --- |
-| `InvalidConfigurationException` | a project definition, a config value or a binding is wrong: a list whose primary purpose is optional too, a mail link without `{token}`, a model or binding of the wrong class, a negative retention period, export columns that may not be exported |
+| `InvalidConfigurationException` | a project definition, a config value or a binding is wrong: a list whose primary purpose is optional too, a mail link without `{token}`, a model or binding of the wrong class, a guard `config/auth.php` does not define, a period below its minimum, export columns that may not be exported |
 | `MissingWordingException` | a list's primary purpose has no wording in force, e.g. with `StoredWordingCatalog` before the first `waitlist:wording`; a kind of `InvalidConfigurationException`, which `waitlist:privacy` reports as a row instead of failing |
 
 The macroable classes, swappable models and contracts are in [Extending](../extending.md).

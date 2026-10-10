@@ -16,15 +16,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 use Taldres\Waitlist\Actions\RecordActivity;
+use Taldres\Waitlist\Config\TimestampRange;
+use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Contracts\EmailNormalizer;
 use Taldres\Waitlist\Database\Factories\WaitlistEntryFactory;
-use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\EntryStatus;
 use Taldres\Waitlist\Events\EntryForgotten;
 use Taldres\Waitlist\Models\Concerns\UsesWaitlistEncrypter;
 use Taldres\Waitlist\Support\BlindIndex;
 use Taldres\Waitlist\Support\ResolvesModel;
-use Taldres\Waitlist\Support\Setting;
 
 /**
  * Identity only: what happens to the address lives in subscription cycles, and
@@ -86,9 +86,7 @@ class WaitlistEntry extends Model
 
     public static function waitlistConnection(): ?string
     {
-        $connection = Setting::value(ConfigKey::Connection->value);
-
-        return is_string($connection) && $connection !== '' ? $connection : null;
+        return WaitlistConfig::connection();
     }
 
     public function getConnectionName(): ?string
@@ -343,7 +341,7 @@ class WaitlistEntry extends Model
             ->where('status', EntryStatus::Pending)
             ->whereHas('currentSubscription', fn (Builder $cycle) => $cycle
                 ->whereNull('confirmed_at')
-                ->where('started_at', '<', now()->subDays($days)));
+                ->where('started_at', '<', TimestampRange::daysAgo($days)));
     }
 
     /**
@@ -357,7 +355,7 @@ class WaitlistEntry extends Model
         return $query
             ->where('status', EntryStatus::Unsubscribed)
             ->whereHas('latestSubscription', fn (Builder $cycle) => $cycle
-                ->where('ended_at', '<', now()->subDays($days)));
+                ->where('ended_at', '<', TimestampRange::daysAgo($days)));
     }
 
     protected static function newFactory(): WaitlistEntryFactory

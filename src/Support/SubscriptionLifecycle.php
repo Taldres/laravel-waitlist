@@ -10,9 +10,9 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Taldres\Waitlist\Actions\GetUnsubscribeToken;
 use Taldres\Waitlist\Actions\RecordActivity;
+use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
 use Taldres\Waitlist\Enums\ActivityType;
-use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\EndReason;
 use Taldres\Waitlist\Enums\EntryStatus;
 use Taldres\Waitlist\Events\ConsentGranted;
@@ -30,6 +30,10 @@ use Taldres\Waitlist\Models\WaitlistSubscription;
  * expected state. Only an update that affected exactly one row writes activity,
  * moves the entry's status projection and dispatches an event, so concurrent
  * callers see an event fire once.
+ *
+ * An event is built inside the transaction and dispatched after it: a link
+ * that cannot be built undoes the step, rather than leaving it committed and
+ * never announced.
  */
 class SubscriptionLifecycle
 {
@@ -38,7 +42,6 @@ class SubscriptionLifecycle
     public function __construct(
         protected RecordActivity $activity,
         protected GetUnsubscribeToken $unsubscribeToken,
-        protected ConfirmationUrlGenerator $urls,
     ) {}
 
     /**
@@ -60,9 +63,9 @@ class SubscriptionLifecycle
         ?string $confirmToken,
     ): WaitlistSubscription {
         $now = Carbon::now();
-        $ttl = Setting::integerOrNull(ConfigKey::ConfirmTokenTtl->value);
+        $expiresAt = $confirmToken !== null ? WaitlistConfig::confirmTokenExpiresAt($now) : null;
 
-        $subscription = static::waitlistConnection()->transaction(function () use ($entry, $purposes, $context, $doubleOptIn, $confirmToken, $now, $ttl): WaitlistSubscription {
+        [$subscription, $events] = static::waitlistConnection()->transaction(function () use ($entry, $purposes, $context, $doubleOptIn, $confirmToken, $now, $expiresAt): array {
             $last = static::subscriptionModelClass()::query()
                 ->where('waitlist_entry_id', $entry->getKey())
                 ->max('sequence');
@@ -73,7 +76,7 @@ class SubscriptionLifecycle
                 'sequence' => $sequence,
                 'active' => 1,
                 'confirm_token_hash' => $confirmToken !== null ? $entry::hashToken($confirmToken) : null,
-                'confirm_token_expires_at' => ($confirmToken !== null && $ttl !== null) ? $now->copy()->addMinutes($ttl) : null,
+                'confirm_token_expires_at' => $expiresAt,
                 'started_at' => $now,
                 'confirmation_sent_at' => $confirmToken !== null ? $now : null,
                 'confirmation_count' => $confirmToken !== null ? 1 : 0,
@@ -110,17 +113,16 @@ class SubscriptionLifecycle
                 ($this->activity)($entry, ActivityType::ConfirmationRequested, $subscription, $context);
             }
 
-            return $subscription;
+            return [$subscription, [
+                ...(! $doubleOptIn || $confirmToken !== null ? [$this->subscribed($entry, $subscription, $confirmToken, $doubleOptIn, isNewCycle: true)] : []),
+                // Without double opt-in the cycle starts confirmed;
+                // confirmation listeners must hear about it too.
+                ...(! $doubleOptIn ? [$this->confirmed($entry, $subscription)] : []),
+            ]];
         });
 
-        if (! $doubleOptIn || $confirmToken !== null) {
-            $this->announceSubscribed($entry, $subscription, $confirmToken, $doubleOptIn, isNewCycle: true);
-        }
-
-        // Without double opt-in the cycle starts confirmed; confirmation
-        // listeners must hear about it too.
-        if (! $doubleOptIn) {
-            $this->announceConfirmed($entry, $subscription);
+        foreach ($events as $event) {
+            event($event);
         }
 
         return $subscription;
@@ -133,22 +135,15 @@ class SubscriptionLifecycle
     {
         $attributes = ['confirmed_at' => Carbon::now()];
 
-        if (Setting::enabled(ConfigKey::InvalidateConfirmToken->value)) {
+        if (WaitlistConfig::singleUseConfirmTokens()) {
             $attributes['confirm_token_hash'] = null;
             $attributes['confirm_token_expires_at'] = null;
         }
 
-        $entry = $this->transition($subscription, $attributes, fn (Builder $query): Builder => $query
+        return $this->transition($subscription, $attributes, fn (Builder $query): Builder => $query
             ->whereNull('confirmed_at')
-            ->whereNull('ended_at'), ActivityType::Confirmed, $context);
-
-        if ($entry === null) {
-            return false;
-        }
-
-        $this->announceConfirmed($entry, $subscription);
-
-        return true;
+            ->whereNull('ended_at'), ActivityType::Confirmed, $context,
+            fn (WaitlistEntry $entry): EntryConfirmed => $this->confirmed($entry, $subscription));
     }
 
     /**
@@ -157,7 +152,7 @@ class SubscriptionLifecycle
      */
     public function end(WaitlistSubscription $subscription, EndReason $reason, RequestContext $context): bool
     {
-        $entry = $this->transition($subscription, [
+        return $this->transition($subscription, [
             'ended_at' => Carbon::now(),
             'end_reason' => $reason->value,
             'active' => null,
@@ -167,18 +162,11 @@ class SubscriptionLifecycle
             ->whereNull('ended_at')
             // A confirmation that lands before an expiry wins.
             ->when($reason === EndReason::Expired, fn (Builder $query): Builder => $query->whereNull('confirmed_at')),
-            $reason->activityType(), $context);
-
-        if ($entry === null) {
-            return false;
-        }
-
-        match ($reason) {
-            EndReason::Unsubscribed => EntryUnsubscribed::dispatch($entry, $subscription),
-            EndReason::Expired => SubscriptionExpired::dispatch($entry, $subscription),
-        };
-
-        return true;
+            $reason->activityType(), $context,
+            fn (WaitlistEntry $entry): object => match ($reason) {
+                EndReason::Unsubscribed => new EntryUnsubscribed($entry, $subscription),
+                EndReason::Expired => new SubscriptionExpired($entry, $subscription),
+            });
     }
 
     /**
@@ -189,27 +177,20 @@ class SubscriptionLifecycle
     public function sendConfirmation(WaitlistSubscription $subscription, string $confirmToken, RequestContext $context): bool
     {
         $expected = $subscription->confirmation_count;
-        $ttl = Setting::integerOrNull(ConfigKey::ConfirmTokenTtl->value);
         $now = Carbon::now();
+        $expiresAt = WaitlistConfig::confirmTokenExpiresAt($now);
 
-        $entry = $this->transition($subscription, [
+        return $this->transition($subscription, [
             'confirm_token_hash' => WaitlistEntry::hashToken($confirmToken),
-            'confirm_token_expires_at' => $ttl !== null ? $now->copy()->addMinutes($ttl) : null,
+            'confirm_token_expires_at' => $expiresAt,
             'confirmation_sent_at' => $now,
             'confirmation_count' => $expected + 1,
         ], fn (Builder $query): Builder => $query
             ->whereNull('confirmed_at')
             ->whereNull('ended_at')
-            ->where('confirmation_count', $expected), ActivityType::ConfirmationRequested, $context);
-
-        if ($entry === null) {
-            return false;
-        }
-
-        // The first request of a cycle that started without one is no reminder.
-        $this->announceSubscribed($entry, $subscription, $confirmToken, doubleOptIn: true, isNewCycle: $expected === 0);
-
-        return true;
+            ->where('confirmation_count', $expected), ActivityType::ConfirmationRequested, $context,
+            // The first request of a cycle that started without one is no reminder.
+            fn (WaitlistEntry $entry): EntrySubscribed => $this->subscribed($entry, $subscription, $confirmToken, doubleOptIn: true, isNewCycle: $expected === 0));
     }
 
     /**
@@ -313,10 +294,11 @@ class SubscriptionLifecycle
     }
 
     /**
-     * Null when another request got there first.
+     * False when another request got there first.
      *
      * @param  array<string, mixed>  $attributes
      * @param  Closure(Builder<WaitlistSubscription>): Builder<WaitlistSubscription>  $condition
+     * @param  Closure(WaitlistEntry): object  $event
      */
     protected function transition(
         WaitlistSubscription $subscription,
@@ -324,8 +306,9 @@ class SubscriptionLifecycle
         Closure $condition,
         ActivityType $type,
         RequestContext $context,
-    ): ?WaitlistEntry {
-        return static::waitlistConnection()->transaction(function () use ($subscription, $attributes, $condition, $type, $context): ?WaitlistEntry {
+        Closure $event,
+    ): bool {
+        $event = static::waitlistConnection()->transaction(function () use ($subscription, $attributes, $condition, $type, $context, $event): ?object {
             $affected = $condition(
                 static::subscriptionModelClass()::query()->whereKey($subscription->getKey()),
             )->update($attributes + ['updated_at' => Carbon::now()]);
@@ -343,8 +326,16 @@ class SubscriptionLifecycle
             ($this->activity)($entry, $type, $subscription, $context, previousStatus: $type->isDeparture() ? $entry->status : null);
             $this->project($entry, $subscription);
 
-            return $entry;
+            return $event($entry);
         });
+
+        if ($event === null) {
+            return false;
+        }
+
+        event($event);
+
+        return true;
     }
 
     /**
@@ -366,11 +357,11 @@ class SubscriptionLifecycle
         }
     }
 
-    protected function announceConfirmed(WaitlistEntry $entry, WaitlistSubscription $subscription): void
+    protected function confirmed(WaitlistEntry $entry, WaitlistSubscription $subscription): EntryConfirmed
     {
         $unsubscribe = ($this->unsubscribeToken)($entry);
 
-        EntryConfirmed::dispatch(
+        return new EntryConfirmed(
             entry: $entry,
             subscription: $subscription,
             unsubscribeToken: $unsubscribe->token,
@@ -378,21 +369,21 @@ class SubscriptionLifecycle
         );
     }
 
-    protected function announceSubscribed(
+    protected function subscribed(
         WaitlistEntry $entry,
         WaitlistSubscription $subscription,
         ?string $confirmToken,
         bool $doubleOptIn,
         bool $isNewCycle,
-    ): void {
+    ): EntrySubscribed {
         $unsubscribe = ($this->unsubscribeToken)($entry);
 
-        EntrySubscribed::dispatch(
+        return new EntrySubscribed(
             entry: $entry,
             subscription: $subscription,
             confirmToken: $confirmToken,
             unsubscribeToken: $unsubscribe->token,
-            confirmUrl: $confirmToken !== null ? $this->urls->confirmUrl($entry, $confirmToken) : null,
+            confirmUrl: $confirmToken !== null ? app(ConfirmationUrlGenerator::class)->confirmUrl($entry, $confirmToken) : null,
             unsubscribeUrl: $unsubscribe->url,
             requiresConfirmation: $doubleOptIn,
             isNewCycle: $isNewCycle,

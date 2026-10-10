@@ -8,15 +8,15 @@ use Illuminate\Auth\Access\Response;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Arr;
 use Illuminate\Validation\ValidationException;
 use Taldres\Waitlist\Auth\WaitlistGate;
+use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
-use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\WaitlistAction;
 use Taldres\Waitlist\Http\Rules\PurposeChoice;
-use Taldres\Waitlist\Support\Setting;
 
 class SubscribeRequest extends FormRequest
 {
@@ -50,7 +50,7 @@ class SubscribeRequest extends FormRequest
     {
         $purposes = $this->input('purposes');
 
-        return is_array($purposes) && array_filter($purposes, fn (mixed $choice): bool => is_array($choice) && array_key_exists('text', $choice)) !== [];
+        return is_array($purposes) && Arr::some($purposes, fn (mixed $choice): bool => is_array($choice) && array_key_exists('text', $choice));
     }
 
     /**
@@ -70,7 +70,7 @@ class SubscribeRequest extends FormRequest
     {
         $list = $this->input('list');
 
-        return is_string($list) ? $list : Setting::string(ConfigKey::DefaultList->value);
+        return is_string($list) ? $list : WaitlistConfig::defaultList();
     }
 
     /**

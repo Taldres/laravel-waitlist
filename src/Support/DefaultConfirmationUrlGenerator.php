@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Support;
 
-use Illuminate\Support\Facades\URL;
+use Illuminate\Routing\UrlGenerator;
+use Symfony\Component\Routing\Exception\RouteNotFoundException;
+use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
-use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\Page;
+use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Models\WaitlistEntry;
 
 class DefaultConfirmationUrlGenerator implements ConfirmationUrlGenerator
@@ -44,7 +46,7 @@ class DefaultConfirmationUrlGenerator implements ConfirmationUrlGenerator
             return str_replace('{token}', $plainToken, $pattern);
         }
 
-        if (Setting::enabled(ConfigKey::RoutesEnabled->value)) {
+        if (WaitlistConfig::routesEnabled()) {
             return self::packageUrl($action, ['token' => $plainToken]);
         }
 
@@ -61,10 +63,19 @@ class DefaultConfirmationUrlGenerator implements ConfirmationUrlGenerator
      */
     public static function packageUrl(string $action, array $parameters): string
     {
-        $root = config('app.url');
-        $name = Setting::value(ConfigKey::RoutesName->value);
-        $path = URL::route((is_string($name) ? $name : '').$action, $parameters, absolute: false);
+        $name = WaitlistConfig::routeName().$action;
+        $urls = app(UrlGenerator::class);
 
-        return is_string($root) && $root !== '' ? rtrim($root, '/').$path : URL::to($path);
+        try {
+            $path = $urls->route($name, $parameters, absolute: false);
+        } catch (RouteNotFoundException) {
+            // Routes that are on but not registered under this name come from a
+            // route cache built before the config changed, or while they were off.
+            throw new InvalidConfigurationException("The waitlist routes are on, but no route is named {$name}. Register them again, with php artisan route:cache if the routes are cached, and restart long-running workers.");
+        }
+
+        $root = config('app.url');
+
+        return is_string($root) && $root !== '' ? rtrim($root, '/').$path : $urls->to($path);
     }
 }

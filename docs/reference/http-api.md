@@ -55,9 +55,25 @@ A refusal the package answers itself names it in `error`, next to the
 | `410` | `expired_token` | The confirm or manage link has expired. |
 
 A `404` without `error` did not come from the package: there is no such route,
-often a URL without the routes' prefix, or the `useWaitlist` gate keeps the
-caller from the project. Validation errors are `422` with `errors`, as Laravel
-answers them, and rate limits `429` with `Retry-After`.
+often a URL without the routes' prefix, the routes are switched off, or the
+`useWaitlist` gate keeps the caller from the project. Validation errors are
+`422` with `errors`, as Laravel answers them, and rate limits `429` with
+`Retry-After`.
+
+## Routes that are off
+
+While `waitlist.routes.enabled` is off, every route answers `404`, also when a
+route cache still holds it. The request counts against no rate limit and starts
+no session, see [Middleware order](../securing-the-endpoints.md#middleware-order).
+Only what Laravel answers before any middleware runs still gets through: a
+method the route does not take (`405`) and `OPTIONS` (the allowed methods).
+Neither acts: no entry is written and no event fires.
+
+A setting that does not read refuses the request of its group with an
+`InvalidConfigurationException`, which Laravel renders as a `500`; the message
+in your logs names the config key. That includes an empty
+`WAITLIST_ROUTES_ENABLED=`, which is no decision to turn the routes off, and a
+limiter name that no `RateLimiter::for()` defines.
 
 ## GET never changes anything
 

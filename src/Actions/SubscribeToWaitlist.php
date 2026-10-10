@@ -67,6 +67,9 @@ class SubscribeToWaitlist
     ): SubscribeResult {
         $context ??= RequestContext::none();
         $policy = $this->registry->policy($project, $list);
+        // Decided before anything is registered or looked up: a setting that
+        // does not read must refuse every signup alike, a known address too.
+        $doubleOptIn = $policy->doubleOptIn;
         $wordings = $this->registry->resolve($policy, $purposes, acceptWording: true, caller: $context->caller);
 
         $email = $this->normalizer->normalize($email);
@@ -81,28 +84,28 @@ class SubscribeToWaitlist
 
         if ($entry === null) {
             try {
-                return $this->createWithCycle($policy, $email, $metadata, $wordings, $context);
+                return $this->createWithCycle($policy, $doubleOptIn, $email, $metadata, $wordings, $context);
             } catch (UniqueConstraintViolationException) {
                 // A concurrent request created the address first.
                 $entry = $this->find($policy, $email) ?? throw new UnknownWaitlistException('The waitlist entry vanished mid-request.');
             }
         }
 
-        return $this->continueExisting($policy, $entry, $email, $metadata, $wordings, $context);
+        return $this->continueExisting($policy, $doubleOptIn, $entry, $email, $metadata, $wordings, $context);
     }
 
     /**
      * @param  array<string, mixed>  $metadata
      * @param  list<PurposeWording>  $wordings
      */
-    protected function createWithCycle(ListPolicy $policy, string $email, array $metadata, array $wordings, RequestContext $context): SubscribeResult
+    protected function createWithCycle(ListPolicy $policy, bool $doubleOptIn, string $email, array $metadata, array $wordings, RequestContext $context): SubscribeResult
     {
         $model = static::modelClass();
-        $deferred = $policy->doubleOptIn && $this->resend->addressSaturated($policy->project, $email);
-        $confirmToken = $policy->doubleOptIn && ! $deferred ? Str::random(64) : null;
+        $deferred = $doubleOptIn && $this->resend->addressSaturated($policy->project, $email);
+        $confirmToken = $doubleOptIn && ! $deferred ? Str::random(64) : null;
         $unsubscribeToken = Str::random(64);
 
-        [$entry, $subscription] = static::waitlistConnection()->transaction(function () use ($model, $policy, $email, $metadata, $wordings, $context, $confirmToken, $unsubscribeToken): array {
+        [$entry, $subscription] = static::waitlistConnection()->transaction(function () use ($model, $policy, $doubleOptIn, $email, $metadata, $wordings, $context, $confirmToken, $unsubscribeToken): array {
             /** @var WaitlistEntry $entry */
             $entry = $model::query()->create([
                 'project' => $policy->project,
@@ -114,7 +117,7 @@ class SubscribeToWaitlist
                 'unsubscribe_token' => $unsubscribeToken,
             ]);
 
-            return [$entry, $this->lifecycle->start($entry, $wordings, $context, $policy->doubleOptIn, $confirmToken)];
+            return [$entry, $this->lifecycle->start($entry, $wordings, $context, $doubleOptIn, $confirmToken)];
         });
 
         return new SubscribeResult($entry, $subscription, $deferred ? SubscribeOutcome::ConfirmationDeferred : SubscribeOutcome::Started);
@@ -124,7 +127,7 @@ class SubscribeToWaitlist
      * @param  array<string, mixed>  $metadata
      * @param  list<PurposeWording>  $wordings
      */
-    protected function continueExisting(ListPolicy $policy, WaitlistEntry $entry, string $email, array $metadata, array $wordings, RequestContext $context, bool $retried = false): SubscribeResult
+    protected function continueExisting(ListPolicy $policy, bool $doubleOptIn, WaitlistEntry $entry, string $email, array $metadata, array $wordings, RequestContext $context, bool $retried = false): SubscribeResult
     {
         $current = $entry->currentSubscription;
 
@@ -136,12 +139,12 @@ class SubscribeToWaitlist
                     : SubscribeOutcome::ResendSuppressed);
         }
 
-        $deferred = $policy->doubleOptIn && $this->resend->addressSaturated($policy->project, $email);
-        $confirmToken = $policy->doubleOptIn && ! $deferred ? Str::random(64) : null;
+        $deferred = $doubleOptIn && $this->resend->addressSaturated($policy->project, $email);
+        $confirmToken = $doubleOptIn && ! $deferred ? Str::random(64) : null;
 
         try {
-            $subscription = static::waitlistConnection()->transaction(function () use ($policy, $entry, $metadata, $wordings, $context, $confirmToken): WaitlistSubscription {
-                $subscription = $this->lifecycle->start($entry, $wordings, $context, $policy->doubleOptIn, $confirmToken);
+            $subscription = static::waitlistConnection()->transaction(function () use ($doubleOptIn, $entry, $metadata, $wordings, $context, $confirmToken): WaitlistSubscription {
+                $subscription = $this->lifecycle->start($entry, $wordings, $context, $doubleOptIn, $confirmToken);
 
                 // Only a new opt-in brings metadata: a repeat on a running cycle
                 // comes from anyone who knows the address and proves nothing.
@@ -159,7 +162,7 @@ class SubscribeToWaitlist
                 throw new UnknownWaitlistException('The waitlist entry could not get a new cycle.');
             }
 
-            return $this->continueExisting($policy, $entry->refresh(), $email, [], $wordings, $context, retried: true);
+            return $this->continueExisting($policy, $doubleOptIn, $entry->refresh(), $email, [], $wordings, $context, retried: true);
         }
 
         return new SubscribeResult($entry, $subscription, $deferred ? SubscribeOutcome::ConfirmationDeferred : SubscribeOutcome::Resubscribed);

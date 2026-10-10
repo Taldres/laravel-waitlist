@@ -3,7 +3,10 @@
 declare(strict_types=1);
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Exceptions;
 use Taldres\Waitlist\Actions\EraseEntry;
 use Taldres\Waitlist\Actions\PruneEntries;
 use Taldres\Waitlist\Enums\ActivityType;
@@ -12,6 +15,7 @@ use Taldres\Waitlist\Enums\EndReason;
 use Taldres\Waitlist\Enums\EntryStatus;
 use Taldres\Waitlist\Events\EntryForgotten;
 use Taldres\Waitlist\Events\SubscriptionExpired;
+use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Facades\Waitlist;
 use Taldres\Waitlist\Models\WaitlistActivity;
 use Taldres\Waitlist\Models\WaitlistEntry;
@@ -81,8 +85,9 @@ it('refuses a negative retention period instead of erasing everything', function
     pendingSince(1);
     config()->set(ConfigKey::RetentionPendingDays->value, -1);
 
-    expect(fn () => app(PruneEntries::class)())->toThrow(InvalidArgumentException::class, ConfigKey::RetentionPendingDays->value.' must not be negative.');
-    expect(WaitlistEntry::query()->count())->toBe(1);
+    expect(fn () => app(PruneEntries::class)())->toThrow(InvalidArgumentException::class, 'The '.ConfigKey::RetentionPendingDays->value.' config must be at least 0.');
+    // Without the model: it reads the same config and would refuse it as well.
+    expect(DB::table('waitlist_entries')->count())->toBe(1);
 });
 
 it('counts an abandoned signup as leaving from pending, and its erasure as clean-up', function () {
@@ -228,4 +233,53 @@ it('erases a whole list once its purpose is fulfilled', function () {
 
     expect(Waitlist::for('beta')->forgetAll())->toBe(3)
         ->and(WaitlistEntry::query()->pluck('list')->all())->toBe(['launch']);
+});
+
+it('applies the periods it can read and then fails on the one it cannot', function () {
+    pendingSince(40);
+    leftSince(2000, email: 'gone@example.com');
+    config()->set(ConfigKey::RetentionRequestMetadataDays->value, -1);
+
+    expect(fn () => app(PruneEntries::class)())->toThrow(InvalidConfigurationException::class, ConfigKey::RetentionRequestMetadataDays->value)
+        ->and(WaitlistEntry::query()->count())->toBe(0);
+});
+
+it('applies the other periods when the first does not read', function () {
+    $left = leftSince(2000, email: 'gone@example.com');
+    WaitlistEntry::factory()->confirmed()->create();
+    config()->set(ConfigKey::RetentionPendingDays->value, 'soon');
+
+    expect(fn () => app(PruneEntries::class)())->toThrow(InvalidConfigurationException::class, ConfigKey::RetentionPendingDays->value)
+        ->and(WaitlistEntry::query()->whereKey($left->id)->exists())->toBeFalse()
+        ->and(WaitlistEntry::query()->count())->toBe(1);
+});
+
+it('throws the first period that does not read and reports the others', function () {
+    Exceptions::fake();
+    pendingSince(40);
+    config()->set(ConfigKey::RetentionPendingDays->value, 'soon');
+    config()->set(ConfigKey::RetentionUnsubscribedDays->value, -1);
+    config()->set(ConfigKey::RetentionRequestMetadataDays->value, 'later');
+
+    expect(fn () => app(PruneEntries::class)())->toThrow(InvalidConfigurationException::class, ConfigKey::RetentionPendingDays->value);
+
+    Exceptions::assertReported(fn (InvalidConfigurationException $exception) => str_contains($exception->getMessage(), ConfigKey::RetentionUnsubscribedDays->value));
+    Exceptions::assertReported(fn (InvalidConfigurationException $exception) => str_contains($exception->getMessage(), ConfigKey::RetentionRequestMetadataDays->value));
+    Exceptions::assertReportedCount(2);
+});
+
+it('fails the command on a period that does not read, after it applied the others', function () {
+    pendingSince(40);
+    leftSince(2000, email: 'gone@example.com');
+    config()->set(ConfigKey::RetentionRequestMetadataDays->value, 'soon');
+
+    expect(fn () => Artisan::call('waitlist:prune'))->toThrow(InvalidConfigurationException::class, ConfigKey::RetentionRequestMetadataDays->value)
+        ->and(WaitlistEntry::query()->count())->toBe(0);
+});
+
+it('runs the command to the end when every period reads', function () {
+    pendingSince(40);
+
+    expect(Artisan::call('waitlist:prune'))->toBe(0)
+        ->and(Artisan::output())->toContain('Expired and erased 1 unconfirmed');
 });

@@ -108,9 +108,20 @@ WHERE project = ? AND list IN (?) AND occurred_on BETWEEN ? AND ?
 GROUP BY occurred_on, type, previous_status
 ```
 
-Set `waitlist.reporting.timezone` to decide where a day ends. It defaults to
-`app.timezone`. Changing it later does not rewrite rows that are already dated,
-so pick it before you start collecting.
+## Where a day ends
+
+A reporting day ends in `app.timezone`, always. Each log row stores its day
+(`occurred_on`) when it is written, worked out in that zone, and the reports
+group on the stored day and resolve their periods in `app.timezone` too. With
+`app.timezone` at UTC, a signup at 23:30 in Berlin in summer belongs to the next
+UTC day: a defined day boundary, not a miscount.
+
+Choose `app.timezone` before the first signup. An erasure clears the exact time,
+so a day cannot be worked out again in another zone later: changing
+`app.timezone` afterwards does not redate existing rows, only the rows written
+after it use the new zone. Laravel advises keeping it stable anyway, as it
+stores timestamps without an offset and changing it later shifts what every
+stored time means.
 
 ## What an erasure leaves behind
 

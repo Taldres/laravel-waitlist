@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Artisan;
-use Taldres\Waitlist\Actions\PruneEntries;
+use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Contracts\EmailNormalizer;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
@@ -69,7 +69,7 @@ it('throws an InvalidConfigurationException for every setup mistake, never a Wai
     }],
     'a negative retention period' => [function () {
         config()->set(ConfigKey::RetentionPendingDays->value, -1);
-        PruneEntries::days(ConfigKey::RetentionPendingDays->value);
+        WaitlistConfig::retention();
     }],
     'export columns that may not be exported' => [function () {
         config()->set(ConfigKey::ExportColumns->value, ['email', 'confirm_token_hash']);

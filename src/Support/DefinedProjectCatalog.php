@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Support;
 
+use Closure;
+use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Definitions\ListDefinition;
 use Taldres\Waitlist\Definitions\ProjectDefinitions;
-use Taldres\Waitlist\Enums\ConfigKey;
+use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Models\WaitlistWording;
 
@@ -40,7 +42,7 @@ class DefinedProjectCatalog implements ProjectCatalog
             list: $list,
             primary: $definition->purpose,
             optional: $definition->getOptional(),
-            doubleOptIn: $definition->getDoubleOptIn() ?? Setting::enabled(ConfigKey::DoubleOptIn->value),
+            doubleOptIn: $definition->getDoubleOptIn() ?? $this->defaultDoubleOptIn(),
             wordingFromCallers: $this->definitions->get($project)?->getWordingFromCallers() ?? false,
         );
     }
@@ -128,5 +130,21 @@ class DefinedProjectCatalog implements ProjectCatalog
         $definition = $this->definitions->get($project);
 
         return $definition?->getList($list) ?? $definition?->getList('*');
+    }
+
+    /**
+     * A switch that does not read is not refused here, because a policy also
+     * serves leaving and withdrawing, which need none. Starting a cycle reads
+     * it from the policy and gets the error.
+     *
+     * @return bool|Closure(): bool
+     */
+    protected function defaultDoubleOptIn(): bool|Closure
+    {
+        try {
+            return WaitlistConfig::doubleOptIn();
+        } catch (InvalidConfigurationException) {
+            return WaitlistConfig::doubleOptIn(...);
+        }
     }
 }

@@ -8,6 +8,7 @@ use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Events\EntryForgotten;
 use Taldres\Waitlist\Events\ManageLinkRequested;
+use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Support\StoredWordingCatalog;
 
 function privacyRecord(): string
@@ -90,3 +91,36 @@ it('prints wording as stored, in one table row', function () {
 
     expect(privacyRecord())->toContain('| Email me <info>when</info> early access opens. |');
 });
+
+it('needs no setting it does not describe', function (string $key) {
+    config()->set($key, 'soon');
+
+    expect(Artisan::call('waitlist:privacy'))->toBe(0)
+        ->and(Artisan::output())->toContain('Waitlist processing record');
+})->with([
+    'the lifetime of a confirm link' => ConfigKey::ConfirmTokenTtl->value,
+    'the cooldown of manage link mails' => ConfigKey::ManageRequestCooldown->value,
+]);
+
+it('describes the manage link lifetime and the resend rules it reads', function () {
+    config()->set(ConfigKey::ManageTokenTtl->value, 90);
+    config()->set(ConfigKey::ResendCooldown->value, 15);
+    config()->set(ConfigKey::MaxConfirmations->value, null);
+    config()->set(ConfigKey::MaxPendingPerAddress->value, null);
+
+    expect(privacyRecord())
+        ->toContain('expires after 90 minutes')
+        ->toContain('- Confirmation mails limited to one per 15 minutes')
+        ->not->toContain('per cycle')
+        ->not->toContain('At most');
+});
+
+it('still fails on a setting it describes that does not read', function (string $key) {
+    config()->set($key, 'soon');
+
+    expect(fn () => Artisan::call('waitlist:privacy'))->toThrow(InvalidConfigurationException::class, $key);
+})->with([
+    ConfigKey::ManageTokenTtl->value,
+    ConfigKey::ResendCooldown->value,
+    ConfigKey::RetentionRequestMetadataDays->value,
+]);

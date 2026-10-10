@@ -6,10 +6,9 @@ namespace Taldres\Waitlist\Auth;
 
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Http\Request;
+use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Contracts\HasWaitlistProject;
-use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
-use Taldres\Waitlist\Support\Setting;
 
 /**
  * Who is calling the signup endpoints: the user of the first guard in
@@ -32,7 +31,7 @@ final class WaitlistCaller
         $caller = null;
 
         foreach (self::guards() as $guard) {
-            $user = $request->user($guard);
+            $user = $request->user(self::defined($guard));
 
             if ($user instanceof Authenticatable) {
                 $caller = $user;
@@ -59,13 +58,14 @@ final class WaitlistCaller
     }
 
     /**
-     * Never read from guests, who could send any address.
+     * Never read from guests, who could send any address, so neither is the
+     * setting.
      */
     public static function forwardedIp(Request $request): ?string
     {
-        $header = Setting::value(ConfigKey::ClientIpHeader->value);
+        $header = self::isServer($request) ? WaitlistConfig::clientIpHeader() : null;
 
-        if (! is_string($header) || $header === '' || ! self::isServer($request)) {
+        if ($header === null) {
             return null;
         }
 
@@ -86,13 +86,23 @@ final class WaitlistCaller
      */
     public static function guards(): array
     {
-        $guards = Setting::value(ConfigKey::AuthenticationGuards->value);
+        return WaitlistConfig::guards();
+    }
 
-        if (! is_array($guards) || array_filter($guards, fn (mixed $guard): bool => $guard !== null && ! is_string($guard)) !== []) {
-            throw new InvalidConfigurationException(ConfigKey::AuthenticationGuards->value.' must list guard names, or null for the default guard.');
+    /**
+     * Laravel refuses a guard it does not define with a bare
+     * InvalidArgumentException; this names the setting that asked for it.
+     */
+    private static function defined(?string $guard): ?string
+    {
+        $name = $guard ?? config('auth.defaults.guard');
+
+        if (! is_string($name) || config("auth.guards.{$name}") === null) {
+            $named = is_string($name) ? $name : 'the default one';
+
+            throw new InvalidConfigurationException("The waitlist.authentication.guards config names a guard config/auth.php does not define: {$named}.");
         }
 
-        /** @var list<string|null> */
-        return array_values($guards);
+        return $guard;
     }
 }

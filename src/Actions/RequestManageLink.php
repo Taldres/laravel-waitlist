@@ -6,11 +6,10 @@ namespace Taldres\Waitlist\Actions;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
-use Taldres\Waitlist\Enums\ConfigKey;
+use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Events\ManageLinkRequested;
 use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Support\ResolvesModel;
-use Taldres\Waitlist\Support\Setting;
 
 class RequestManageLink
 {
@@ -32,8 +31,11 @@ class RequestManageLink
             return false;
         }
 
-        $cooldown = Setting::integerOrNull(ConfigKey::ManageRequestCooldown->value);
+        $cooldown = WaitlistConfig::manageRequestCooldown();
         $now = Carbon::now();
+
+        // Read before the claim below: a link that cannot be issued must not start the cooldown.
+        IssueManageLink::ttl();
 
         if ($cooldown !== null && $this->sentToAddressSince($entry, $now->copy()->subMinutes($cooldown))) {
             return false;

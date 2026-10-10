@@ -98,7 +98,8 @@ freely given, specific, informed and unambiguous.
   form displayed it. Render the form from the same source, for example from
   `GET /waitlist/purposes`. A form with its own copy of the text posts back its
   hash, and a mismatch is refused; `WAITLIST_REQUIRE_WORDING_HASH=true` makes the
-  hash mandatory.
+  hash mandatory for every consent that is newly recorded, never for keeping or
+  withdrawing one.
 - Retiring every version of an optional purpose stops offering it; its list keeps
   working.
 - Removing a purpose from the catalog does not strand anyone: withdrawal works from

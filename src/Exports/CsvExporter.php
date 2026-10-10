@@ -9,12 +9,10 @@ use DateTimeInterface;
 use Illuminate\Database\Eloquent\Builder;
 use RuntimeException;
 use Stringable;
-use Taldres\Waitlist\Enums\ConfigKey;
+use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Enums\EntryStatus;
-use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Support\ResolvesModel;
-use Taldres\Waitlist\Support\Setting;
 
 class CsvExporter
 {
@@ -60,7 +58,8 @@ class CsvExporter
      */
     public function write(mixed $handle, string $list, ?EntryStatus $status = null, string $project = WaitlistEntry::DEFAULT_PROJECT): int
     {
-        $columns = $this->columns();
+        $export = WaitlistConfig::export();
+        $columns = $export->columns;
 
         fputcsv($handle, $columns, escape: '');
 
@@ -73,10 +72,10 @@ class CsvExporter
 
         $rows = 0;
 
-        $query->lazyById(500)->each(function (WaitlistEntry $entry) use ($handle, $columns, &$rows) {
+        $query->lazyById(500)->each(function (WaitlistEntry $entry) use ($handle, $columns, $export, &$rows) {
             // No escape character: RFC 4180 readers only know doubled quotes.
             fputcsv($handle, array_map(
-                fn (string $column) => $this->stringify($entry->getAttribute($column)),
+                fn (string $column) => $this->stringify($entry->getAttribute($column), $export->spreadsheetSafe),
                 $columns,
             ), escape: '');
             $rows++;
@@ -85,26 +84,7 @@ class CsvExporter
         return $rows;
     }
 
-    /**
-     * @return list<string>
-     */
-    protected function columns(): array
-    {
-        /** @var list<string> $columns */
-        $columns = Setting::value(ConfigKey::ExportColumns->value);
-
-        $unknown = array_diff($columns, self::EXPORTABLE);
-
-        if ($unknown !== []) {
-            throw new InvalidConfigurationException(
-                ConfigKey::ExportColumns->value.' contains columns that may not be exported: '.implode(', ', $unknown),
-            );
-        }
-
-        return $columns;
-    }
-
-    private function stringify(mixed $value): string
+    private function stringify(mixed $value, bool $spreadsheetSafe): string
     {
         $string = match (true) {
             $value === null => '',
@@ -115,7 +95,7 @@ class CsvExporter
             default => '',
         };
 
-        return Setting::enabled(ConfigKey::ExportSpreadsheetSafe->value) ? $this->neutralizeFormula($string) : $string;
+        return $spreadsheetSafe ? $this->neutralizeFormula($string) : $string;
     }
 
     /**

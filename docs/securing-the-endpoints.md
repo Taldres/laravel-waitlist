@@ -187,10 +187,12 @@ them. See [Who may call](projects.md#who-may-call-the-usewaitlist-gate).
 
 ## Checks for your forms only
 
-`routes.group_middleware` adds middleware to one group, after its rate limit.
-Checks that only your own forms can pass belong on `signup`: the token links in
-your mails, and the one-click requests mail providers send without cookies or
-credentials, never face them.
+`routes.group_middleware` adds middleware to one group, after its rate limit,
+apart from what Laravel always sorts ahead of it, such as the cookies and the
+session of `web`, see [Middleware order](#middleware-order). Checks that only
+your own forms can pass belong on `signup`: the token links in your mails, and
+the one-click requests mail providers send without cookies or credentials,
+never face them.
 
 ```php
 // config/waitlist.php
@@ -245,6 +247,45 @@ class OwnOrigins
 A browser cannot fake its `Origin`; a script outside one can, so this, too,
 keeps out other websites, not bots.
 
+## Middleware order
+
+Every package route starts with a check of the `waitlist.routes` settings, ahead
+of the rate limit and the middleware you configure. It answers `404` while
+`routes.enabled` is off, which also covers a route cache that still holds the
+routes, and refuses a request with an `InvalidConfigurationException` naming the
+key when a setting of its group does not read.
+
+The check is not in Laravel's middleware priority list, so Laravel would sort
+the rate limit, route bindings and, with `web`, the cookies and the session ahead
+of it. The package therefore puts the check at the head of that list when it boots.
+A route that is off then neither counts against a limiter nor starts a session,
+and answers `404` even when a rate limit does not read.
+Middleware of your own that the list does not name is not moved: it runs ahead
+of the check only if you list it in `routes.middleware` before everything the
+list does name, the `api` group for one.
+
+An app that sets the list with `priority()` in `bootstrap/app.php` is covered:
+Laravel applies it when the HTTP kernel resolves, before any provider boots, and
+the package then adds the check in front of it. An app that replaces the list
+afterwards, with `setMiddlewarePriority()` in a provider that boots after the
+package or in a `booted()` callback, takes the check out again. A route that is
+off then counts against its limiter and answers `429` once the limit is used up.
+List the check first in your own list:
+
+```php
+use Taldres\Waitlist\Http\Middleware\CheckRouteConfig;
+
+$kernel->setMiddlewarePriority([
+    CheckRouteConfig::class,
+    // the rest of your list
+]);
+```
+
+A route that is off still answers a method it does not take with `405` and
+`OPTIONS` with the methods it allows, as Laravel answers both before any
+middleware runs, a route cache included. Nothing acts on them: no entry is
+written and no event fires.
+
 ## Rate limits
 
 The routes fall into two groups, each throttled by its own named limiter:
@@ -287,6 +328,11 @@ it under a name of your own and point the group at it:
     ],
 ],
 ```
+
+Define it in a service provider's `boot()`, so it exists by the first request.
+A name that no `RateLimiter::for()` defines refuses the requests of the group
+with an `InvalidConfigurationException` that names the config key, token links
+included.
 
 Your limiter then decides everything for that group, the way any Laravel
 [named rate limiter](https://laravel.com/docs/routing#rate-limiting) does; the

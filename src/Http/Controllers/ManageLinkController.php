@@ -7,13 +7,12 @@ namespace Taldres\Waitlist\Http\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Taldres\Waitlist\Auth\WaitlistGate;
+use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Contracts\SpamProtector;
-use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\WaitlistAction;
 use Taldres\Waitlist\Exceptions\UnknownWaitlistException;
 use Taldres\Waitlist\Http\Controllers\Concerns\ValidatesAsJson;
-use Taldres\Waitlist\Support\Setting;
 use Taldres\Waitlist\WaitlistManager;
 
 class ManageLinkController
@@ -24,10 +23,11 @@ class ManageLinkController
      * The link goes to the mailbox via ManageLinkRequested, never into this
      * response, which is identical whether or not anything was sent.
      */
-    public function __invoke(Request $request, WaitlistManager $waitlist, SpamProtector $protector, ProjectResolver $projects): JsonResponse
+    public function __invoke(Request $request, WaitlistManager $waitlist): JsonResponse
     {
         // A token belongs to an entry and its project, so it needs neither the
-        // resolver nor the gate.
+        // resolver, the gate nor the spam protector; they are resolved below,
+        // so their settings cannot stop a request by token.
         if ($request->has('token')) {
             /** @var array{token: string} $validated */
             $validated = $this->validateAsJson($request, ['token' => ['required', 'string', 'max:255']]);
@@ -39,9 +39,9 @@ class ManageLinkController
 
         // By address, as on the signup form: the project and the gate come
         // before validation and the spam check.
-        $project = $projects->resolve($request);
+        $project = app(ProjectResolver::class)->resolve($request);
         $list = $request->input('list');
-        $list = is_string($list) ? $list : Setting::string(ConfigKey::DefaultList->value);
+        $list = is_string($list) ? $list : WaitlistConfig::defaultList();
 
         WaitlistGate::inspect($request, $project, WaitlistAction::RequestManageLink, $list)->authorize();
 
@@ -54,7 +54,7 @@ class ManageLinkController
         ]);
 
         // Anyone can type an address here, as on the signup form.
-        if (! $protector->passes($request)) {
+        if (! app(SpamProtector::class)->passes($request)) {
             return new JsonResponse(['message' => 'Spam check failed.'], 422);
         }
 

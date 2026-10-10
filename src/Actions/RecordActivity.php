@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Actions;
 
+use DateTimeInterface;
 use Illuminate\Support\Carbon;
 use Taldres\Waitlist\Enums\ActivityType;
 use Taldres\Waitlist\Enums\EntryStatus;
@@ -80,8 +81,8 @@ class RecordActivity
      * engine-specific date functions and independent of the timezone the query
      * runs in.
      */
-    public static function dateFor(Carbon $moment): string
+    public static function dateFor(DateTimeInterface $moment): string
     {
-        return $moment->copy()->setTimezone(Period::timezone())->toDateString();
+        return Carbon::instance($moment)->setTimezone(Period::timezone())->toDateString();
     }
 }
