@@ -11,6 +11,16 @@ use Taldres\Waitlist\Support\DefinedProjectCatalog;
 use Taldres\Waitlist\Support\NullSpamProtector;
 use Taldres\Waitlist\WaitlistServiceProvider;
 
+/*
+| Every setting is described in docs/reference/configuration.md, which is not
+| installed with the package: open it at the tag of your version on
+| https://github.com/Taldres/laravel-waitlist/blob/main/docs/reference/configuration.md
+|
+| An empty variable in .env is refused, naming the key, for every setting but
+| five that read it as unset, like null: the connection, the two limiters, the
+| client IP header and the retention schedule. Their comments say so.
+*/
+
 return [
 
     /*
@@ -34,8 +44,8 @@ return [
     | Database Connection
     |--------------------------------------------------------------------------
     |
-    | Null uses the application default. Set this to keep waitlist tables on a
-    | separate connection.
+    | Null, or an empty value, uses the application default. Set this to keep
+    | waitlist tables on a separate connection.
     |
     */
 
@@ -185,8 +195,8 @@ return [
     |   disputed; agree on the period with your data protection officer
     | - request_metadata_days: IP and user agent on the log, when stored at all
     |
-    | The package schedules waitlist:prune with this cron expression; null
-    | leaves scheduling to you. One that can never run, such as the 30th of
+    | The package schedules waitlist:prune with this cron expression; null, or
+    | an empty value, leaves scheduling to you. One that can never run, such as the 30th of
     | February, is refused. Either way, Laravel's scheduler must run.
     |
     */
@@ -231,7 +241,7 @@ return [
     | and "links" (everything with a token). Each names a limiter: the
     | package's "waitlist" and "waitlist-links", tuned by rate_limits, or one
     | you define with RateLimiter::for(); a name nothing defines is refused.
-    | Null turns a group's limit off.
+    | Null, or an empty value, turns a group's limit off.
     | Guests are limited per IP; a server calling for its project (see
     | "authentication") per server, since all its visitors share its address.
     |
@@ -292,7 +302,8 @@ return [
     | in which your servers forward the visitor's address, e.g.
     | "X-Waitlist-Client-Ip", to limit per visitor here as well and record
     | that address with the consent. It is read from callers with a project
-    | only, never from guests, who could send anything.
+    | only, never from guests, who could send anything. Null, or an empty value,
+    | names none.
     */
     'authentication' => [
         'guards' => [null],
