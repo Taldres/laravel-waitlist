@@ -137,9 +137,9 @@ The retention periods are technical defaults, not legal recommendations; see
 | `prefix` | | `waitlist` | the path the routes live under, empty for the root; no `{placeholder}`, as the links in mails cannot be built for one |
 | `name` | | `waitlist.` | the route name prefix |
 | `middleware` | | `['api']` | applies to every route, token links included: no authentication here |
-| `group_middleware.signup` | | `[]` | added to signup, wording and manage links only, after the rate limit, apart from what Laravel always sorts ahead of it, such as the session of `web`: checks for your forms, such as CSRF or an origin check, see [Checks for your forms only](../securing-the-endpoints.md#checks-for-your-forms-only) |
+| `group_middleware.signup` | | `[]` | added to signup, wording and manage links by address only, after the rate limit, apart from what Laravel always sorts ahead of it, such as the session of `web`: checks for your forms, such as CSRF or an origin check, see [Checks for your forms only](../securing-the-endpoints.md#checks-for-your-forms-only) |
 | `group_middleware.links` | | `[]` | added to everything with a token only |
-| `limiters.signup` | | `waitlist` | named limiter for signup, wording and manage links; `null` or empty off; a name no `RateLimiter::for()` defines is refused |
+| `limiters.signup` | | `waitlist` | named limiter for signup, wording and manage links by address; `null` or empty off; a name no `RateLimiter::for()` defines is refused |
 | `limiters.links` | | `waitlist-links` | named limiter for everything with a token; `null` or empty off; a name no `RateLimiter::for()` defines is refused |
 | `rate_limits.signup_per_minute` | `WAITLIST_RATE_LIMIT_SIGNUP` | 10 | per visitor and endpoint: a guest's IP, or the address a server forwards; at least 1, as do all four |
 | `rate_limits.link_per_minute` | `WAITLIST_RATE_LIMIT_LINK` | 10 | per token; one that does not read gives way to 10, reported |

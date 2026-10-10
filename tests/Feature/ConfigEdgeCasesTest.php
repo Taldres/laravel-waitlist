@@ -162,12 +162,12 @@ function edgeCaseFlows(): array
                 Event::assertDispatched(ManageLinkRequested::class);
             };
         }],
-        'manage link requested by token over HTTP' => [[...$store, ...$manageLink, ...$signup], true, function ($test): Closure {
+        'manage link requested by token over HTTP' => [[...$store, ...$manageLink, ...$links], true, function ($test): Closure {
             $tokens = edgeCaseSubscribe();
             Event::fake([ManageLinkRequested::class]);
 
             return function () use ($test, $tokens): void {
-                $test->postJson('/waitlist/manage-link', ['token' => $tokens['unsubscribe']])->assertStatus(202);
+                $test->postJson("/waitlist/unsubscribe/{$tokens['unsubscribe']}/manage-link")->assertStatus(202);
 
                 Event::assertDispatched(ManageLinkRequested::class);
             };

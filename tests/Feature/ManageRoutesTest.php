@@ -129,8 +129,8 @@ describe('with routes enabled', function () {
         Event::fake([ManageLinkRequested::class]);
 
         $responses = [
-            $this->postJson('/waitlist/manage-link', ['token' => $this->tokens['unsubscribe']]),
-            $this->postJson('/waitlist/manage-link', ['token' => 'nope']),
+            $this->postJson("/waitlist/unsubscribe/{$this->tokens['unsubscribe']}/manage-link"),
+            $this->postJson('/waitlist/unsubscribe/nope/manage-link'),
             $this->postJson('/waitlist/manage-link', ['email' => 'nobody@example.com', 'list' => 'beta']),
             $this->postJson('/waitlist/manage-link', ['email' => 'user@example.com', 'list' => 'beta']),
         ];
@@ -141,7 +141,17 @@ describe('with routes enabled', function () {
 
         Event::assertDispatchedTimes(ManageLinkRequested::class, 1);
 
-        $this->postJson('/waitlist/manage-link', [])->assertStatus(422)->assertJsonValidationErrors(['token', 'email']);
+        $this->postJson('/waitlist/manage-link', [])->assertStatus(422)->assertJsonValidationErrors(['email']);
+    });
+
+    it('takes the token from the path only, not from the body of the request by address', function () {
+        Event::fake([ManageLinkRequested::class]);
+
+        $this->postJson('/waitlist/manage-link', ['token' => $this->tokens['unsubscribe']])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['email']);
+
+        Event::assertNotDispatched(ManageLinkRequested::class);
     });
 
     it('runs the spam check when the address is typed in', function () {
@@ -149,7 +159,7 @@ describe('with routes enabled', function () {
         Waitlist::verifySpamUsing(fn () => false);
 
         $this->postJson('/waitlist/manage-link', ['email' => 'user@example.com', 'list' => 'beta'])->assertStatus(422);
-        $this->postJson('/waitlist/manage-link', ['token' => $this->tokens['unsubscribe']])->assertStatus(202);
+        $this->postJson("/waitlist/unsubscribe/{$this->tokens['unsubscribe']}/manage-link")->assertStatus(202);
 
         Waitlist::verifySpamUsing(null);
         Event::assertDispatchedTimes(ManageLinkRequested::class, 1);
@@ -162,10 +172,10 @@ describe('with routes enabled', function () {
 
         $refused = ['message' => 'This project offers no manage links.', 'error' => 'manage_links_disabled'];
 
-        $this->postJson('/waitlist/manage-link', ['token' => $this->tokens['unsubscribe']])->assertNotFound()->assertExactJson($refused);
+        $this->postJson("/waitlist/unsubscribe/{$this->tokens['unsubscribe']}/manage-link")->assertNotFound()->assertExactJson($refused);
         $this->postJson('/waitlist/manage-link', ['email' => 'user@example.com', 'list' => 'beta'])->assertNotFound()->assertExactJson($refused);
         $this->postJson('/waitlist/manage-link', ['email' => 'nobody@example.com', 'list' => 'beta'])->assertNotFound()->assertExactJson($refused);
-        $this->postJson('/waitlist/manage-link', ['token' => 'nope'])->assertStatus(202);
+        $this->postJson('/waitlist/unsubscribe/nope/manage-link')->assertStatus(202);
 
         Waitlist::verifySpamUsing(null);
         Event::assertNotDispatched(ManageLinkRequested::class);

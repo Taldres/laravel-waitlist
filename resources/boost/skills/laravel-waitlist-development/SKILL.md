@@ -182,8 +182,8 @@ $entry->hasConsentFor('newsletter');
 - Mails carry only the unsubscribe token, which can only remove. The preference
   page needs a short-lived manage token, mailed on request: listen to
   `ManageLinkRequested` and send `$event->manageUrl` to `$event->entry->email`.
-  Requests: `POST /waitlist/manage-link` with `token` (the unsubscribe token) or
-  `email`, `Waitlist::requestManageLink($token)`,
+  Requests: `POST /waitlist/unsubscribe/{token}/manage-link` (the unsubscribe
+  token) or `POST /waitlist/manage-link` with `email`, `Waitlist::requestManageLink($token)`,
   `Waitlist::for($list)->requestManageLink($email)`.
 - With routes on, the page uses `GET /waitlist/manage/{token}`, `PUT .../purposes`,
   `POST .../data`, `POST .../unsubscribe`, and `POST .../erase` with

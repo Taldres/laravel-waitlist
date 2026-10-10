@@ -158,7 +158,8 @@ describe('the order a route runs its middleware in', function () {
 
         expect(priorityOrderOf('waitlist.subscribe')[0])->toBe('CheckRouteConfig:signup')
             ->and(priorityOrderOf('waitlist.subscribe'))->toContain('ThrottleRequests:waitlist', $first)
-            ->and(priorityOrderOf('waitlist.confirm')[0])->toBe('CheckRouteConfig:links');
+            ->and(priorityOrderOf('waitlist.confirm')[0])->toBe('CheckRouteConfig:links')
+            ->and(priorityOrderOf('waitlist.unsubscribe.manage-link')[0])->toBe('CheckRouteConfig:links');
     })->with([
         'api' => [['api'], 'SubstituteBindings'],
         'web' => [['web'], 'StartSession'],

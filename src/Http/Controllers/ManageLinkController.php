@@ -13,7 +13,6 @@ use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Contracts\SpamProtector;
 use Taldres\Waitlist\Enums\ApiError;
 use Taldres\Waitlist\Enums\WaitlistAction;
-use Taldres\Waitlist\Exceptions\ManageLinksDisabledException;
 use Taldres\Waitlist\Exceptions\UnknownWaitlistException;
 use Taldres\Waitlist\Http\Controllers\Concerns\ValidatesAsJson;
 use Taldres\Waitlist\WaitlistManager;
@@ -23,29 +22,14 @@ class ManageLinkController
     use ValidatesAsJson;
 
     /**
-     * The link goes to the mailbox via ManageLinkRequested, never into this
-     * response, which is identical whether or not anything was sent.
+     * By address, as on the signup form: the project and the gate come before
+     * validation and the spam check. The link goes to the mailbox via
+     * ManageLinkRequested, never into this response, which is identical
+     * whether or not anything was sent. With a token from a mail, see
+     * ManageLinkByTokenController.
      */
     public function __invoke(Request $request, WaitlistManager $waitlist): JsonResponse
     {
-        // A token belongs to an entry and its project, so it needs neither the
-        // resolver, the gate nor the spam protector; they are resolved below,
-        // so their settings cannot stop a request by token.
-        if ($request->has('token')) {
-            /** @var array{token: string} $validated */
-            $validated = $this->validateAsJson($request, ['token' => ['required', 'string', 'max:255']]);
-
-            try {
-                $waitlist->requestManageLink($validated['token']);
-            } catch (ManageLinksDisabledException) {
-                return $this->disabled();
-            }
-
-            return new JsonResponse(['message' => 'Requested.'], 202);
-        }
-
-        // By address, as on the signup form: the project and the gate come
-        // before validation and the spam check.
         $project = app(ProjectResolver::class)->resolve($request);
         $list = $request->input('list');
         $list = is_string($list) && $list !== '' ? $list : WaitlistConfig::defaultList();
@@ -55,14 +39,12 @@ class ManageLinkController
         // Per project, so the answer says nothing about the address; before the
         // spam check, so no challenge is spent on a request that cannot succeed.
         if (! app(ProjectCatalog::class)->manageLinks($project)) {
-            return $this->disabled();
+            return self::disabled();
         }
 
-        // Without either, the 422 names both alternatives.
         /** @var array{email: string, list?: string} $validated */
         $validated = $this->validateAsJson($request, [
-            'token' => ['required_without:email', 'string', 'max:255'],
-            'email' => ['required_without:token', 'email:filter', 'max:255'],
+            'email' => ['required', 'email:filter', 'max:255'],
             'list' => ['sometimes', 'nullable', 'string', 'max:255'],
         ]);
 
@@ -80,7 +62,7 @@ class ManageLinkController
         return new JsonResponse(['message' => 'Requested.'], 202);
     }
 
-    private function disabled(): JsonResponse
+    public static function disabled(): JsonResponse
     {
         return new JsonResponse(['message' => 'This project offers no manage links.', 'error' => ApiError::ManageLinksDisabled->value], 404);
     }

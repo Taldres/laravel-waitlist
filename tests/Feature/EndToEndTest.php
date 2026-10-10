@@ -41,7 +41,7 @@ it('runs a whole life on the list over HTTP and leaves no trace of the person', 
 
     // An unsubscribe token cannot open the preference page; it can only request a manage link by mail.
     $this->getJson("/waitlist/manage/{$tokens['unsubscribe']}")->assertNotFound();
-    $this->postJson('/waitlist/manage-link', ['token' => $tokens['unsubscribe']])->assertStatus(202);
+    $this->postJson("/waitlist/unsubscribe/{$tokens['unsubscribe']}/manage-link")->assertStatus(202);
 
     $manage = "/waitlist/manage/{$tokens['manage']}";
 

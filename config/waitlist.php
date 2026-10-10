@@ -230,8 +230,8 @@ return [
     | "signup" for checks on your forms, such as CSRF ("web") or an origin
     | check, which the token links that mail providers call must not face.
     |
-    | Rate limits apply per group: "signup" (signup, wording, manage links)
-    | and "links" (everything with a token). Each names a limiter: the
+    | Rate limits apply per group: "signup" (signup, wording, manage links by
+    | address) and "links" (everything with a token). Each names a limiter: the
     | package's "waitlist" and "waitlist-links", tuned by rate_limits, or one
     | you define with RateLimiter::for(); a name nothing defines is refused.
     | Null, or an empty value, turns a group's limit off.
