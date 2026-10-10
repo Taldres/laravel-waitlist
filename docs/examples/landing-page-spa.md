@@ -18,7 +18,8 @@ WAITLIST_ROUTES_ENABLED=true
 - Purposes and lists as in [Getting started](../getting-started.md#2-define-the-purposes-and-the-list).
 - A queued listener that sends the confirmation mail, and one for the preference
   page link: [Mail](../mail.md).
-- A frontend on another origin than the app: allow it in CORS, see
+- A frontend on another origin than the app: name it with `$project->origins([...])`,
+  which also handles CORS, see
   [Securing the endpoints](../securing-the-endpoints.md#cors).
 - Bot protection on the signup: [Securing the endpoints](../securing-the-endpoints.md#bot-protection-via-spamprotector).
 

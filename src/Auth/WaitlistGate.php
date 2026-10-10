@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Gate;
 use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Contracts\HasWaitlistProject;
 use Taldres\Waitlist\Enums\WaitlistAction;
+use Taldres\Waitlist\Support\OriginPolicy;
 
 /**
  * The useWaitlist gate: whether the caller may sign up, read the wording or
@@ -51,10 +52,17 @@ final class WaitlistGate
 
     /**
      * Asks the gate for the request's caller; authorize() the result to throw
-     * with the status and message the gate chose.
+     * with the status and message the gate chose. A guest from a website that
+     * the project does not list is refused first, whatever the gate says.
      */
     public static function inspect(Request $request, string $project, WaitlistAction $action, ?string $list = null): Response
     {
-        return Gate::forUser(WaitlistCaller::of($request))->inspect(self::ABILITY, [$project, $action, $list]);
+        $caller = WaitlistCaller::of($request);
+
+        if (! $caller instanceof HasWaitlistProject && ! OriginPolicy::allows($request, $project)) {
+            return Response::deny('This website may not use the waitlist.');
+        }
+
+        return Gate::forUser($caller)->inspect(self::ABILITY, [$project, $action, $list]);
     }
 }

@@ -61,6 +61,11 @@ class DatabaseCatalog extends StoredWordingCatalog
         return (bool) (Project::query()->where('key', $project)->value('manage_links') ?? true);
     }
 
+    public function origins(string $project): array
+    {
+        return Project::query()->where('key', $project)->value('origins') ?? [];   // e.g. a JSON column
+    }
+
     public function periods(string $project): ProjectPeriods
     {
         // What the site promised in its privacy notice, null where the
@@ -200,8 +205,9 @@ and where browsers land afterwards, come from its `urlPattern()`; the
 since the one-click request has to reach the package.
 
 Keep the key check out of `routes.middleware`: it applies to the token links
-too. Allow each site's origin in CORS, and configure trusted proxies so the rate
-limiter sees real client IPs.
+too. Return each site's origins from `origins($project)` of your catalog: they
+drive CORS and refuse other websites' browsers. Configure trusted proxies so the
+rate limiter sees real client IPs.
 
 ## 4. Mails per project
 
