@@ -192,6 +192,7 @@ class PrivacyCommand extends Command
 
         $retention = WaitlistConfig::retention();
         $schedule = WaitlistConfig::pruneSchedule();
+        [$offering, $without] = $this->manageLinkProjects($catalog, $projects);
 
         return [
             '## Retention',
@@ -204,9 +205,9 @@ class PrivacyCommand extends Command
             $schedule !== null
                 ? "- Applied by waitlist:prune on the schedule `{$schedule}`; Laravel's scheduler must run"
                 : '- Not scheduled by the package: run waitlist:prune yourself',
-            match ($without = $this->withoutManageLinks($catalog, $projects)) {
-                [] => '- On request (Art. 17): waitlist:forget, or the person via a manage link sent to their address',
-                $projects => '- On request (Art. 17): waitlist:forget',
+            match (true) {
+                $without === [] => '- On request (Art. 17): waitlist:forget, or the person via a manage link sent to their address',
+                $offering === [] => '- On request (Art. 17): waitlist:forget',
                 default => '- On request (Art. 17): waitlist:forget, or the person via a manage link sent to their address, except in projects without manage links ('.implode(', ', $without).')',
             },
             '- Active confirmed entries and remaining reporting rows have no automatic expiry; the remaining log is not guaranteed anonymous',
@@ -223,6 +224,7 @@ class PrivacyCommand extends Command
     {
         $cooldown = ResendConfirmation::cooldown();
         $cap = ResendConfirmation::maxConfirmations();
+        [$offering, $without] = $this->manageLinkProjects($catalog, $projects);
 
         return [
             '## Technical and organisational measures (Art. 32)',
@@ -232,9 +234,9 @@ class PrivacyCommand extends Command
             '- Address, metadata, IP, user agent and mail references encrypted at rest with '.$this->encryptedWith(),
             '- Addresses looked up by an HMAC-SHA256 hash with a subkey of the '.$this->encryptedWith().' key, never by the address itself',
             '- Tokens stored as SHA-256 hashes, the unsubscribe token additionally encrypted; none exported',
-            match ($without = $this->withoutManageLinks($catalog, $projects)) {
-                [] => '- Mails carry an unsubscribe token that can only remove; access to the data and erasure needs a manage link that is mailed to the address on request and expires after '.$this->manageTtl(),
-                $projects => '- Mails carry an unsubscribe token that can only remove; no manage links are sent, so access to the data and erasure go through you (waitlist:export, waitlist:forget)',
+            match (true) {
+                $without === [] => '- Mails carry an unsubscribe token that can only remove; access to the data and erasure needs a manage link that is mailed to the address on request and expires after '.$this->manageTtl(),
+                $offering === [] => '- Mails carry an unsubscribe token that can only remove; no manage links are sent, so access to the data and erasure go through you (waitlist:export, waitlist:forget)',
                 default => '- Mails carry an unsubscribe token that can only remove; access to the data and erasure needs a manage link that is mailed to the address on request and expires after '.$this->manageTtl()
                     .'; projects without manage links ('.implode(', ', $without).') handle both through you (waitlist:export, waitlist:forget)',
             },
@@ -332,12 +334,30 @@ class PrivacyCommand extends Command
     }
 
     /**
+     * Only projects with lists count: one without takes no signups, like the
+     * default project, which exists whether it is defined or not.
+     *
      * @param  list<string>  $projects
-     * @return list<string>
+     * @return array{list<string>, list<string>} with manage links, without
      */
-    protected function withoutManageLinks(ProjectCatalog $catalog, array $projects): array
+    protected function manageLinkProjects(ProjectCatalog $catalog, array $projects): array
     {
-        return array_values(array_filter($projects, fn (string $project): bool => ! $catalog->manageLinks($project)));
+        $offering = [];
+        $without = [];
+
+        foreach ($projects as $project) {
+            if ($catalog->lists($project) === []) {
+                continue;
+            }
+
+            if ($catalog->manageLinks($project)) {
+                $offering[] = $project;
+            } else {
+                $without[] = $project;
+            }
+        }
+
+        return [$offering, $without];
     }
 
     protected function manageTtl(): string

@@ -133,6 +133,16 @@ it('sends access and erasure through the operator where a project has no manage 
         ->not->toContain('expires after');
 });
 
+it('leaves a project without lists out of the manage links, such as an undefined default project', function () {
+    defineDefaultProject(lists: false);
+    Waitlist::define('acme', fn (ProjectDefinition $project) => TestCase::defineTestProject($project->manageLinks(false)));
+
+    expect(privacyRecord())
+        ->toContain('- On request (Art. 17): waitlist:forget'.PHP_EOL)
+        ->toContain('no manage links are sent, so access to the data and erasure go through you')
+        ->not->toContain('except in projects without manage links');
+});
+
 it('still fails on a setting it describes that does not read', function (string $key) {
     config()->set($key, 'soon');
 
