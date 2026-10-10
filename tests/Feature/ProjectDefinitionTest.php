@@ -357,6 +357,16 @@ describe('pages', function () {
         expect(app(ProjectCatalog::class)->urlPattern('default', Page::Confirmed->value))->toBe('https://app.test/welcome');
     });
 
+    it('offers manage links until a project turns them off', function () {
+        Waitlist::define('acme', fn (ProjectDefinition $project) => $project->manageLinks(false));
+
+        $catalog = app(ProjectCatalog::class);
+
+        expect($catalog->manageLinks('default'))->toBeTrue()
+            ->and($catalog->manageLinks('acme'))->toBeFalse()
+            ->and($catalog->manageLinks('unknown'))->toBeTrue();
+    });
+
     it('fails on a misspelt page instead of ignoring it', function () {
         defineDefaultProject(fn (ProjectDefinition $project) => $project->urls(...['confrim' => 'https://app.test/confirm/{token}']));
 

@@ -148,7 +148,9 @@ Waitlist::requestManageLink($token);                // "manage preferences inste
 Both throw `InvalidTokenException` for an unknown token.
 
 Over HTTP: `POST /waitlist/unsubscribe/{token}[?purpose=]` and
-`POST /waitlist/manage-link` with `{"token": ...}`.
+`POST /waitlist/manage-link` with `{"token": ...}`. A project without a
+preference page sets `$project->manageLinks(false)`: then offer no "manage
+preferences" step, as the request answers `404` with `manage_links_disabled`.
 
 ### 5. Preference page
 

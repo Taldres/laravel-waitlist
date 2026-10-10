@@ -69,7 +69,7 @@ Waitlist::findByConfirmToken(string $plainToken): ?WaitlistSubscription
 Waitlist::findByUnsubscribeToken(string $plainToken): ?WaitlistEntry
 Waitlist::findByManageToken(string $plainToken): ?WaitlistEntry            // null once expired
 Waitlist::unsubscribeToken(WaitlistEntry $entry): UnsubscribeToken
-Waitlist::manageLink(WaitlistEntry $entry): ManageLink                     // mints a fresh, short-lived one
+Waitlist::manageLink(WaitlistEntry $entry): ManageLink                     // mints a fresh, short-lived one; ManageLinksDisabledException without manage links
 Waitlist::unsubscribeUrl(WaitlistEntry $entry, ?string $purpose = null): ?string
 Waitlist::listUnsubscribeHeaders(WaitlistEntry $entry, ?string $purpose = null): array
 Waitlist::exists(string $email, ?string $list = null): bool

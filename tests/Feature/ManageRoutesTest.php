@@ -8,6 +8,7 @@ use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\EntryStatus;
 use Taldres\Waitlist\Events\EntryForgotten;
 use Taldres\Waitlist\Events\ManageLinkRequested;
+use Taldres\Waitlist\Exceptions\ManageLinksDisabledException;
 use Taldres\Waitlist\Facades\Waitlist;
 use Taldres\Waitlist\Models\WaitlistActivity;
 use Taldres\Waitlist\Models\WaitlistEntry;
@@ -17,6 +18,21 @@ it('exposes nothing while the routes are disabled', function () {
 
     $this->getJson("/waitlist/manage/{$tokens['unsubscribe']}")->assertNotFound();
     $this->getJson('/waitlist/purposes')->assertNotFound();
+});
+
+it('refuses to mint or request a manage link for a project without them', function () {
+    Event::fake([ManageLinkRequested::class]);
+    $tokens = subscribeAndCapture('beta', 'user@example.com');
+    Waitlist::confirm($tokens['confirm']);
+    defineDefaultProject(fn (ProjectDefinition $project) => $project->manageLinks(false));
+
+    expect(fn () => Waitlist::manageLink($tokens['entry']))->toThrow(ManageLinksDisabledException::class, 'The waitlist project [default] offers no manage links.')
+        ->and(fn () => Waitlist::requestManageLink($tokens['unsubscribe']))->toThrow(ManageLinksDisabledException::class)
+        ->and(fn () => Waitlist::for('beta')->requestManageLink('nobody@example.com'))->toThrow(ManageLinksDisabledException::class)
+        ->and(Waitlist::requestManageLink('nope'))->toBeFalse()
+        ->and($tokens['entry']->fresh()->manage_token_hash)->toBeNull();
+
+    Event::assertNotDispatched(ManageLinkRequested::class);
 });
 
 describe('with routes enabled', function () {
@@ -137,6 +153,26 @@ describe('with routes enabled', function () {
 
         Waitlist::verifySpamUsing(null);
         Event::assertDispatchedTimes(ManageLinkRequested::class, 1);
+    });
+
+    it('refuses manage links for a project that turned them off, the same for every address', function () {
+        Event::fake([ManageLinkRequested::class]);
+        Waitlist::verifySpamUsing(fn () => false);
+        defineDefaultProject(fn (ProjectDefinition $project) => $project->manageLinks(false));
+
+        $refused = ['message' => 'This project offers no manage links.', 'error' => 'manage_links_disabled'];
+
+        $this->postJson('/waitlist/manage-link', ['token' => $this->tokens['unsubscribe']])->assertNotFound()->assertExactJson($refused);
+        $this->postJson('/waitlist/manage-link', ['email' => 'user@example.com', 'list' => 'beta'])->assertNotFound()->assertExactJson($refused);
+        $this->postJson('/waitlist/manage-link', ['email' => 'nobody@example.com', 'list' => 'beta'])->assertNotFound()->assertExactJson($refused);
+        $this->postJson('/waitlist/manage-link', ['token' => 'nope'])->assertStatus(202);
+
+        Waitlist::verifySpamUsing(null);
+        Event::assertNotDispatched(ManageLinkRequested::class);
+        expect($this->tokens['entry']->fresh()->manage_link_sent_at)->toBeNull();
+
+        // Mailed before the switch, it works until it expires.
+        $this->getJson("/waitlist/manage/{$this->manage}")->assertOk();
     });
 
     it('hands out a copy of the data on POST only', function () {

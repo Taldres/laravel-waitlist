@@ -8,9 +8,9 @@ use Taldres\Waitlist\Support\ListPolicy;
 
 /**
  * Everything project-specific: lists, the wording of their purposes, the
- * fields a signup may carry and the frontend URL patterns. The default reads
- * the projects registered with Waitlist::define(); bind your own to keep them
- * in a database.
+ * fields a signup may carry, the frontend URL patterns and whether manage
+ * links are offered. The default reads the projects registered with
+ * Waitlist::define(); bind your own to keep them in a database.
  *
  * The package snapshots the wording a person agreed to, so later catalog
  * changes never touch stored consent.
@@ -49,6 +49,12 @@ interface ProjectCatalog
      * pages are where a browser lands; null answers JSON.
      */
     public function urlPattern(string $project, string $action): ?string;
+
+    /**
+     * False when the project mails no manage links: requesting or minting one
+     * throws ManageLinksDisabledException, and the HTTP request is refused.
+     */
+    public function manageLinks(string $project): bool;
 
     /**
      * Must include "default": the facade acts on that project when no

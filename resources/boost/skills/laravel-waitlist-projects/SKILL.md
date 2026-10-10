@@ -180,8 +180,8 @@ the default project; `waitlist:export`, `waitlist:wording` and
 For projects that come and go at runtime, or manage their own lists and wording,
 bind a `ProjectCatalog` (`waitlist.catalog`), usually extending
 `StoredWordingCatalog`, with `policy()`, `fields()` (field => rules; stored rules
-can only be strings), `urlPattern()`, `projects()` (must include `default`) and
-`lists()`, plus a resolver that maps a publishable key to a project. A catalog of
+can only be strings), `urlPattern()`, `manageLinks()`, `projects()` (must include
+`default`) and `lists()`, plus a resolver that maps a publishable key to a project. A catalog of
 your own replaces the definitions. Projects register wording with
 `Waitlist::project($key)->registerWording()`.
 

@@ -19,7 +19,7 @@ legal requirement is satisfied.
 | Withdrawal as easy as consent (Art. 7(3)) | Per-purpose links and RFC 8058 one-click support; the application must deliver working links and implement an accessible withdrawal flow |
 | Data minimization (Art. 5(1)(c)) | The HTTP signup accepts only the fields a project or list defines; optional activity-log IP and user agent off by default; server-side calls and infrastructure need their own controls |
 | Storage limitation (Art. 5(1)(e)) | Retention periods applied by a scheduled `waitlist:prune` |
-| Self-service rights (Art. 12(2), 15, 17, 20) | Preference page behind a manage link mailed to the address: change purposes, download a JSON copy, erase |
+| Self-service rights (Art. 12(2), 15, 17, 20) | Preference page behind a manage link mailed to the address: change purposes, download a JSON copy, erase; a project can turn it off and answer these requests itself |
 | Access and erasure on request (Art. 15, 17) | `waitlist:show`, `waitlist:forget`, `Waitlist::allProjects()->personalData()`, `Waitlist::allProjects()->forget()` |
 | Privacy by default (Art. 25) | Encryption always on, double opt-in on, request metadata off, routes off until enabled |
 | Record of processing (Art. 30) | `waitlist:privacy` describes configured package storage and registered listeners; the operator must complete the processing record |
@@ -165,7 +165,10 @@ or a provider reading its headers exposes nothing. The preference page opens wit
 a manage link that is mailed to the address on request (`ManageLinkRequested`)
 and expires after an hour. It only reaches the person through their mailbox,
 which is what lets it stand in for a login. Offer the request on your unsubscribe
-page: `POST /waitlist/manage-link` with the token from the link.
+page: `POST /waitlist/manage-link` with the token from the link. A project
+without a preference page turns manage links off (`manageLinks(false)`); access
+and erasure then go through you, with the commands above, and your privacy
+notice says how to reach you.
 
 ## Your listeners
 

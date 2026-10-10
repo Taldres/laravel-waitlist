@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Events\ManageLinkRequested;
+use Taldres\Waitlist\Exceptions\ManageLinksDisabledException;
 use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Support\ResolvesModel;
 
@@ -24,9 +25,14 @@ class RequestManageLink
      * what lets it stand in for a login. Returns false when nothing was sent
      * because the cooldown is running or the address cannot be read; callers
      * that face the public must not reveal which case applied.
+     *
+     * @throws ManageLinksDisabledException
      */
     public function __invoke(WaitlistEntry $entry): bool
     {
+        // Before the claim below, like the TTL: a refused request must not start the cooldown.
+        $this->issue->assertOffered($entry->project);
+
         if ($entry->readableEmail() === null) {
             return false;
         }

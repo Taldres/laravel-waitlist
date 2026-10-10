@@ -198,6 +198,15 @@ address that confirmed at least once gets one, at most once per
 `manage.request_cooldown`. Where you have identified the person yourself,
 `Waitlist::manageLink($entry)` mints one directly.
 
+A project with one list and one purpose has nothing to manage beyond leaving,
+which the unsubscribe link already does. Without a preference page, turn manage
+links off with [`$project->manageLinks(false)`](projects.md#pages): the three
+calls above throw `ManageLinksDisabledException`, `POST /waitlist/manage-link`
+answers `404` with `manage_links_disabled`, and `ManageLinkRequested` never
+fires. A link mailed before the switch works until it expires. Requests for
+access or erasure then reach you another way, such as the contact in your
+privacy notice, and `waitlist:export` and `waitlist:forget` answer them.
+
 ## A welcome mail
 
 Optional: a mail once the double opt-in is completed. Check the rules that apply
