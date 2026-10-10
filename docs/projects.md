@@ -462,6 +462,19 @@ sender, template and mailer from it. See [Mail](mail.md#several-projects).
 
 ## Who may call: the `useWaitlist` gate
 
+Two setups cover most apps; the settings below each do one job in them, and every
+other combination is possible.
+
+| | A public form (architecture A) | Your sites' servers with credentials (architecture C) |
+| --- | --- | --- |
+| Who calls | anyone, as a guest | each site's server, with a token of its own |
+| `project_resolver` | the default (one project), or your own from a publishable key or the Origin | `AuthenticatedProjectResolver`: the project follows from the caller |
+| `authentication.guards` | not needed | the guard that authenticates the server, such as `sanctum` |
+| `authentication.required` | off | on: guests get `401`, callers without a project `403` |
+| `useWaitlist` gate | the default lets everyone through; define it only to restrict | the default keeps a caller to its own project; define it for abilities per action or list |
+| Wording from the site | never: a guest cannot send text | `RegisterWording`, only for a caller acting for the project |
+| Rate limit | per IP | per server, and per visitor when the server forwards the address (`authentication.client_ip_header`) |
+
 Three requests act for a project: the signup, the wording for a form and a manage
 link requested by address. For each, once the resolver has picked the project and
 before the body is validated, the package asks Laravel's gate `useWaitlist`. Token

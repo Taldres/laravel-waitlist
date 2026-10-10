@@ -5,6 +5,25 @@ me the newsletter". A **list** is a waitlist a form signs people up for, and say
 which purposes it asks for. The **wording** is the text of a purpose, in
 versions, and the package stores a snapshot of it with every consent.
 
+## Where the wording lives
+
+There are two sources: wording **defined in code**, or wording **registered** in the
+`waitlist_wordings` table. The table has three ways in, so pick by who changes the
+text and where it is written:
+
+| The text is written… | You set it up with | The package reads it from | Pick it when |
+| --- | --- | --- | --- |
+| in your Laravel project | `purpose()` in the definition, see [below](#purposes-and-lists) | the definition | one app, and a change of wording is a deploy |
+| in a frontend that ships its own files | `StoredWordingCatalog` and `waitlist:wording` on deploy, see [Registering wording where it is written](#registering-wording-where-it-is-written) | the table, filled by the command | the text sits next to the form that shows it, in another repository |
+| in a CMS | `Waitlist::registerWording()` from a webhook, with the same catalog | the table | editors change the text, not a deploy |
+| on each site that shows it | `wordingFromCallers()` on the project, see [Wording sent by your servers](#wording-sent-by-your-servers) | the table, filled by the first signup of a version | a central API whose sites own their text |
+
+Whichever way, the text of a version never changes after it is registered; a
+change is a new version. The hash (`waitlist.wording.require_hash`) and the locales
+work the same for all four: a form posts the version, optionally the locale and the
+hash of the text it showed, and the package refuses a text that drifted from the
+registered one.
+
 ## Purposes and lists
 
 ```php
