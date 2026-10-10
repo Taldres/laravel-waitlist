@@ -205,7 +205,7 @@ never face them.
 // config/waitlist.php
 'routes' => [
     'group_middleware' => [
-        'signup' => ['web'], // sessions and CSRF for the signup, the wording and manage links
+        'signup' => ['web'], // sessions and CSRF for the signup, the wording and manage links by address
         'links' => [],
     ],
 ],
@@ -300,7 +300,7 @@ The routes fall into two groups, each throttled by its own named limiter:
 | Group | Routes | Default limiter | Keyed by |
 | --- | --- | --- | --- |
 | `signup` | `POST /waitlist`, `GET /purposes`, `POST /manage-link` | `waitlist` | client IP and endpoint; for a [server calling for a project](#servers-calling-for-a-project), the server and endpoint |
-| `links` | everything with a `{token}` | `waitlist-links` | the token, plus a looser ceiling per IP, or per server |
+| `links` | everything with a `{token}`, including `POST /unsubscribe/{token}/manage-link` | `waitlist-links` | the token, plus a looser ceiling per IP, or per server |
 
 Token links are limited per token because one-click unsubscribes arrive from mail
 providers' servers, many recipients behind a few addresses; a tight IP limit

@@ -310,7 +310,7 @@ describe('guards that do not resolve', function () {
 
         config()->set($this->guards);
 
-        $this->postJson('/waitlist/manage-link', ['token' => $tokens['unsubscribe']])->assertStatus(202);
+        $this->postJson("/waitlist/unsubscribe/{$tokens['unsubscribe']}/manage-link")->assertStatus(202);
 
         Event::assertDispatched(ManageLinkRequested::class);
     });

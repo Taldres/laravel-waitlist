@@ -192,7 +192,7 @@ Send it to `$event->entry->email` and nowhere else. The link expires after
 `manage.token_ttl` minutes (60), so the mail says until when it works.
 
 Someone asks for it from your unsubscribe page, with the unsubscribe token
-(`POST /waitlist/manage-link`, `Waitlist::requestManageLink($token)`), or by
+(`POST /waitlist/unsubscribe/{token}/manage-link`, `Waitlist::requestManageLink($token)`), or by
 address (`Waitlist::for($list)->requestManageLink($email)`). By address, only an
 address that confirmed at least once gets one, at most once per
 `manage.request_cooldown`. Where you have identified the person yourself,
@@ -201,8 +201,8 @@ address that confirmed at least once gets one, at most once per
 A project with one list and one purpose has nothing to manage beyond leaving,
 which the unsubscribe link already does. Without a preference page, turn manage
 links off with [`$project->manageLinks(false)`](projects.md#pages): the three
-calls above throw `ManageLinksDisabledException`, `POST /waitlist/manage-link`
-answers `404` with `manage_links_disabled`, and `ManageLinkRequested` never
+calls above throw `ManageLinksDisabledException`, both manage link routes
+answer `404` with `manage_links_disabled`, and `ManageLinkRequested` never
 fires. A link mailed before the switch works until it expires. Requests for
 access or erasure then reach you another way, such as the contact in your
 privacy notice, and `waitlist:export` and `waitlist:forget` answer them.

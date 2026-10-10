@@ -192,7 +192,7 @@ describe('a manage link requested by token', function () {
 
         config()->set($setting->value, stdClass::class);
 
-        $this->postJson('/waitlist/manage-link', ['token' => $this->tokens['unsubscribe']])->assertStatus(202);
+        $this->postJson("/waitlist/unsubscribe/{$this->tokens['unsubscribe']}/manage-link")->assertStatus(202);
 
         Event::assertDispatchedTimes(ManageLinkRequested::class, 1);
     })->with([

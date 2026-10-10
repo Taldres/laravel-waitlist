@@ -327,8 +327,7 @@ person's data, purposes and erasure, your unsubscribe page offers to mail a
 short-lived manage link:
 
 ```http
-POST /waitlist/manage-link
-{"token": "<the unsubscribe token>"}
+POST /waitlist/unsubscribe/<the unsubscribe token>/manage-link
 ```
 
 or `Waitlist::requestManageLink($token)`. A listener for `ManageLinkRequested`
