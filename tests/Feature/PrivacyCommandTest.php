@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Event;
+use Symfony\Component\Console\Output\BufferedOutput;
+use Symfony\Component\Console\Output\ConsoleOutputInterface;
+use Symfony\Component\Console\Output\ConsoleSectionOutput;
+use Symfony\Component\Console\Output\OutputInterface;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Events\EntryForgotten;
@@ -92,6 +96,102 @@ it('needs the limit of servers only where it describes it', function () {
     config()->set(ConfigKey::AuthenticationRequired->value, true);
 
     expect(fn () => Artisan::call('waitlist:privacy'))->toThrow(InvalidConfigurationException::class, ConfigKey::CallerSignupPerMinute->value);
+});
+
+it('warns about page URLs a recipient could not open', function () {
+    defineDefaultProject(fn (ProjectDefinition $project) => $project->urls(
+        confirm: 'http://localhost:3000/confirm?token={token}',
+        unsubscribe: 'http://example.com/unsubscribe?token={token}',
+        manage: '/manage?token={token}',
+    ));
+
+    expect(privacyRecord())
+        ->toContain('Warning: The confirm link of project [default] points at http://localhost, so a link in a mail may not open for the person.')
+        ->toContain('Warning: The unsubscribe link of project [default] does not use https (http://example.com), so')
+        ->toContain('Warning: The manage link of project [default] is not an absolute URL, so');
+});
+
+it('names APP_URL where the package routes carry the links', function () {
+    defineDefaultProject();
+    config()->set(ConfigKey::RoutesEnabled->value, true);
+    config()->set('app.url', 'http://127.0.0.1:8000');
+
+    expect(privacyRecord())
+        ->toContain('Warning: The confirm, unsubscribe, manage link of project [default] points at http://127.0.0.1, from APP_URL, so');
+
+    config()->set('app.url', 'https://api.example.com');
+
+    expect(privacyRecord())->not->toContain('Warning:');
+});
+
+it('leaves out what does not apply: the manage link of a project without manage links, and debug and guards while the routes are off', function () {
+    defineDefaultProject(fn (ProjectDefinition $project) => $project->manageLinks(false)->urls(
+        confirm: 'https://example.com/confirm?token={token}',
+        unsubscribe: 'https://example.com/unsubscribe?token={token}',
+        manage: 'http://localhost/manage?token={token}',
+    ));
+    config()->set('app.debug', true);
+    config()->set(ConfigKey::AuthenticationGuards->value, ['sanctum']);
+
+    expect(privacyRecord())->not->toContain('Warning:');
+});
+
+it('warns when debug is on and guards leave guests in', function () {
+    config()->set(ConfigKey::RoutesEnabled->value, true);
+    config()->set('app.url', 'https://api.example.com');
+    config()->set('app.debug', true);
+    config()->set(ConfigKey::AuthenticationGuards->value, ['sanctum']);
+
+    expect(privacyRecord())
+        ->toContain('Warning: APP_DEBUG is on while the waitlist routes are enabled')
+        ->toContain('Warning: authentication.guards names guards but authentication.required is off');
+
+    config()->set('app.debug', false);
+    config()->set(ConfigKey::AuthenticationRequired->value, true);
+
+    expect(privacyRecord())->not->toContain('Warning:');
+});
+
+it('warns of guards that do not read instead of failing', function () {
+    config()->set(ConfigKey::RoutesEnabled->value, true);
+    config()->set('app.url', 'https://api.example.com');
+    config()->set(ConfigKey::AuthenticationGuards->value, 'soon');
+
+    expect(privacyRecord())->toContain('Warning: The '.ConfigKey::AuthenticationGuards->value.' config');
+});
+
+it('keeps the warnings out of a record written to a file', function () {
+    config()->set(ConfigKey::RoutesEnabled->value, true);
+    config()->set('app.debug', true);
+
+    $error = new BufferedOutput;
+    $output = new class($error) extends BufferedOutput implements ConsoleOutputInterface
+    {
+        public function __construct(private OutputInterface $error)
+        {
+            parent::__construct();
+        }
+
+        public function getErrorOutput(): OutputInterface
+        {
+            return $this->error;
+        }
+
+        public function setErrorOutput(OutputInterface $error): void
+        {
+            $this->error = $error;
+        }
+
+        public function section(): ConsoleSectionOutput
+        {
+            throw new LogicException('Not needed.');
+        }
+    };
+
+    Artisan::call('waitlist:privacy', outputBuffer: $output);
+
+    expect($output->fetch())->not->toContain('Warning:')
+        ->and($error->fetch())->toContain('Warning: APP_DEBUG is on');
 });
 
 it('reports disabled periods and scheduling', function () {

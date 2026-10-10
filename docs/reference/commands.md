@@ -51,5 +51,9 @@ say where they looked.
 - **`waitlist:privacy`** describes the configured package storage, the fields
   and purposes of every list, retention, the rate limits (including those of
   servers calling for a project) and the listeners registered for package
-  events. It does not audit
+  events. It also warns, on stderr so a redirected record stays clean, about
+  what a launch trips over: a mail link that is not https or points at
+  localhost (a page's URL, or `APP_URL` for a page left on the package routes),
+  `APP_DEBUG` on while the routes are enabled, and `authentication.guards` set
+  without `authentication.required`. Run it on the production host. It does not audit
   your infrastructure or find every recipient; complete it yourself.
