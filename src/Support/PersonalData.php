@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Taldres\Waitlist\Support;
 
 use Illuminate\Contracts\Support\Arrayable;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use JsonSerializable;
 use Taldres\Waitlist\Enums\EntryStatus;
@@ -64,7 +65,7 @@ final readonly class PersonalData implements Arrayable, JsonSerializable
      */
     public function effectivePurposes(): array
     {
-        $latest = $this->subscriptions[array_key_last($this->subscriptions) ?? -1] ?? null;
+        $latest = Arr::last($this->subscriptions);
 
         if ($latest === null || $latest->endedAt !== null || $latest->confirmedAt === null) {
             return [];

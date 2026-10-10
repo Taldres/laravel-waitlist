@@ -8,6 +8,7 @@ use ArrayIterator;
 use Countable;
 use DateTimeInterface;
 use Illuminate\Contracts\Support\Arrayable;
+use Illuminate\Support\Arr;
 use IteratorAggregate;
 use JsonSerializable;
 use Taldres\Waitlist\Enums\ActivityType;
@@ -50,13 +51,7 @@ final readonly class DailySeries implements Arrayable, Countable, IteratorAggreg
     {
         $key = Period::of($date, $date)->from->toDateString();
 
-        foreach ($this->days as $day) {
-            if ($day->date->toDateString() === $key) {
-                return $day;
-            }
-        }
-
-        return null;
+        return Arr::first($this->days, fn (DailyCount $day): bool => $day->date->toDateString() === $key);
     }
 
     public function sum(ActivityType $type): int
