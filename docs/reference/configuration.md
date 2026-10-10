@@ -10,9 +10,9 @@ switches a limit or period off where a table below says so. Any other value is
 refused with an `InvalidConfigurationException` that names the key and what it
 must be, an empty variable included: a blank line in `.env` never turns double
 opt-in or a retention period off. If an empty variable in `.env` causes it,
-remove the variable to keep the default. The connection, the client IP
-header, the limiters and the retention schedule read an empty value as unset,
-like `null`.
+remove the variable to keep the default. Five settings read an empty value as
+unset, like `null`, and say so in the tables below: the connection, the client
+IP header, the two limiters and the retention schedule.
 
 A period is bounded by the `timestamp` columns it is stored in or compared
 with, and a value beyond is refused with an `InvalidConfigurationException`
@@ -119,7 +119,7 @@ come from.
 
 | Key | Variable | Default | |
 | --- | --- | --- | --- |
-| `connection` | `WAITLIST_CONNECTION` | app default | a separate database connection for the waitlist tables |
+| `connection` | `WAITLIST_CONNECTION` | app default | a separate database connection for the waitlist tables; empty is unset |
 | `privacy.store_ip` | `WAITLIST_STORE_IP` | off | IP on the activity log |
 | `privacy.store_user_agent` | `WAITLIST_STORE_USER_AGENT` | off | user agent on the activity log |
 | `retention.pending_days` | `WAITLIST_RETENTION_PENDING_DAYS` | 30 | unconfirmed signups, from the start of the cycle; 0 at the next run, `null` kept, at most the days since 1970 |
@@ -140,8 +140,8 @@ The retention periods are technical defaults, not legal recommendations; see
 | `middleware` | | `['api']` | applies to every route, token links included: no authentication here |
 | `group_middleware.signup` | | `[]` | added to signup, wording and manage links only, after the rate limit, apart from what Laravel always sorts ahead of it, such as the session of `web`: checks for your forms, such as CSRF or an origin check, see [Checks for your forms only](../securing-the-endpoints.md#checks-for-your-forms-only) |
 | `group_middleware.links` | | `[]` | added to everything with a token only |
-| `limiters.signup` | | `waitlist` | named limiter for signup, wording and manage links; `null` off; a name no `RateLimiter::for()` defines is refused |
-| `limiters.links` | | `waitlist-links` | named limiter for everything with a token; `null` off; a name no `RateLimiter::for()` defines is refused |
+| `limiters.signup` | | `waitlist` | named limiter for signup, wording and manage links; `null` or empty off; a name no `RateLimiter::for()` defines is refused |
+| `limiters.links` | | `waitlist-links` | named limiter for everything with a token; `null` or empty off; a name no `RateLimiter::for()` defines is refused |
 | `rate_limits.signup_per_minute` | `WAITLIST_RATE_LIMIT_SIGNUP` | 10 | per visitor and endpoint: a guest's IP, or the address a server forwards; at least 1, as do all four |
 | `rate_limits.link_per_minute` | `WAITLIST_RATE_LIMIT_LINK` | 10 | per token; one that does not read gives way to 10, reported |
 | `rate_limits.links_per_ip_per_minute` | `WAITLIST_RATE_LIMIT_LINKS_PER_IP` | 600 | bounds made-up tokens per IP, per server, or per visitor a server forwards; one that does not read gives way to 600, reported |
@@ -165,7 +165,7 @@ never need credentials.
 | --- | --- | --- | --- |
 | `guards` | | `[null]` | the guards that find the caller of the signup, the wording and the manage link by address, in order; the first that authenticates wins; `null` is the default guard; one `config/auth.php` does not define is refused, naming it |
 | `required` | `WAITLIST_AUTHENTICATION_REQUIRED` | off | the default `useWaitlist` gate refuses guests (`401`) and callers without a project (`403`); a gate of your own decides for itself |
-| `client_ip_header` | `WAITLIST_CLIENT_IP_HEADER` | `null` | the header in which servers calling for a project forward their visitor's address, e.g. `X-Waitlist-Client-Ip`: limits per visitor and the recorded IP use it; never read from guests |
+| `client_ip_header` | `WAITLIST_CLIENT_IP_HEADER` | `null` | the header in which servers calling for a project forward their visitor's address, e.g. `X-Waitlist-Client-Ip`: limits per visitor and the recorded IP use it; never read from guests; empty is unset |
 
 ## Bindings
 
