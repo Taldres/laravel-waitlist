@@ -175,8 +175,9 @@ return [
     |
     | Technical defaults, not statutory periods or legal recommendations. You
     | must justify your retention periods and monitor the cleanup. Values are
-    | days; null keeps the data. A period reaching back before 1970, which
-    | would never match a row, is refused: write null to keep. waitlist:prune
+    | days, whole numbers from 0, which applies at the next run; null keeps the
+    | data. A period reaching back before 1970, which would never match a row,
+    | is refused: write null to keep. waitlist:prune
     | applies the periods; one that does not read is reported and fails the
     | run once the others are applied. Active confirmed entries and the
     | remaining activity rows never expire automatically.
@@ -233,7 +234,8 @@ return [
     | check, which the token links that mail providers call must not face.
     |
     | Rate limits apply per group: "signup" (signup, wording, manage links by
-    | address) and "links" (everything with a token). Each names a limiter: the
+    | address) and "links" (everything with a token). The numbers under
+    | rate_limits are whole numbers, at least 1, counted per minute. Each names a limiter: the
     | package's "waitlist" and "waitlist-links", tuned by rate_limits, or one
     | you define with RateLimiter::for(); a name nothing defines is refused.
     | Null, or an empty value, turns a group's limit off.
