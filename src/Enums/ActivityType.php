@@ -19,6 +19,13 @@ enum ActivityType: string
      */
     case ConfirmationMailed = 'confirmation_mailed';
 
+    /**
+     * Reported by your listener when it could not mail the confirmation
+     * request. The request no longer counts against the resend cooldown and
+     * the caps, so the person's own retry gets a mail.
+     */
+    case ConfirmationFailed = 'confirmation_failed';
+
     case Confirmed = 'confirmed';
 
     case Unsubscribed = 'unsubscribed';

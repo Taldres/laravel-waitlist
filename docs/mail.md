@@ -156,6 +156,21 @@ Laravel discovers the listener in `app/Listeners` by itself.
 - **The reference.** `confirmationMailed()` records the reference your listener
   reports next to the consent wording; keep the text of each version of the mail.
   See [GDPR in practice](gdpr.md#proof-of-the-double-opt-in).
+- **A mail that could not be sent.** A request counts against the resend cooldown
+  and the caps as soon as it is issued, before any mail exists. When your queued
+  listener gives up, report it from its `failed()` method:
+
+  ```php
+  public function failed(EntrySubscribed $event, Throwable $exception): void
+  {
+      // The provider's error code, never the address or its message.
+      Waitlist::confirmationFailed($event->subscription, 'http-429');
+  }
+  ```
+
+  The request stops counting, so the person's own retry gets a mail, and the log
+  shows `confirmation_failed`. It answers `false` and changes nothing when a
+  newer request was issued since, the cycle ended or the entry was erased.
 - **The link.** `confirmUrl` points at your confirm page, the `confirm` page of
   the project's [`urls()`](projects.md#pages), or at the package route. A plain
   GET must never confirm, since mail scanners follow every link: the page posts

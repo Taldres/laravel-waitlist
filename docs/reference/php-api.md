@@ -61,6 +61,7 @@ Waitlist::subscribe(string $list, string $email, array $purposes, array $metadat
 Waitlist::resendConfirmation(string $list, string $email, ?RequestContext $context = null): ?WaitlistEntry
 Waitlist::confirm(string $plainToken, ?RequestContext $context = null): WaitlistEntry
 Waitlist::confirmationMailed(WaitlistSubscription $subscription, string $reference, ?RequestContext $context = null): void  // record the reference of the mail your listener reports sending
+Waitlist::confirmationFailed(WaitlistSubscription $subscription, ?string $reference = null, ?RequestContext $context = null): bool  // report that your listener could not send the mail: the request stops counting against the cooldown and the caps
 Waitlist::grantConsent(string $manageToken, string $purpose, string $version, ?string $locale = null, ?RequestContext $context = null): WaitlistEntry
 Waitlist::withdrawConsent(string $unsubscribeToken, string $purpose, ?RequestContext $context = null): WaitlistEntry
 Waitlist::unsubscribe(string $unsubscribeToken, ?RequestContext $context = null): WaitlistEntry
