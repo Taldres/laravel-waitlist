@@ -221,7 +221,7 @@ Mails
       `$event->subscription->consents`
 - [ ] The listener records it with `Waitlist::confirmationMailed()`, and each
       version of the mail's text is kept
-- [ ] Every mail carries an unsubscribe link and `List-Unsubscribe` headers for its own purpose
+- [ ] Every mail carries an unsubscribe link for its own purpose, and `List-Unsubscribe` headers where your provider accepts them (see [Mail](mail.md#unsubscribe-headers-and-your-provider))
 - [ ] Your unsubscribe page offers to mail a link to the preference page
 - [ ] A listener mails `ManageLinkRequested` links to the address, and nowhere else
 - [ ] Recipients selected with `recipients($purpose)`, or `whereConsentedTo($purpose)` in queries of your own

@@ -120,7 +120,7 @@ complete record: it does not audit infrastructure or find every recipient.
 - signup form renders `Waitlist::purposes()` or `GET /waitlist/purposes`; optional
   purposes unticked
 - confirmation listener records `Waitlist::confirmationMailed()`
-- every mail has a per-purpose unsubscribe link and one-click headers
+- every mail has a per-purpose unsubscribe link, and one-click headers where the provider accepts them
 - `ManageLinkRequested` mailed only to the address
 - queued listeners implement `ShouldBeEncrypted`; `EntryForgotten`,
   `EntryUnsubscribed` and `ConsentWithdrawn` reach every provider

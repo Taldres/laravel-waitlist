@@ -526,6 +526,13 @@ Either way, a failed check returns `422 {"message": "Spam check failed."}`.
 The same pattern works for reCAPTCHA, hCaptcha, or a simple honeypot field
 (the check returns false when the hidden field is filled).
 
+**One check, in one place.** Challenge tokens such as Turnstile's are single use,
+so a token your own server already verified cannot be verified again by the API.
+When your site's server checks the visitor and then calls the API with its token,
+keep the API's default protector and check in the site only; or forward the proof
+in `X-Waitlist-Challenge` and drop the site's check, so the API's protector is the
+one that verifies it. Doing both refuses every signup with `Spam check failed.`.
+
 **Scope:** the protector guards only the package's HTTP endpoint. Actions and
 your own controllers are never affected. If you build your own controller
 (architecture B), inject and consult the protector yourself.

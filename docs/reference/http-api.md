@@ -61,6 +61,26 @@ often a URL without the routes' prefix, the routes are switched off, or the
 `422` with `errors`, as Laravel answers them, and rate limits `429` with
 `Retry-After`.
 
+## What a client does with a status
+
+Statuses besides the package's own `error` codes, as a client sees them:
+
+| Status | Usually | Retry? | Log |
+| --- | --- | --- | --- |
+| `401` | The caller sent no credentials the API accepts: `authentication.required` is on, or the project resolver needs them. A wrong token looks the same. | No, fix the token | Yes, as a setup error |
+| `403` | The `useWaitlist` gate refused the caller: a project that is not its own, or wording from a guest. | No | Yes |
+| `404` without `error` | Not the package: a URL without the routes' prefix, routes switched off, or the gate keeping the caller from the project. | No | Yes, as a setup error |
+| `419` | A CSRF or form check of your own on the signup group, such as `web`. | No, send what the check wants | Yes |
+| `422` | Validation (`errors`), or `Spam check failed.` | No, fix the input | No, show it to the person |
+| `429` | A rate limit. `Retry-After` says when. | After the wait | Count it |
+| `500` | A setting that does not read, or an error in your app. The log names the key. | Only after a fix | Yes |
+| no answer | A timeout, a refused connection or a dead network. | Yes, with a limit | Yes, with the reason |
+
+A signup or a confirmation that fails with a `500` for a setting stored
+nothing, so a retry after the fix is safe. The [JS client](https://github.com/Taldres/laravel-waitlist-js#results)
+turns each of these into a result and logs the reason without the token or any
+personal data.
+
 ## Routes that are off
 
 While `waitlist.routes.enabled` is off, every route answers `404`, also when a
