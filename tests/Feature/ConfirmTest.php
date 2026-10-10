@@ -5,7 +5,6 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Event;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Enums\ActivityType;
-use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\EntryStatus;
 use Taldres\Waitlist\Events\EntryConfirmed;
 use Taldres\Waitlist\Exceptions\ExpiredTokenException;
@@ -77,13 +76,4 @@ it('refuses a token whose cycle has ended, so a link cannot undo an unsubscribe'
     expect(fn () => Waitlist::confirm($tokens['confirm']))->toThrow(InvalidTokenException::class);
 
     assertWaitlistInvariants();
-});
-
-it('can make the link single-use', function () {
-    config()->set(ConfigKey::InvalidateConfirmToken->value, true);
-
-    $tokens = subscribeAndCapture('beta', 'user@example.com');
-
-    expect(Waitlist::confirm($tokens['confirm'])->status)->toBe(EntryStatus::Confirmed)
-        ->and(fn () => Waitlist::confirm($tokens['confirm']))->toThrow(InvalidTokenException::class);
 });

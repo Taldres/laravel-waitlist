@@ -47,7 +47,6 @@ describe('the defaults', function () {
             ->and(WaitlistConfig::requireWordingHash())->toBeFalse()
             ->and(WaitlistConfig::doubleOptIn())->toBeTrue()
             ->and($confirmation->tokenTtl)->toBe(60 * 24 * 7)
-            ->and(WaitlistConfig::singleUseConfirmTokens())->toBeFalse()
             ->and($confirmation->resendCooldown)->toBe(5)
             ->and($confirmation->maxConfirmations)->toBe(5)
             ->and($confirmation->maxPendingPerAddress)->toBe(5)

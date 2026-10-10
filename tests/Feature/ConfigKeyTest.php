@@ -75,7 +75,6 @@ describe('ConfigKey', function () {
             'double_opt_in.resend_cooldown' => 102,
             'double_opt_in.max_confirmations' => 103,
             'double_opt_in.max_pending_per_address' => 104,
-            'double_opt_in.invalidate_confirm_token_after_confirmation' => 'on',
             'manage.token_ttl' => 105,
             'manage.request_cooldown' => 106,
             'privacy.store_ip' => 'on',
@@ -116,7 +115,6 @@ describe('ConfigKey', function () {
             ->and(WaitlistConfig::requireWordingHash())->toBeTrue()
             ->and(WaitlistConfig::doubleOptIn())->toBeFalse()
             ->and([$confirmation->tokenTtl, $confirmation->resendCooldown, $confirmation->maxConfirmations, $confirmation->maxPendingPerAddress])->toBe([101, 102, 103, 104])
-            ->and(WaitlistConfig::singleUseConfirmTokens())->toBeTrue()
             ->and([$manage->tokenTtl, $manage->requestCooldown])->toBe([105, 106])
             ->and([$privacy->storeIp, $privacy->storeUserAgent])->toBe([true, false])
             ->and([$retention->pendingDays, $retention->unsubscribedDays, $retention->requestMetadataDays])->toBe([107, 108, 109])

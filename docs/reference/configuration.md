@@ -106,7 +106,6 @@ come from.
 | `resend_cooldown` | `WAITLIST_RESEND_COOLDOWN` | 5 | minutes between two confirmation requests of one cycle; 0 or `null` none, at most the minutes since 1970 |
 | `max_confirmations` | `WAITLIST_MAX_CONFIRMATIONS` | 5 | confirmation requests per cycle, at least 1; `null` no cap. Past the cap, one more may go out once the last link has expired |
 | `max_pending_per_address` | `WAITLIST_MAX_PENDING_PER_ADDRESS` | 5 | unconfirmed lists of a project one address gets a request for per day, at least 1; `null` no limit |
-| `invalidate_confirm_token_after_confirmation` | `WAITLIST_INVALIDATE_CONFIRM_TOKEN` | off | make confirm links single-use |
 
 ## Preference page: `manage`
 
