@@ -74,7 +74,7 @@ foreach ($series as $day) {
     $day->of(ActivityType::Confirmed);
 }
 
-$series->toArray();   // [{date, subscribed, resubscribed, confirmation_requested, confirmation_mailed, confirmed, unsubscribed, expired, erased, consent_granted, consent_withdrawn}]
+$series->toArray();   // [{date, subscribed, resubscribed, confirmation_requested, confirmation_mailed, confirmation_failed, confirmed, unsubscribed, expired, erased, consent_granted, consent_withdrawn}]
 ```
 
 `fillGaps()` adds days without activity, which a chart needs.

@@ -122,10 +122,8 @@ function assertWaitlistInvariants(): void
                 expect($cycle->confirmed_at->lessThanOrEqualTo($cycle->ended_at))->toBeTrue();
             }
 
-            $sent = $entry->activity
-                ->where('waitlist_subscription_id', $cycle->getKey())
-                ->where('type', ActivityType::ConfirmationRequested)
-                ->count();
+            $ofCycle = $entry->activity->where('waitlist_subscription_id', $cycle->getKey());
+            $sent = $ofCycle->where('type', ActivityType::ConfirmationRequested)->count() - $ofCycle->where('type', ActivityType::ConfirmationFailed)->count();
             expect($sent)->toBe($cycle->confirmation_count, "cycle {$cycle->id}: confirmation_count does not match the log");
 
             $signups = $entry->activity

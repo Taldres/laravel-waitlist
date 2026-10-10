@@ -73,6 +73,10 @@ class SendWaitlistConfirmationMail implements ShouldQueue, ShouldBeEncrypted
   the listener; the package's cooldown and caps already did.
 - `confirmationMailed()` records the reference of the mail next to the consent;
   use a template name and version, and keep each version's text.
+- A request counts against the cooldown and the caps when it is issued. If the
+  queued listener gives up, call `Waitlist::confirmationFailed($event->subscription,
+  'http-429')` from its `failed()` method (an error code, never the address): the
+  person's own retry then gets a mail. It answers `false` if a newer request exists.
 - `$event->confirmUrl` is `null` while the project's `urls()` sets no `confirm` page
   and the package routes are off. A link that cannot be built (the routes are on
   but not registered, as after a stale route cache) throws

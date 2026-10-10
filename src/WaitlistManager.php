@@ -50,6 +50,7 @@ use Taldres\Waitlist\Support\Recipient;
 use Taldres\Waitlist\Support\RequestContext;
 use Taldres\Waitlist\Support\ResolvesModel;
 use Taldres\Waitlist\Support\SubscribeResult;
+use Taldres\Waitlist\Support\SubscriptionLifecycle;
 use Taldres\Waitlist\Support\UnsubscribeToken;
 
 class WaitlistManager
@@ -287,6 +288,25 @@ class WaitlistManager
         }
 
         app(RecordActivity::class)($entry, ActivityType::ConfirmationMailed, $subscription, $context, reference: $reference);
+    }
+
+    /**
+     * Records your listener's report that it could not mail a cycle's
+     * confirmation request, e.g. from the queued listener's failed() method.
+     * The request stops counting against the resend cooldown and the caps, so
+     * the person's own retry gets a mail. False when the cycle was confirmed
+     * or has ended, a newer request was issued since, or the entry was erased.
+     * $reference is what you want in the log, such as the provider's error
+     * code; never the address or the provider's message.
+     */
+    public function confirmationFailed(WaitlistSubscription $subscription, ?string $reference = null, ?RequestContext $context = null): bool
+    {
+        // Erased in the meantime: a queued listener must not fail again.
+        if ($subscription->entry()->doesntExist()) {
+            return false;
+        }
+
+        return app(SubscriptionLifecycle::class)->confirmationFailed($subscription, $context ?? RequestContext::none(), $reference);
     }
 
     public function findByConfirmToken(string $plainToken): ?WaitlistSubscription
