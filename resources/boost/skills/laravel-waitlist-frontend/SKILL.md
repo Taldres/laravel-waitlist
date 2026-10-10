@@ -173,7 +173,7 @@ keeping or dropping one does not.
   Waitlist::verifySpamUsing(fn (Request $request): bool => Http::asForm()
       ->post('https://challenges.cloudflare.com/turnstile/v0/siteverify', [
           'secret' => config('services.turnstile.secret'),
-          'response' => (string) $request->input('turnstile_token'),
+          'response' => (string) ($request->header('X-Waitlist-Challenge') ?? $request->input('turnstile_token')),
           'remoteip' => $request->ip(),
       ])->json('success') === true);
   ```
@@ -209,8 +209,8 @@ keeping or dropping one does not.
 - "Add a waitlist form to the Blade landing page": steps 2 to 4 in controllers.
 - "Our Nuxt site needs a waitlist": `WAITLIST_ROUTES_ENABLED=true`, CORS, then the
   HTTP variants of steps 2 to 5.
-- "Add Turnstile to the waitlist form": step 6, and send `turnstile_token` with the
-  form.
+- "Add Turnstile to the waitlist form": step 6, and send the token in the
+  `X-Waitlist-Challenge` header, or as `turnstile_token` from a plain form.
 
 ## Anti-patterns
 
