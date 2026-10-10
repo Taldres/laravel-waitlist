@@ -83,7 +83,7 @@ describe('the default gate', function () {
         $signUp = fn (string $project) => $this->withHeaders(['X-First' => 'project:acme', 'X-Waitlist-Project' => $project])
             ->postJson('/waitlist', ['email' => 'user@example.com', 'list' => 'beta', 'purposes' => ['launch' => 'v1']]);
 
-        $signUp('other')->assertNotFound();
+        $signUp('other')->assertNotFound()->assertJsonMissingPath('error');
         $signUp('acme')->assertStatus(202);
 
         expect(WaitlistEntry::query()->pluck('project')->all())->toBe(['acme']);

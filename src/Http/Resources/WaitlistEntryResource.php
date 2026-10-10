@@ -17,6 +17,14 @@ use Taldres\Waitlist\Models\WaitlistEntry;
 class WaitlistEntryResource extends JsonResource
 {
     /**
+     * Pinned, as an app's JsonResource::withoutWrapping() would otherwise
+     * change the shape of the API for every client.
+     *
+     * @var string|null
+     */
+    public static $wrap = 'data';
+
+    /**
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array

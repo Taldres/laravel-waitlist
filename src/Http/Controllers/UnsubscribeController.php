@@ -7,6 +7,7 @@ namespace Taldres\Waitlist\Http\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Taldres\Waitlist\Enums\ApiError;
 use Taldres\Waitlist\Enums\Page;
 use Taldres\Waitlist\Exceptions\InvalidTokenException;
 use Taldres\Waitlist\Http\Controllers\Concerns\RedirectsToFrontend;
@@ -39,7 +40,7 @@ class UnsubscribeController
 
             if ($entry === null) {
                 return $this->redirectFor(Page::Invalid->value)
-                    ?? new JsonResponse(['message' => 'Invalid token.'], 404);
+                    ?? new JsonResponse(['message' => 'Invalid token.', 'error' => ApiError::InvalidToken->value], 404);
             }
 
             return $this->redirectFor(Page::Unsubscribe->value, $entry, $token, $purpose) ?? new WaitlistEntryResource($entry);
@@ -54,7 +55,7 @@ class UnsubscribeController
                 : $waitlist->unsubscribe($token, RequestContext::fromRequest($request));
         } catch (InvalidTokenException) {
             return ($oneClick ? null : $this->redirectFor(Page::Invalid->value))
-                ?? new JsonResponse(['message' => 'Invalid token.'], 404);
+                ?? new JsonResponse(['message' => 'Invalid token.', 'error' => ApiError::InvalidToken->value], 404);
         }
 
         return ($oneClick ? null : $this->redirectFor(Page::Unsubscribed->value, $entry)) ?? new WaitlistEntryResource($entry);

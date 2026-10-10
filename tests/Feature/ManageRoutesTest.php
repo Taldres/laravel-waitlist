@@ -41,7 +41,9 @@ describe('with routes enabled', function () {
 
         defineDefaultProject(fn (ProjectDefinition $project) => $project->list('beta', purpose: 'waitlist'), lists: false);
 
-        $this->getJson('/waitlist/purposes?list=secret')->assertNotFound();
+        $this->getJson('/waitlist/purposes?list=secret')
+            ->assertNotFound()
+            ->assertExactJson(['message' => 'Not found.', 'error' => 'unknown_list']);
     });
 
     it('shows status and purposes without the address and without changing anything', function () {
@@ -55,7 +57,9 @@ describe('with routes enabled', function () {
 
         expect(WaitlistActivity::query()->count())->toBe($before);
 
-        $this->getJson('/waitlist/manage/nope')->assertNotFound();
+        $this->getJson('/waitlist/manage/nope')
+            ->assertNotFound()
+            ->assertExactJson(['message' => 'Invalid token.', 'error' => 'invalid_token']);
     });
 
     it('sends a browser to the preference page', function () {
@@ -96,7 +100,9 @@ describe('with routes enabled', function () {
     it('answers 410 once the manage link has expired', function () {
         $this->travel(61)->minutes();
 
-        $this->getJson("/waitlist/manage/{$this->manage}")->assertStatus(410);
+        $this->getJson("/waitlist/manage/{$this->manage}")
+            ->assertStatus(410)
+            ->assertExactJson(['message' => 'This link has expired.', 'error' => 'expired_token']);
         $this->postJson("/waitlist/manage/{$this->manage}/data")->assertStatus(410);
         $this->postJson("/waitlist/manage/{$this->manage}/erase", ['confirm' => true])->assertStatus(410);
 
@@ -180,7 +186,8 @@ describe('with routes enabled', function () {
         defineDefaultProject(fn (ProjectDefinition $project) => $project->list('gamma', purpose: 'waitlist'), lists: false);
 
         $this->putJson("/waitlist/manage/{$this->manage}/purposes", ['purposes' => waitlistConsent()])
-            ->assertStatus(409);
+            ->assertStatus(409)
+            ->assertExactJson(['message' => 'This list is no longer available.', 'error' => 'list_unavailable']);
         $this->postJson("/waitlist/unsubscribe/{$this->tokens['unsubscribe']}")
             ->assertOk()
             ->assertJsonPath('data.status', EntryStatus::Unsubscribed->value);
@@ -189,7 +196,9 @@ describe('with routes enabled', function () {
     it('answers 409 once the address has left', function () {
         Waitlist::unsubscribe($this->tokens['unsubscribe']);
 
-        $this->putJson("/waitlist/manage/{$this->manage}/purposes", ['purposes' => waitlistConsent()])->assertStatus(409);
+        $this->putJson("/waitlist/manage/{$this->manage}/purposes", ['purposes' => waitlistConsent()])
+            ->assertStatus(409)
+            ->assertExactJson(['message' => 'Not subscribed.', 'error' => 'not_subscribed']);
     });
 
     it('erases only with an explicit confirmation', function () {

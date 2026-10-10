@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Taldres\Waitlist\Auth\WaitlistGate;
 use Taldres\Waitlist\Contracts\ProjectResolver;
+use Taldres\Waitlist\Enums\ApiError;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\WaitlistAction;
 use Taldres\Waitlist\Exceptions\UnknownWaitlistException;
@@ -33,7 +34,7 @@ class PurposesController
         try {
             $purposes = $waitlist->project($project)->purposes($list, is_string($locale) && $locale !== '' ? $locale : null);
         } catch (UnknownWaitlistException) {
-            return new JsonResponse(['message' => 'Not found.'], 404);
+            return new JsonResponse(['message' => 'Not found.', 'error' => ApiError::UnknownList->value], 404);
         }
 
         return new JsonResponse(['data' => array_map(fn (PurposeWording $wording) => $wording->toArray(), $purposes)]);
