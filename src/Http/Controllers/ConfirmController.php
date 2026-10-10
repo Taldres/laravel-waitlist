@@ -7,6 +7,7 @@ namespace Taldres\Waitlist\Http\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Taldres\Waitlist\Enums\ApiError;
 use Taldres\Waitlist\Enums\Page;
 use Taldres\Waitlist\Exceptions\ExpiredTokenException;
 use Taldres\Waitlist\Exceptions\InvalidTokenException;
@@ -34,10 +35,10 @@ class ConfirmController
             $entry = $waitlist->confirm($token, RequestContext::fromRequest($request));
         } catch (ExpiredTokenException) {
             return $this->redirectFor(Page::Expired->value, $this->owner($token, $waitlist))
-                ?? new JsonResponse(['message' => 'This confirmation link has expired.'], 410);
+                ?? new JsonResponse(['message' => 'This confirmation link has expired.', 'error' => ApiError::ExpiredToken->value], 410);
         } catch (InvalidTokenException) {
             return $this->redirectFor(Page::Invalid->value, $this->owner($token, $waitlist))
-                ?? new JsonResponse(['message' => 'Invalid token.'], 404);
+                ?? new JsonResponse(['message' => 'Invalid token.', 'error' => ApiError::InvalidToken->value], 404);
         }
 
         return $this->redirectFor(Page::Confirmed->value, $entry) ?? new WaitlistEntryResource($entry);
@@ -50,12 +51,12 @@ class ConfirmController
 
         if ($subscription === null || $entry === null || ! $subscription->isOpen()) {
             return $this->redirectFor(Page::Invalid->value, $entry)
-                ?? new JsonResponse(['message' => 'Invalid token.'], 404);
+                ?? new JsonResponse(['message' => 'Invalid token.', 'error' => ApiError::InvalidToken->value], 404);
         }
 
         if (! $subscription->isConfirmed() && $subscription->hasExpiredToken()) {
             return $this->redirectFor(Page::Expired->value, $entry)
-                ?? new JsonResponse(['message' => 'This confirmation link has expired.'], 410);
+                ?? new JsonResponse(['message' => 'This confirmation link has expired.', 'error' => ApiError::ExpiredToken->value], 410);
         }
 
         return $this->redirectFor(Page::Confirm->value, $entry, $token) ?? new WaitlistEntryResource($entry);

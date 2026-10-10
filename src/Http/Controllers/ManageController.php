@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Taldres\Waitlist\Actions\EraseEntry;
 use Taldres\Waitlist\Actions\SyncPurposes;
 use Taldres\Waitlist\Actions\UnsubscribeEntry;
+use Taldres\Waitlist\Enums\ApiError;
 use Taldres\Waitlist\Enums\Page;
 use Taldres\Waitlist\Exceptions\MissingConsentException;
 use Taldres\Waitlist\Exceptions\UnknownPurposeException;
@@ -76,7 +77,7 @@ class ManageController
         }
 
         if ($entry->currentSubscription === null) {
-            return new JsonResponse(['message' => 'Not subscribed.'], 409);
+            return new JsonResponse(['message' => 'Not subscribed.', 'error' => ApiError::NotSubscribed->value], 409);
         }
 
         try {
@@ -85,7 +86,7 @@ class ManageController
             return new JsonResponse(['message' => $exception->getMessage(), 'errors' => ['purposes' => [$exception->getMessage()]]], 422);
         } catch (UnknownWaitlistException) {
             // The list was removed from the catalog; leaving still works.
-            return new JsonResponse(['message' => 'This list is no longer available.'], 409);
+            return new JsonResponse(['message' => 'This list is no longer available.', 'error' => ApiError::ListUnavailable->value], 409);
         }
 
         return new WaitlistEntryResource($entry);
@@ -144,11 +145,11 @@ class ManageController
 
     private function invalid(): JsonResponse
     {
-        return new JsonResponse(['message' => 'Invalid token.'], 404);
+        return new JsonResponse(['message' => 'Invalid token.', 'error' => ApiError::InvalidToken->value], 404);
     }
 
     private function expired(): JsonResponse
     {
-        return new JsonResponse(['message' => 'This link has expired.'], 410);
+        return new JsonResponse(['message' => 'This link has expired.', 'error' => ApiError::ExpiredToken->value], 410);
     }
 }

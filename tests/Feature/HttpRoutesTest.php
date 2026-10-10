@@ -197,16 +197,24 @@ it('keeps the data wrapper when the app turns wrapping off', function () {
     }
 });
 
-it('answers 404 and 410 for bad confirm tokens on both methods', function () {
+it('answers 404 and 410 for bad confirm tokens on both methods, naming the error', function () {
     $tokens = ($this->tokens)();
 
-    $this->getJson('/waitlist/confirm/unknown')->assertStatus(404);
-    $this->postJson('/waitlist/confirm/unknown')->assertStatus(404);
+    $this->getJson('/waitlist/confirm/unknown')
+        ->assertStatus(404)
+        ->assertExactJson(['message' => 'Invalid token.', 'error' => 'invalid_token']);
+    $this->postJson('/waitlist/confirm/unknown')->assertStatus(404)->assertJsonPath('error', 'invalid_token');
 
     $this->travel(8)->days();
 
-    $this->getJson("/waitlist/confirm/{$tokens['confirm']}")->assertStatus(410);
-    $this->postJson("/waitlist/confirm/{$tokens['confirm']}")->assertStatus(410);
+    $this->getJson("/waitlist/confirm/{$tokens['confirm']}")
+        ->assertStatus(410)
+        ->assertExactJson(['message' => 'This confirmation link has expired.', 'error' => 'expired_token']);
+    $this->postJson("/waitlist/confirm/{$tokens['confirm']}")->assertStatus(410)->assertJsonPath('error', 'expired_token');
+});
+
+it('names no error on a 404 that did not come from a package route', function () {
+    $this->postJson('/waitlist/nope/unknown')->assertNotFound()->assertJsonMissingPath('error');
 });
 
 it('never unsubscribes on GET, only on POST', function () {
@@ -218,7 +226,8 @@ it('never unsubscribes on GET, only on POST', function () {
 
     expect(WaitlistEntry::query()->firstOrFail()->status)->toBe(EntryStatus::Pending);
 
-    $this->getJson('/waitlist/unsubscribe/unknown')->assertStatus(404);
+    $this->getJson('/waitlist/unsubscribe/unknown')->assertStatus(404)->assertJsonPath('error', 'invalid_token');
+    $this->postJson('/waitlist/unsubscribe/unknown')->assertStatus(404)->assertJsonPath('error', 'invalid_token');
 
     $this->postJson("/waitlist/unsubscribe/{$tokens['unsubscribe']}")
         ->assertOk()

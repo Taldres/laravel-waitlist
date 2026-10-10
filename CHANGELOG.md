@@ -12,6 +12,7 @@
 - A purpose choice that is wrong says what is wrong with it, and hashes are accepted in either case
 - Addresses, metadata, IP and user agent always encrypted at rest with Laravel's `encrypted` casts, following `Model::encryptUsing()`, or with an encrypter for the package only (`Waitlist::encryptUsing()`); lookups on a keyed hash
 - Retention periods applied by a scheduled `waitlist:prune`
+- Refusals the routes answer themselves name an `error` (`invalid_token`, `expired_token`, `unknown_list`, `not_subscribed`, `list_unavailable`), so a client can tell them from a `404` for a route that does not exist
 - Reporting from the activity log: daily series and totals per list, and the confirmed count at the end of any day (`confirmedOn()`), with every departure recorded by the status it left so a later clean-up is not counted twice
 - Self-service preference page: purposes, data export, erasure. Mails carry an unsubscribe token that can only remove; the page opens with a short-lived manage link mailed to the address on request
 - `waitlist:privacy` for the record of processing

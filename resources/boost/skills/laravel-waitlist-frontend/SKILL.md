@@ -127,7 +127,9 @@ try {
 ```
 
 Over HTTP: `POST /waitlist/confirm/{token}` with `Accept: application/json`
-answers `{"data": {..., "status": "confirmed"}}`, `404` unknown, `410` expired.
+answers `{"data": {..., "status": "confirmed"}}`, `404` unknown, `410` expired;
+the package's own refusals name an `error`, e.g. `invalid_token`, and a `404`
+without one means a wrong URL.
 
 ### 4. Unsubscribe page
 

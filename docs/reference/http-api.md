@@ -41,6 +41,24 @@ Nothing looks up data by address over HTTP: access and erasure by address exist
 only as commands and PHP APIs. A person reaches their own data only through a
 manage link mailed to their address.
 
+## Errors
+
+A refusal the package answers itself names it in `error`, next to the
+`message`:
+
+| Status | `error` | When |
+| --- | --- | --- |
+| `404` | `invalid_token` | The token belongs to no entry. |
+| `404` | `unknown_list` | `GET /purposes` for a list the project does not have. |
+| `409` | `not_subscribed` | `PUT /manage/{token}/purposes` once the address has left. |
+| `409` | `list_unavailable` | `PUT /manage/{token}/purposes` for a list removed since. |
+| `410` | `expired_token` | The confirm or manage link has expired. |
+
+A `404` without `error` did not come from the package: there is no such route,
+often a URL without the routes' prefix, or the `useWaitlist` gate keeps the
+caller from the project. Validation errors are `422` with `errors`, as Laravel
+answers them, and rate limits `429` with `Retry-After`.
+
 ## GET never changes anything
 
 Neither does HEAD, and no response to a link from a mail carries the address:
