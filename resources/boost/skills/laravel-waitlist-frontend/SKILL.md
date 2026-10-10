@@ -167,7 +167,8 @@ keeping or dropping one does not.
 
 ### 6. Protect the public endpoints
 
-- Bot check on the signup and manage links by address, e.g. Cloudflare Turnstile:
+- Optional bot check on the signup and manage links by address (the default
+  `NullSpamProtector` accepts every request), e.g. Cloudflare Turnstile:
 
   ```php
   Waitlist::verifySpamUsing(fn (Request $request): bool => Http::asForm()

@@ -438,13 +438,15 @@ use up the server's cap.
 
 ## Bot protection via SpamProtector
 
-The package ships a `SpamProtector` contract with a no-op default. It guards the
-two endpoints where anyone can type an address: the signup (`POST /waitlist`)
-and a manage link requested by address (`POST /waitlist/manage-link` with
-`email`), so a form for either must send what your check expects. Send the
-proof of a bot check in the `X-Waitlist-Challenge` header, which every client
-can set, the JS client included; a plain HTML form posts it as a field instead.
-The examples below read either. There are two ways to plug in your own check.
+A bot check is optional. The package ships a `SpamProtector` contract whose
+default, `NullSpamProtector`, accepts every request, so no client needs to send
+anything until you add a check of your own. A check guards the two endpoints
+where anyone can type an address: the signup (`POST /waitlist`) and a manage
+link requested by address (`POST /waitlist/manage-link` with `email`), so a form
+for either must then send what your check expects. Send the proof in the
+`X-Waitlist-Challenge` header, which every client can set, the JS client
+included; a plain HTML form posts it as a field instead. The examples below read
+either. There are two ways to plug in your own check.
 
 ### The quick path: a closure
 
