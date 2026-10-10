@@ -163,6 +163,10 @@ $this->postJson('/waitlist', [/* email, list, purposes */])->assertJsonValidatio
 Use `postJson()`/`getJson()`: without `Accept: application/json`, the pages in the
 project's `urls()` turn answers into redirects.
 
+A test that switches between a server caller and a guest calls `Auth::forgetGuards()`
+in between: a guard built with `Auth::viaRequest()` keeps its user for the rest of
+the test, so the guest request would still see the server.
+
 ### 6. Bot checks and erasure
 
 ```php

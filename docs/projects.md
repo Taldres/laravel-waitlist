@@ -597,3 +597,8 @@ it('asks teams for a phone number', function () {
     $this->postJson('/waitlist', [/* ... */])->assertJsonValidationErrors('metadata.contact_phone');
 });
 ```
+
+A test that switches between a server caller and a guest calls `Auth::forgetGuards()`
+in between. A guard built with `Auth::viaRequest()` keeps its user for the rest of
+the test, so the guest request would still see the server and a missing `401`
+looks like a bug in the package.
