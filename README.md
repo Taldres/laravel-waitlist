@@ -8,7 +8,7 @@
 
 ![Tests](https://img.shields.io/github/actions/workflow/status/taldres/laravel-waitlist/tests.yml?label=tests)
 ![PHPStan](https://img.shields.io/badge/PHPStan-level%2010-brightgreen)
-![Laravel](https://img.shields.io/badge/Laravel-12%20%7C%2013-red)
+![Laravel](https://img.shields.io/badge/Laravel-13-red)
 ![PHP](https://img.shields.io/badge/PHP-8.3%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
@@ -46,7 +46,7 @@ top via events and macros, see [the invite flow example](docs/examples/invite-fl
 ## Requirements
 
 - PHP 8.3+
-- Laravel 12 or 13
+- Laravel 13
 - SQLite 3.26+, MySQL 5.7+, MariaDB 10.3+ or PostgreSQL 10+
 
 ## Installation

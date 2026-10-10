@@ -2,6 +2,7 @@
 
 ## [Unreleased](https://github.com/taldres/laravel-waitlist/commits/main)
 
+- Requires PHP 8.3+ and Laravel 13
 - Subscription cycles with exactly-once state changes
 - Consent per purpose: one required primary purpose per list, optional purposes withdrawable on their own
 - Wording per locale: forms get the text in the visitor's language, and each consent stores the locale it was given in
