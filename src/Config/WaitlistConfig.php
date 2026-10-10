@@ -381,44 +381,77 @@ final class WaitlistConfig
     }
 
     /**
-     * Reads every setting, for a check before going live.
+     * Reads every setting, for a check before going live, and throws the first
+     * that does not read.
+     *
+     * @throws InvalidConfigurationException
      */
     public static function check(): void
     {
-        self::entryModel();
-        self::subscriptionModel();
-        self::consentModel();
-        self::activityModel();
-        self::connection();
-        self::defaultList();
-        self::requireWordingHash();
-        self::doubleOptIn();
-        self::confirmation();
-        self::manage();
-        self::privacy();
-        self::retention();
-        self::pruneSchedule();
-        self::routesEnabled();
-        self::routePrefix();
-        self::routeName();
-        self::routeMiddleware();
-        self::signupMiddleware();
-        self::linksMiddleware();
-        self::definedLimiter(ConfigKey::SignupLimiter, self::signupLimiter());
-        self::definedLimiter(ConfigKey::LinksLimiter, self::linksLimiter());
-        self::signupPerMinute();
-        self::linkPerMinute();
-        self::linksPerIpPerMinute();
-        self::callerSignupPerMinute();
-        self::guards();
-        self::authenticationRequired();
-        self::clientIpHeader();
-        self::catalog();
-        self::urlGenerator();
-        self::projectResolver();
-        self::emailNormalizer();
-        self::spamProtector();
-        self::export();
+        $problems = self::problems();
+
+        if ($problems !== []) {
+            throw $problems[0];
+        }
+    }
+
+    /**
+     * Every setting that does not read, each once and in the order of the
+     * settings. The messages name the key and what it must be, never a value.
+     *
+     * @return list<InvalidConfigurationException>
+     */
+    public static function problems(): array
+    {
+        $checks = [
+            self::entryModel(...),
+            self::subscriptionModel(...),
+            self::consentModel(...),
+            self::activityModel(...),
+            self::connection(...),
+            self::defaultList(...),
+            self::requireWordingHash(...),
+            self::doubleOptIn(...),
+            self::confirmation(...),
+            self::manage(...),
+            self::privacy(...),
+            self::retention(...),
+            self::pruneSchedule(...),
+            self::routesEnabled(...),
+            self::routePrefix(...),
+            self::routeName(...),
+            self::routeMiddleware(...),
+            self::signupMiddleware(...),
+            self::linksMiddleware(...),
+            static fn () => self::definedLimiter(ConfigKey::SignupLimiter, self::signupLimiter()),
+            static fn () => self::definedLimiter(ConfigKey::LinksLimiter, self::linksLimiter()),
+            self::signupPerMinute(...),
+            self::linkPerMinute(...),
+            self::linksPerIpPerMinute(...),
+            self::callerSignupPerMinute(...),
+            self::guards(...),
+            self::authenticationRequired(...),
+            self::clientIpHeader(...),
+            self::catalog(...),
+            self::urlGenerator(...),
+            self::projectResolver(...),
+            self::emailNormalizer(...),
+            self::spamProtector(...),
+            self::export(...),
+        ];
+
+        $problems = [];
+
+        foreach ($checks as $check) {
+            try {
+                $check();
+            } catch (InvalidConfigurationException $exception) {
+                // A config that is no array fails every reader alike.
+                $problems[$exception->getMessage()] = $exception;
+            }
+        }
+
+        return array_values($problems);
     }
 
     /**

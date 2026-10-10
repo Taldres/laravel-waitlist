@@ -3,6 +3,7 @@
 ```bash
 php artisan waitlist:install                               # publish the provider, config and migrations; register the provider
 php artisan waitlist:privacy [--project=]                  # input for your record of processing
+php artisan waitlist:check [--strict]                       # settings, tables and leftovers of an older version, for a deploy
 php artisan waitlist:show {email} [--list=] [--project=] [--json|--pretty]  # right of access
 php artisan waitlist:forget {email} [--list=] [--project=] # right to erasure
 php artisan waitlist:forget --list= [--project=] --all [--force]  # erase a whole list
@@ -48,6 +49,14 @@ say where they looked.
 - **`waitlist:wording`** registers wording from a file or, with
   `--from-definitions`, the purposes a project's definition holds, see
   [Purposes and wording](../purposes-and-wording.md#registering-wording-where-it-is-written).
+- **`waitlist:check`** reads every setting and reports all that do not read at
+  once, by key and never by value, so a typo in `.env` is found on deploy and not
+  by the first request that needs it. It also warns of settings in a published
+  `config/waitlist.php` that this version does not read (a removed key stays
+  ignored otherwise), and compares the tables and columns of this version with the
+  database, naming what your migrations lack. The exit code is 1 for a setting or
+  a table, and with `--strict` for a warning too. `php artisan about` shows a
+  Laravel Waitlist section with the same state.
 - **`waitlist:privacy`** describes the configured package storage, the fields
   and purposes of every list, retention, the rate limits (including those of
   servers calling for a project) and the listeners registered for package
