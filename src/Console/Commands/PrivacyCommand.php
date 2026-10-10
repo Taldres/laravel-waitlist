@@ -250,6 +250,7 @@ class PrivacyCommand extends Command
                     .', token links '.$this->rateLimit(WaitlistConfig::linksLimiter(), WaitlistServiceProvider::LINKS_LIMITER, WaitlistConfig::linkPerMinute().' per minute and token')
                     .'; GET never changes state'
                 : '- No public endpoints (package routes disabled)',
+            ...$this->servers(),
             '- Consent records immutable; lifecycle log rows never deleted, only stripped on erasure',
             '- Erasure strips the log: only project, list, step, purpose, the status a departure left and date remain',
             '- No mail sent and no outbound requests made by the package',
@@ -257,6 +258,38 @@ class PrivacyCommand extends Command
             'Yours to add: access control to the database, its backups and the queue; protection of APP_KEY; bot protection on public forms.',
             '',
         ];
+    }
+
+    /**
+     * Only where servers can call for a project: they are limited as a whole,
+     * and a forwarded visitor address replaces theirs.
+     *
+     * @return list<string>
+     */
+    protected function servers(): array
+    {
+        if (! WaitlistConfig::routesEnabled()) {
+            return [];
+        }
+
+        $header = WaitlistConfig::clientIpHeader();
+
+        if (! WaitlistConfig::authenticationRequired() && $header === null) {
+            return [];
+        }
+
+        $lines = [];
+
+        if (WaitlistConfig::signupLimiter() === WaitlistServiceProvider::SIGNUP_LIMITER) {
+            $lines[] = '- Rate limits for servers calling for a project: signups '.WaitlistConfig::callerSignupPerMinute().' per minute and server'
+                .($header !== null ? ', and '.WaitlistConfig::signupPerMinute().' per minute and visitor' : '');
+        }
+
+        if ($header !== null) {
+            $lines[] = "- A visitor's address is read from the `{$header}` header of servers calling for a project, never of guests; it is the address limited and, where IP addresses are stored, logged";
+        }
+
+        return $lines;
     }
 
     protected function encryptedWith(): string

@@ -49,6 +49,7 @@ say where they looked.
   `--from-definitions`, the purposes a project's definition holds, see
   [Purposes and wording](../purposes-and-wording.md#registering-wording-where-it-is-written).
 - **`waitlist:privacy`** describes the configured package storage, the fields
-  and purposes of every list, retention and the listeners registered for
-  package events. It does not audit
+  and purposes of every list, retention, the rate limits (including those of
+  servers calling for a project) and the listeners registered for package
+  events. It does not audit
   your infrastructure or find every recipient; complete it yourself.
