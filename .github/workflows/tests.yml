@@ -76,7 +76,37 @@ jobs:
         if: runner.os == 'Windows'
         run: vendor/bin/pest
 
+  # Docs, agent skills and repository settings cannot change what a database
+  # does, so a change that touches only those skips the database lanes. The
+  # first push of a branch has no base to compare and always runs them.
+  changes:
+    runs-on: ubuntu-latest
+
+    outputs:
+      databases: ${{ steps.diff.outputs.databases }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Compare with the base
+        id: diff
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "databases=true" >> "$GITHUB_OUTPUT"
+          elif [ -n "$(git diff --name-only "$BASE" HEAD | grep -vE '\.md$|^docs/|^resources/boost/|^\.(agents|claude|codex|cursor|junie)/|^\.github/(assets|ISSUE_TEMPLATE)/|^\.github/(dependabot|release)\.yml$')" ]; then
+            echo "databases=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "databases=false" >> "$GITHUB_OUTPUT"
+          fi
+
   databases:
+    needs: changes
+    if: needs.changes.outputs.databases == 'true'
     runs-on: ubuntu-latest
 
     strategy:
