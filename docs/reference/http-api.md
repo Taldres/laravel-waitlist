@@ -23,15 +23,15 @@ Leave the routes off and call the facade from your controllers;
 | POST | `/waitlist/confirm/{token}` | Confirm. |
 | GET | `/waitlist/unsubscribe/{token}` | Reports the entry. `404` invalid. |
 | POST | `/waitlist/unsubscribe/{token}[?purpose=]` | Unsubscribe, or withdraw one purpose; including [RFC 8058](https://www.rfc-editor.org/rfc/rfc8058) one-click. |
-| POST | `/waitlist/manage-link` | Mail a manage link, with `token` (the unsubscribe token) or `email` and optional `list`. `202` with an identical body whether or not anything was sent. With `email`, the project resolver and the `useWaitlist` gate decide first, then the spam check applies. `404` with `manage_links_disabled` for a project [without manage links](../projects.md#pages). |
+| POST | `/waitlist/unsubscribe/{token}/manage-link` | Mail a manage link to the address behind the unsubscribe token. `202` with an identical body whether or not anything was sent, also for a token that belongs to nobody. A token needs no resolver, gate or spam check, and the route is in the `links` group. `404` with `manage_links_disabled` for a project [without manage links](../projects.md#pages). |
+| POST | `/waitlist/manage-link` | Mail a manage link to an `email`, with an optional `list`. `202` with an identical body whether or not anything was sent. The project resolver and the `useWaitlist` gate decide first, then the spam check applies. `404` with `manage_links_disabled` for a project without manage links. |
 | GET | `/waitlist/manage/{token}` | Status and purposes in force, for the preference page. `404` invalid, `410` expired. |
 | PUT | `/waitlist/manage/{token}/purposes` | Set the purposes; the primary one must be included, else `422`. `409` once the address has left. |
 | POST | `/waitlist/manage/{token}/unsubscribe` | Leave this list, keeping the consent records for the configured retention period. |
 | POST | `/waitlist/manage/{token}/data` | A JSON copy of everything stored for this entry, i.e. this list. |
 | POST | `/waitlist/manage/{token}/erase` | Erase this entry, with `{"confirm": true}`. |
 
-`/manage/…` takes the manage token, `/unsubscribe/…` and `/manage-link` the
-unsubscribe token, `/confirm/…` the confirm token. The token routes answer
+`/manage/…` takes the manage token, `/unsubscribe/…` the unsubscribe token, `/confirm/…` the confirm token. The token routes answer
 `{"data": {project, list, status, purposes, confirmed_at, unsubscribed_at,
 created_at}}`, never the address, also in an app that calls
 `JsonResource::withoutWrapping()`; `/manage/{token}/data` answers the copy itself.
@@ -51,7 +51,7 @@ A refusal the package answers itself names it in `error`, next to the
 | `404` | `invalid_token` | The token belongs to no entry. |
 | `404` | `unknown_list` | `GET /purposes` for a list the project does not have. |
 | `409` | `not_subscribed` | `PUT /manage/{token}/purposes` once the address has left. |
-| `404` | `manage_links_disabled` | `POST /manage-link` for a project without manage links; by address, the same for every address. |
+| `404` | `manage_links_disabled` | `POST /manage-link` or `POST /unsubscribe/{token}/manage-link` for a project without manage links; by address, the same for every address. |
 | `409` | `list_unavailable` | `PUT /manage/{token}/purposes` for a list removed since. |
 | `410` | `expired_token` | The confirm or manage link has expired. |
 | `422` | `spam_check_failed` | `POST /waitlist` or `POST /manage-link` by address, when the [spam check](../securing-the-endpoints.md#bot-protection-via-spamprotector) refuses; the `message` is `Spam check failed.` and there are no `errors`. |
@@ -189,7 +189,7 @@ of your own answers with whatever status it returns. See
 ## Rate limits, CORS, bots
 
 Each route group has its own named limiter: `signup` (signup, wording, manage
-links; `waitlist`, per IP, or per server for one calling for a project) and
+links by address; `waitlist`, per IP, or per server for one calling for a project) and
 `links` (everything with a token; `waitlist-links`, per token, so one-click
 unsubscribes from a mail provider's servers get through). CORS for a frontend on another origin, trusted proxies and
 bot protection are covered in [Securing the endpoints](../securing-the-endpoints.md).

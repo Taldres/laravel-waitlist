@@ -145,11 +145,6 @@ final class WaitlistConfig
     /**
      * Whether a confirm link stops working once used.
      */
-    public static function singleUseConfirmTokens(): bool
-    {
-        return ConfigReader::of(config('waitlist'))->boolean(ConfigKey::InvalidateConfirmToken);
-    }
-
     /**
      * Every setting of the preference page, for a check; see confirmation().
      */
@@ -399,7 +394,6 @@ final class WaitlistConfig
         self::requireWordingHash();
         self::doubleOptIn();
         self::confirmation();
-        self::singleUseConfirmTokens();
         self::manage();
         self::privacy();
         self::retention();

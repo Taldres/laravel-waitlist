@@ -21,10 +21,8 @@ class ConfirmEntry
     ) {}
 
     /**
-     * Idempotent: a second click returns the confirmed entry, unless
-     * waitlist.double_opt_in.invalidate_confirm_token_after_confirmation makes
-     * the link single-use. A token whose cycle has ended is invalid, so the
-     * link cannot undo an unsubscribe.
+     * Idempotent: a second click returns the confirmed entry. A token whose
+     * cycle has ended is invalid, so the link cannot undo an unsubscribe.
      *
      * @throws InvalidTokenException
      * @throws ExpiredTokenException

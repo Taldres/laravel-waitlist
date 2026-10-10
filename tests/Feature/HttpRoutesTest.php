@@ -253,6 +253,8 @@ it('adds middleware to the signup group only, so token links skip checks meant f
     $signUp = ['email' => 'other@example.com', 'list' => 'beta', 'purposes' => waitlistConsent()];
 
     $this->postJson('/waitlist', $signUp)->assertStatus(419);
+    $this->postJson('/waitlist/manage-link', ['email' => 'user@example.com', 'list' => 'beta'])->assertStatus(419);
+    $this->postJson("/waitlist/unsubscribe/{$tokens['unsubscribe']}/manage-link")->assertStatus(202);
     $this->postJson("/waitlist/confirm/{$tokens['confirm']}")->assertOk();
     $this->post("/waitlist/unsubscribe/{$tokens['unsubscribe']}", ['List-Unsubscribe' => 'One-Click'])->assertOk();
     $this->withHeaders(['X-Form-Check' => 'passed'])->postJson('/waitlist', $signUp)->assertStatus(202);

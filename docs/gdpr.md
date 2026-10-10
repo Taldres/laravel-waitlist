@@ -165,7 +165,7 @@ or a provider reading its headers exposes nothing. The preference page opens wit
 a manage link that is mailed to the address on request (`ManageLinkRequested`)
 and expires after an hour. It only reaches the person through their mailbox,
 which is what lets it stand in for a login. Offer the request on your unsubscribe
-page: `POST /waitlist/manage-link` with the token from the link. A project
+page: `POST /waitlist/unsubscribe/{token}/manage-link` with the token from the link. A project
 without a preference page turns manage links off (`manageLinks(false)`); access
 and erasure then go through you, with the commands above, and your privacy
 notice says how to reach you.

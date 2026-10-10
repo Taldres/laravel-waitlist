@@ -130,7 +130,7 @@ function edgeCaseFlows(): array
                 $test->getJson("/waitlist/unsubscribe/{$tokens['unsubscribe']}")->assertOk()->assertJsonPath('data.status', EntryStatus::Confirmed->value);
             };
         }],
-        'confirm an issued link' => [[...$store, ConfigKey::UrlGenerator, ConfigKey::Catalog, ConfigKey::InvalidateConfirmToken, ConfigKey::RoutesEnabled], false, function ($test): Closure {
+        'confirm an issued link' => [[...$store, ConfigKey::UrlGenerator, ConfigKey::Catalog, ConfigKey::RoutesEnabled], false, function ($test): Closure {
             $tokens = edgeCaseSubscribe(confirm: false);
 
             return function () use ($tokens): void {
@@ -138,7 +138,7 @@ function edgeCaseFlows(): array
                     ->and(edgeCaseEntry()->status)->toBe(EntryStatus::Confirmed);
             };
         }],
-        'confirm an issued link over HTTP' => [[...$store, ...$links, ConfigKey::UrlGenerator, ConfigKey::Catalog, ConfigKey::InvalidateConfirmToken], true, function ($test): Closure {
+        'confirm an issued link over HTTP' => [[...$store, ...$links, ConfigKey::UrlGenerator, ConfigKey::Catalog], true, function ($test): Closure {
             $tokens = edgeCaseSubscribe(confirm: false);
 
             return function () use ($test, $tokens): void {
@@ -162,12 +162,12 @@ function edgeCaseFlows(): array
                 Event::assertDispatched(ManageLinkRequested::class);
             };
         }],
-        'manage link requested by token over HTTP' => [[...$store, ...$manageLink, ...$signup], true, function ($test): Closure {
+        'manage link requested by token over HTTP' => [[...$store, ...$manageLink, ...$links], true, function ($test): Closure {
             $tokens = edgeCaseSubscribe();
             Event::fake([ManageLinkRequested::class]);
 
             return function () use ($test, $tokens): void {
-                $test->postJson('/waitlist/manage-link', ['token' => $tokens['unsubscribe']])->assertStatus(202);
+                $test->postJson("/waitlist/unsubscribe/{$tokens['unsubscribe']}/manage-link")->assertStatus(202);
 
                 Event::assertDispatched(ManageLinkRequested::class);
             };

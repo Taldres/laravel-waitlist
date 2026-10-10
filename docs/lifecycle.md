@@ -91,10 +91,9 @@ Three consequences worth knowing:
   is cleared and the link reports as invalid rather than bringing the address
   back.
 
-Confirming is idempotent by default: a second click reports success rather than a
+Confirming is idempotent: a second click reports success rather than a
 confusing error, and the link degrades to a status link that can never change
-state again. `WAITLIST_INVALIDATE_CONFIRM_TOKEN=true` makes it single-use
-instead. An expired confirm link answers `410`; a resend issues a fresh one.
+state again. An expired confirm link answers `410`; a resend issues a fresh one.
 
 ## Consent in force
 
@@ -144,6 +143,7 @@ Waitlist::listUnsubscribeHeaders($entry, 'newsletter');  // RFC 8058 one-click, 
 | another confirmation request | `confirmation_requested` | `EntrySubscribed` (`isNewCycle: false`) |
 | the held-back first request of a deferred cycle | `confirmation_requested` | `EntrySubscribed` (`isNewCycle: true`) |
 | your listener reports the mail, `Waitlist::confirmationMailed()` | `confirmation_mailed` (with reference) | — |
+| your listener reports that it could not send the mail, `Waitlist::confirmationFailed()` | `confirmation_failed` (with reference), cooldown and count taken back | — |
 | confirmed | `confirmed` | `EntryConfirmed` |
 | optional purpose granted | `consent_granted` (with purpose) | `ConsentGranted` |
 | optional purpose withdrawn | `consent_withdrawn` (with purpose) | `ConsentWithdrawn` |

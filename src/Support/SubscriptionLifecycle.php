@@ -129,18 +129,30 @@ class SubscriptionLifecycle
     }
 
     /**
+     * Takes back what a confirmation request held, because no mail left: the
+     * cooldown and the count of requests. False when the cycle was confirmed or
+     * has ended, or a newer request was issued since, which holds its own.
+     */
+    public function confirmationFailed(WaitlistSubscription $subscription, RequestContext $context, ?string $reference = null): bool
+    {
+        $expected = $subscription->confirmation_count;
+
+        return $this->transition($subscription, [
+            'confirmation_sent_at' => null,
+            'confirmation_count' => max($expected - 1, 0),
+        ], fn (Builder $query): Builder => $query
+            ->whereNull('confirmed_at')
+            ->whereNull('ended_at')
+            ->where('confirmation_count', $expected)
+            ->where('confirmation_count', '>', 0), ActivityType::ConfirmationFailed, $context, reference: $reference);
+    }
+
+    /**
      * False when the cycle was already confirmed or has ended.
      */
     public function confirm(WaitlistSubscription $subscription, RequestContext $context): bool
     {
-        $attributes = ['confirmed_at' => Carbon::now()];
-
-        if (WaitlistConfig::singleUseConfirmTokens()) {
-            $attributes['confirm_token_hash'] = null;
-            $attributes['confirm_token_expires_at'] = null;
-        }
-
-        return $this->transition($subscription, $attributes, fn (Builder $query): Builder => $query
+        return $this->transition($subscription, ['confirmed_at' => Carbon::now()], fn (Builder $query): Builder => $query
             ->whereNull('confirmed_at')
             ->whereNull('ended_at'), ActivityType::Confirmed, $context,
             fn (WaitlistEntry $entry): EntryConfirmed => $this->confirmed($entry, $subscription));
@@ -298,7 +310,7 @@ class SubscriptionLifecycle
      *
      * @param  array<string, mixed>  $attributes
      * @param  Closure(Builder<WaitlistSubscription>): Builder<WaitlistSubscription>  $condition
-     * @param  Closure(WaitlistEntry): object  $event
+     * @param  (Closure(WaitlistEntry): object)|null  $event  null for a step that announces nothing
      */
     protected function transition(
         WaitlistSubscription $subscription,
@@ -306,9 +318,10 @@ class SubscriptionLifecycle
         Closure $condition,
         ActivityType $type,
         RequestContext $context,
-        Closure $event,
+        ?Closure $event = null,
+        ?string $reference = null,
     ): bool {
-        $event = static::waitlistConnection()->transaction(function () use ($subscription, $attributes, $condition, $type, $context, $event): ?object {
+        $announce = static::waitlistConnection()->transaction(function () use ($subscription, $attributes, $condition, $type, $context, $event, $reference): ?array {
             $affected = $condition(
                 static::subscriptionModelClass()::query()->whereKey($subscription->getKey()),
             )->update($attributes + ['updated_at' => Carbon::now()]);
@@ -323,17 +336,19 @@ class SubscriptionLifecycle
             $entry = $subscription->entry()->firstOrFail();
 
             // Read before project() moves it: the status this step leaves.
-            ($this->activity)($entry, $type, $subscription, $context, previousStatus: $type->isDeparture() ? $entry->status : null);
+            ($this->activity)($entry, $type, $subscription, $context, reference: $reference, previousStatus: $type->isDeparture() ? $entry->status : null);
             $this->project($entry, $subscription);
 
-            return $event($entry);
+            return [$event?->__invoke($entry)];
         });
 
-        if ($event === null) {
+        if ($announce === null) {
             return false;
         }
 
-        event($event);
+        if ($announce[0] !== null) {
+            event($announce[0]);
+        }
 
         return true;
     }

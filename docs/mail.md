@@ -156,6 +156,21 @@ Laravel discovers the listener in `app/Listeners` by itself.
 - **The reference.** `confirmationMailed()` records the reference your listener
   reports next to the consent wording; keep the text of each version of the mail.
   See [GDPR in practice](gdpr.md#proof-of-the-double-opt-in).
+- **A mail that could not be sent.** A request counts against the resend cooldown
+  and the caps as soon as it is issued, before any mail exists. When your queued
+  listener gives up, report it from its `failed()` method:
+
+  ```php
+  public function failed(EntrySubscribed $event, Throwable $exception): void
+  {
+      // The provider's error code, never the address or its message.
+      Waitlist::confirmationFailed($event->subscription, 'http-429');
+  }
+  ```
+
+  The request stops counting, so the person's own retry gets a mail, and the log
+  shows `confirmation_failed`. It answers `false` and changes nothing when a
+  newer request was issued since, the cycle ended or the entry was erased.
 - **The link.** `confirmUrl` points at your confirm page, the `confirm` page of
   the project's [`urls()`](projects.md#pages), or at the package route. A plain
   GET must never confirm, since mail scanners follow every link: the page posts
@@ -192,7 +207,7 @@ Send it to `$event->entry->email` and nowhere else. The link expires after
 `manage.token_ttl` minutes (60), so the mail says until when it works.
 
 Someone asks for it from your unsubscribe page, with the unsubscribe token
-(`POST /waitlist/manage-link`, `Waitlist::requestManageLink($token)`), or by
+(`POST /waitlist/unsubscribe/{token}/manage-link`, `Waitlist::requestManageLink($token)`), or by
 address (`Waitlist::for($list)->requestManageLink($email)`). By address, only an
 address that confirmed at least once gets one, at most once per
 `manage.request_cooldown`. Where you have identified the person yourself,
@@ -201,8 +216,8 @@ address that confirmed at least once gets one, at most once per
 A project with one list and one purpose has nothing to manage beyond leaving,
 which the unsubscribe link already does. Without a preference page, turn manage
 links off with [`$project->manageLinks(false)`](projects.md#pages): the three
-calls above throw `ManageLinksDisabledException`, `POST /waitlist/manage-link`
-answers `404` with `manage_links_disabled`, and `ManageLinkRequested` never
+calls above throw `ManageLinksDisabledException`, both manage link routes
+answer `404` with `manage_links_disabled`, and `ManageLinkRequested` never
 fires. A link mailed before the switch works until it expires. Requests for
 access or erasure then reach you another way, such as the contact in your
 privacy notice, and `waitlist:export` and `waitlist:forget` answer them.

@@ -24,7 +24,6 @@ enum ConfigKey: string
     case ResendCooldown = 'waitlist.double_opt_in.resend_cooldown';
     case MaxConfirmations = 'waitlist.double_opt_in.max_confirmations';
     case MaxPendingPerAddress = 'waitlist.double_opt_in.max_pending_per_address';
-    case InvalidateConfirmToken = 'waitlist.double_opt_in.invalidate_confirm_token_after_confirmation';
 
     case ManageTokenTtl = 'waitlist.manage.token_ttl';
     case ManageRequestCooldown = 'waitlist.manage.request_cooldown';

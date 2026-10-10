@@ -153,7 +153,7 @@ await $fetch(`/waitlist/unsubscribe/${token}${purpose ? `?purpose=${purpose}` : 
 })
 
 // "Manage your preferences instead": we mail you a link
-await $fetch('/waitlist/manage-link', { method: 'POST', body: { token } })
+await $fetch(`/waitlist/unsubscribe/${token}/manage-link`, { method: 'POST' })
 ```
 
 ## 5. The preference page
