@@ -33,7 +33,8 @@ Leave the routes off and call the facade from your controllers;
 `/manage/…` takes the manage token, `/unsubscribe/…` and `/manage-link` the
 unsubscribe token, `/confirm/…` the confirm token. The token routes answer
 `{"data": {project, list, status, purposes, confirmed_at, unsubscribed_at,
-created_at}}`, never the address; `/manage/{token}/data` answers the copy itself.
+created_at}}`, never the address, also in an app that calls
+`JsonResource::withoutWrapping()`; `/manage/{token}/data` answers the copy itself.
 Validation errors are always `422` JSON, also for a plain form post.
 
 Nothing looks up data by address over HTTP: access and erasure by address exist

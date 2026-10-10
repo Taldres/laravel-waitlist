@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Event;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Enums\ConfigKey;
@@ -181,6 +182,19 @@ it('reports confirm state on GET and confirms on POST', function () {
     $this->postJson("/waitlist/confirm/{$tokens['confirm']}")
         ->assertOk()
         ->assertJsonPath('data.status', EntryStatus::Confirmed->value);
+});
+
+it('keeps the data wrapper when the app turns wrapping off', function () {
+    $tokens = ($this->tokens)();
+    JsonResource::withoutWrapping();
+
+    try {
+        $this->postJson("/waitlist/confirm/{$tokens['confirm']}")
+            ->assertOk()
+            ->assertJsonPath('data.status', EntryStatus::Confirmed->value);
+    } finally {
+        JsonResource::wrap('data');
+    }
 });
 
 it('answers 404 and 410 for bad confirm tokens on both methods', function () {
