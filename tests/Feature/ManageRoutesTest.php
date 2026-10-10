@@ -148,7 +148,9 @@ describe('with routes enabled', function () {
         Event::fake([ManageLinkRequested::class]);
         Waitlist::verifySpamUsing(fn () => false);
 
-        $this->postJson('/waitlist/manage-link', ['email' => 'user@example.com', 'list' => 'beta'])->assertStatus(422);
+        $this->postJson('/waitlist/manage-link', ['email' => 'user@example.com', 'list' => 'beta'])
+            ->assertStatus(422)
+            ->assertExactJson(['message' => 'Spam check failed.', 'error' => 'spam_check_failed']);
         $this->postJson('/waitlist/manage-link', ['token' => $this->tokens['unsubscribe']])->assertStatus(202);
 
         Waitlist::verifySpamUsing(null);
