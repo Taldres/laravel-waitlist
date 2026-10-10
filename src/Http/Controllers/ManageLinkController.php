@@ -48,7 +48,7 @@ class ManageLinkController
         // before validation and the spam check.
         $project = app(ProjectResolver::class)->resolve($request);
         $list = $request->input('list');
-        $list = is_string($list) ? $list : WaitlistConfig::defaultList();
+        $list = is_string($list) && $list !== '' ? $list : WaitlistConfig::defaultList();
 
         WaitlistGate::inspect($request, $project, WaitlistAction::RequestManageLink, $list)->authorize();
 
@@ -63,7 +63,7 @@ class ManageLinkController
         $validated = $this->validateAsJson($request, [
             'token' => ['required_without:email', 'string', 'max:255'],
             'email' => ['required_without:token', 'email:filter', 'max:255'],
-            'list' => ['sometimes', 'string', 'max:255'],
+            'list' => ['sometimes', 'nullable', 'string', 'max:255'],
         ]);
 
         // Anyone can type an address here, as on the signup form.

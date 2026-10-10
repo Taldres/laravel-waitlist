@@ -63,14 +63,15 @@ class SubscribeRequest extends FormRequest
 
     /**
      * The list the signup is for, as the gate, the fields and the signup see
-     * it. A list that is not a string fails validation later; until then the
-     * default list stands in.
+     * it. A list that is missing, null or empty means the default list, and
+     * one that is not a string fails validation later; until then the default
+     * list stands in.
      */
     public function effectiveList(): string
     {
         $list = $this->input('list');
 
-        return is_string($list) ? $list : WaitlistConfig::defaultList();
+        return is_string($list) && $list !== '' ? $list : WaitlistConfig::defaultList();
     }
 
     /**
@@ -81,7 +82,7 @@ class SubscribeRequest extends FormRequest
         return [
             'email' => ['required', 'email:filter', 'max:255'],
             // A "*" list accepts any name a client sends, so keep it plain.
-            'list' => ['sometimes', 'string', 'max:100', 'regex:'.ProjectDefinition::NAME_PATTERN],
+            'list' => ['sometimes', 'nullable', 'string', 'max:100', 'regex:'.ProjectDefinition::NAME_PATTERN],
             'purposes' => ['required', 'array', 'max:20'],
             // Text only gets here past the gate's RegisterWording.
             'purposes.*' => ['required', new PurposeChoice(acceptsWording: true)],
