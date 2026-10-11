@@ -9,13 +9,14 @@ use Taldres\Waitlist\Config\ConfigFallback;
 use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Enums\Page;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
+use Taldres\Waitlist\WaitlistServiceProvider;
 
 /**
  * Decides which package routes are registered. This runs on every boot,
  * artisan included, and must never stop it: a setting that does not read is
  * reported, once, and what it belongs to is not registered, rather than
- * routes that lack what the setting meant to add. The other group stays, so a
- * broken signup limiter does not take the unsubscribe links with it.
+ * routes that lack what the setting meant to add. The other group stays, so
+ * broken signup middleware does not take the unsubscribe links with it.
  * waitlist:check names every setting that does not read.
  *
  * A route cache holds the routes as they were when it was built; after a
@@ -74,7 +75,7 @@ final class RouteRegistration
      */
     public static function signupMiddleware(): ?array
     {
-        return self::group(WaitlistConfig::signupLimiter(...), WaitlistConfig::signupMiddleware(...));
+        return self::group(WaitlistServiceProvider::SIGNUP_LIMITER, WaitlistConfig::signupMiddleware(...));
     }
 
     /**
@@ -85,20 +86,17 @@ final class RouteRegistration
      */
     public static function linksMiddleware(): ?array
     {
-        return self::group(WaitlistConfig::linksLimiter(...), WaitlistConfig::linksMiddleware(...));
+        return self::group(WaitlistServiceProvider::LINKS_LIMITER, WaitlistConfig::linksMiddleware(...));
     }
 
     /**
-     * @param  Closure(): ?string  $limiter
      * @param  Closure(): list<string>  $middleware
      * @return list<string>|null
      */
-    private static function group(Closure $limiter, Closure $middleware): ?array
+    private static function group(string $limiter, Closure $middleware): ?array
     {
         try {
-            $name = $limiter();
-
-            return [...($name === null ? [] : ["throttle:{$name}"]), ...$middleware()];
+            return ["throttle:{$limiter}", ...$middleware()];
         } catch (InvalidConfigurationException $exception) {
             app(ConfigFallback::class)->report($exception);
 

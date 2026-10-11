@@ -48,7 +48,6 @@ use Throwable;
 
 class WaitlistServiceProvider extends ServiceProvider
 {
-    /** The limiters config/waitlist.php names by default. */
     public const string SIGNUP_LIMITER = 'waitlist';
 
     public const string LINKS_LIMITER = 'waitlist-links';

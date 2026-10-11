@@ -92,10 +92,7 @@ were on still holds them: run `php artisan route:clear`, see
 A route setting that does not read is reported to your logs when the routes are
 registered, naming the config key, and leaves out the routes it belongs to: those
 requests are a plain `404`, not a `500`. That includes an empty
-`WAITLIST_ROUTES_ENABLED=`, which is no decision to turn the routes off. A
-limiter name that no `RateLimiter::for()` defines is different: the route exists
-and Laravel answers its requests with a `500`, "Rate limiter [name] is not
-defined"; `php artisan waitlist:check` names the config key. See
+`WAITLIST_ROUTES_ENABLED=`, which is no decision to turn the routes off. See
 [When the routes are registered](../securing-the-endpoints.md#when-the-routes-are-registered).
 
 ## GET never changes anything

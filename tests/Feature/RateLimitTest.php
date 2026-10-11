@@ -58,24 +58,53 @@ it('still bounds how many token requests one client can send', function () {
     $this->getJson('/waitlist/confirm/guess4')->assertStatus(429);
 });
 
-it('lets a group use a limiter of your own and leaves the other one alone', function () {
-    RateLimiter::for('signup-strict', fn (Request $request) => Limit::perMinute(1)->by($request->ip()));
-    config()->set(ConfigKey::SignupLimiter->value, 'signup-strict');
+it('holds the shipped limits when the app configures none', function () {
+    config()->set('waitlist', PackageConfig::merge([]));
     ($this->loadRoutes)();
+
+    foreach (range(1, 10) as $n) {
+        $this->getJson('/waitlist/purposes?list=beta')->assertOk();
+    }
+
+    $this->getJson('/waitlist/purposes?list=beta')->assertStatus(429);
+
+    foreach (range(1, 10) as $n) {
+        $this->getJson('/waitlist/confirm/made-up')->assertNotFound();
+    }
+
+    $this->getJson('/waitlist/confirm/made-up')->assertStatus(429);
+});
+
+it('keeps limiting when a config published before still sets a group\'s limiter to null or empty', function () {
+    config()->set('waitlist.routes.limiters', ['signup' => null, 'links' => '']);
+    ($this->loadRoutes)();
+
+    ($this->subscribe)('10.0.0.1', 'one@example.com')->assertStatus(202);
+    ($this->subscribe)('10.0.0.1', 'two@example.com')->assertStatus(202);
+    ($this->subscribe)('10.0.0.1', 'three@example.com')->assertStatus(429);
+
+    $this->getJson('/waitlist/confirm/made-up')->assertNotFound();
+    $this->getJson('/waitlist/confirm/made-up')->assertNotFound();
+    $this->getJson('/waitlist/confirm/made-up')->assertStatus(429);
+});
+
+it('lets the app replace the limiter of each group by defining it under its name', function () {
+    RateLimiter::for('waitlist', fn (Request $request) => Limit::perMinute(1)->by($request->ip()));
+    RateLimiter::for('waitlist-links', fn (Request $request) => Limit::perMinute(3)->by($request->ip()));
 
     ($this->subscribe)()->assertStatus(202);
     ($this->subscribe)('10.0.0.1', 'other@example.com')->assertStatus(429);
 
-    $tokens = collect(range(1, 3))->map(fn (int $n) => subscribeAndCapture('beta', "user{$n}@example.com")['unsubscribe']);
-
-    foreach ($tokens as $token) {
-        ($this->oneClick)($token)->assertOk();
+    // Each made-up token stays under the package's limit per token.
+    foreach (range(1, 3) as $n) {
+        $this->getJson("/waitlist/confirm/guess{$n}")->assertNotFound();
     }
+
+    $this->getJson('/waitlist/confirm/guess4')->assertStatus(429);
 });
 
-it('switches a group off, e.g. behind a WAF that limits already, and leaves the other one on', function (?string $off) {
-    config()->set(ConfigKey::SignupLimiter->value, $off);
-    ($this->loadRoutes)();
+it('switches the signup limit off with Limit::none() from the app\'s definition, e.g. behind a WAF, and leaves the links on', function () {
+    RateLimiter::for('waitlist', fn () => Limit::none());
 
     foreach (range(1, 5) as $n) {
         ($this->subscribe)('10.0.0.1', "user{$n}@example.com")->assertStatus(202);
@@ -86,37 +115,20 @@ it('switches a group off, e.g. behind a WAF that limits already, and leaves the 
     ($this->oneClick)($token)->assertOk();
     ($this->oneClick)($token)->assertOk();
     ($this->oneClick)($token)->assertStatus(429);
-})->with([null, '']);
+});
 
-it('keeps limiting with the default limits when the published config has no limiters key', function () {
-    $published = config()->array('waitlist');
-    unset($published['routes']['limiters']);
-    config()->set('waitlist', PackageConfig::merge($published));
-    ($this->loadRoutes)();
+it('switches the links limit off the same way, and leaves the signup on', function () {
+    RateLimiter::for('waitlist-links', fn () => Limit::none());
+
+    $token = subscribeAndCapture('beta', 'link@example.com')['unsubscribe'];
+
+    foreach (range(1, 5) as $n) {
+        ($this->oneClick)($token)->assertOk();
+    }
 
     ($this->subscribe)('10.0.0.1', 'one@example.com')->assertStatus(202);
     ($this->subscribe)('10.0.0.1', 'two@example.com')->assertStatus(202);
     ($this->subscribe)('10.0.0.1', 'three@example.com')->assertStatus(429);
-});
-
-describe('the limiter of a group', function () {
-    it('finds a limiter that an app defines after the package booted', function () {
-        config()->set(ConfigKey::SignupLimiter->value, 'defined-later');
-        ($this->loadRoutes)();
-        RateLimiter::for('defined-later', fn (Request $request) => Limit::perMinute(1)->by($request->ip()));
-
-        $this->getJson('/waitlist/purposes?list=beta')->assertOk();
-        $this->getJson('/waitlist/purposes?list=beta')->assertStatus(429);
-    });
-
-    it('takes a number as the limit of a group, which is what throttle:2 means', function () {
-        config()->set(ConfigKey::SignupLimiter->value, '2');
-        ($this->loadRoutes)();
-
-        $this->getJson('/waitlist/purposes?list=beta')->assertOk();
-        $this->getJson('/waitlist/purposes?list=beta')->assertOk();
-        $this->getJson('/waitlist/purposes?list=beta')->assertStatus(429);
-    });
 });
 
 it('registers its limiters for your own routes too, also with the package routes off', function () {

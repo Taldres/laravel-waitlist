@@ -2,11 +2,9 @@
 
 declare(strict_types=1);
 
-use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Env;
 use Illuminate\Support\Facades\Exceptions;
-use Illuminate\Support\Facades\RateLimiter;
 use Taldres\Waitlist\Actions\PruneEntries;
 use Taldres\Waitlist\Config\PackageConfig;
 use Taldres\Waitlist\Config\WaitlistConfig;
@@ -56,8 +54,6 @@ describe('the defaults', function () {
             ->and($retention->requestMetadataDays)->toBe(30)
             ->and(WaitlistConfig::routesEnabled())->toBeFalse()
             ->and(WaitlistConfig::routeName())->toBe('waitlist.')
-            ->and(WaitlistConfig::signupLimiter())->toBe(WaitlistServiceProvider::SIGNUP_LIMITER)
-            ->and(WaitlistConfig::linksLimiter())->toBe(WaitlistServiceProvider::LINKS_LIMITER)
             ->and(WaitlistConfig::signupPerMinute())->toBe(10)
             ->and(WaitlistConfig::linkPerMinute())->toBe(10)
             ->and(WaitlistConfig::linksPerIpPerMinute())->toBe(600)
@@ -115,13 +111,11 @@ describe('values the app sets', function () {
     it('take null where the setting allows it, and an empty text as null for names', function () {
         config()->set(ConfigKey::ConfirmTokenTtl->value, null);
         config()->set(ConfigKey::RetentionUnsubscribedDays->value, null);
-        config()->set(ConfigKey::SignupLimiter->value, null);
-        config()->set(ConfigKey::LinksLimiter->value, '');
+        config()->set(ConfigKey::ClientIpHeader->value, '');
 
         expect(WaitlistConfig::confirmTokenTtl())->toBeNull()
             ->and(WaitlistConfig::retention()->unsubscribedDays)->toBeNull()
-            ->and(WaitlistConfig::signupLimiter())->toBeNull()
-            ->and(WaitlistConfig::linksLimiter())->toBeNull();
+            ->and(WaitlistConfig::clientIpHeader())->toBeNull();
     });
 
     it('may leave the route prefix and name empty, for routes at the root', function () {
@@ -232,13 +226,9 @@ describe('a name', function () {
     it('is read as unset when it is empty, where null is allowed', function () {
         config()->set(ConfigKey::Connection->value, '');
         config()->set(ConfigKey::ClientIpHeader->value, '');
-        config()->set(ConfigKey::SignupLimiter->value, '');
-        config()->set(ConfigKey::LinksLimiter->value, '');
 
         expect(WaitlistConfig::connection())->toBeNull()
-            ->and(WaitlistConfig::clientIpHeader())->toBeNull()
-            ->and(WaitlistConfig::signupLimiter())->toBeNull()
-            ->and(WaitlistConfig::linksLimiter())->toBeNull();
+            ->and(WaitlistConfig::clientIpHeader())->toBeNull();
 
         checkWaitlistConfig();
     });
@@ -275,47 +265,6 @@ describe('a binding', function () {
 
         checkWaitlistConfig();
     })->with([WaitlistConfigAppNormalizer::class, WaitlistConfigAbstractNormalizer::class]);
-});
-
-describe('a limiter', function () {
-    it('that nothing defines is refused by the full check, naming the key', function (ConfigKey $key) {
-        config()->set($key->value, 'a-limiter-nobody-defined');
-
-        expect(fn () => checkWaitlistConfig())->toThrow(InvalidConfigurationException::class, "The {$key->value} config must name a limiter defined with RateLimiter::for(), or null, got one that is not defined.");
-    })->with([ConfigKey::SignupLimiter, ConfigKey::LinksLimiter]);
-
-    it('is still read by its accessor, as the app may define it after the routes register', function () {
-        config()->set(ConfigKey::SignupLimiter->value, 'defined-later');
-
-        expect(WaitlistConfig::signupLimiter())->toBe('defined-later');
-
-        RateLimiter::for('defined-later', fn () => Limit::perMinute(1));
-
-        expect(fn () => checkWaitlistConfig())->not->toThrow(InvalidConfigurationException::class);
-    });
-
-    it('passes the full check when the app defines it, as do a number, which Laravel reads as a limit, and null', function (mixed $signup, mixed $links) {
-        RateLimiter::for('mine', fn () => Limit::perMinute(1));
-        config()->set(ConfigKey::SignupLimiter->value, $signup);
-        config()->set(ConfigKey::LinksLimiter->value, $links);
-
-        expect(fn () => checkWaitlistConfig())->not->toThrow(InvalidConfigurationException::class);
-    })->with([
-        'one the app defines' => ['mine', 'mine'],
-        'a number' => ['60', '30'],
-        'none' => [null, null],
-        'the package limiters' => [WaitlistServiceProvider::SIGNUP_LIMITER, WaitlistServiceProvider::LINKS_LIMITER],
-    ]);
-
-    it('is checked against the limiters as they are defined now', function () {
-        config()->set(ConfigKey::LinksLimiter->value, 'mine');
-
-        expect(fn () => checkWaitlistConfig())->toThrow(InvalidConfigurationException::class, ConfigKey::LinksLimiter->value);
-
-        RateLimiter::for('mine', fn () => Limit::perMinute(1));
-
-        expect(fn () => checkWaitlistConfig())->not->toThrow(InvalidConfigurationException::class);
-    });
 });
 
 describe('a mistake in one setting', function () {
@@ -375,7 +324,6 @@ describe('a mistake in the config while the app boots', function () {
         Exceptions::assertReported(fn (InvalidConfigurationException $exception) => $exception->getMessage() === $message);
     })->with([
         'signup middleware' => [ConfigKey::SignupMiddleware, null, 'The waitlist.routes.group_middleware.signup config must be a list of middleware names, got null.'],
-        'the signup limiter' => [ConfigKey::SignupLimiter, 5, 'The waitlist.routes.limiters.signup config must be a text or null, got int.'],
     ]);
 
     it('leaves out the token links of a group that does not read, and leaves the signup alone', function (ConfigKey $key, mixed $value, string $message) {
@@ -396,7 +344,6 @@ describe('a mistake in the config while the app boots', function () {
         Exceptions::assertReported(fn (InvalidConfigurationException $exception) => $exception->getMessage() === $message);
     })->with([
         'links middleware' => [ConfigKey::LinksMiddleware, null, 'The waitlist.routes.group_middleware.links config must be a list of middleware names, got null.'],
-        'the links limiter' => [ConfigKey::LinksLimiter, 5, 'The waitlist.routes.limiters.links config must be a text or null, got int.'],
     ]);
 
     it('boots with a key missing from a stale config cache, so artisan can cache it again', function () {
@@ -429,7 +376,7 @@ describe('a mistake in the config while the app boots', function () {
     ]);
 
     it('reports a setting once, however many routes it belongs to', function () {
-        config()->set(ConfigKey::SignupLimiter->value, 5);
+        config()->set(ConfigKey::SignupMiddleware->value, null);
 
         (new WaitlistServiceProvider(app()))->boot();
 
@@ -517,14 +464,14 @@ describe('merging the app config with the package config', function () {
     it('keeps the keys the package does not know, at every depth', function () {
         $merged = PackageConfig::merge([
             'legacy' => ['a' => 1],
-            'routes' => ['custom' => true, 'rate_limits' => ['burst' => 3], 'limiters' => ['third' => 'mine']],
+            'routes' => ['custom' => true, 'rate_limits' => ['burst' => 3], 'group_middleware' => ['third' => ['mine']]],
         ]);
 
         expect($merged['legacy'])->toBe(['a' => 1])
             ->and($merged['routes']['custom'])->toBeTrue()
             ->and($merged['routes']['rate_limits']['burst'])->toBe(3)
             ->and($merged['routes']['rate_limits']['signup_per_minute'])->toBe(10)
-            ->and($merged['routes']['limiters'])->toEqual(['signup' => 'waitlist', 'links' => 'waitlist-links', 'third' => 'mine']);
+            ->and($merged['routes']['group_middleware'])->toEqual(['signup' => [], 'links' => [], 'third' => ['mine']]);
     });
 
     it('keeps a group the app sets to something that is no array, so that it is refused when read', function (string $path, mixed $value) {
@@ -547,7 +494,7 @@ describe('merging the app config with the package config', function () {
     });
 
     it('has nothing left to fill in what it filled already, however often the provider registers', function () {
-        $app = ['routes' => ['enabled' => true, 'limiters' => ['signup' => null]], 'export' => ['columns' => ['id']], 'manage' => ['token_ttl' => [1]], 'legacy' => 1];
+        $app = ['routes' => ['enabled' => true, 'group_middleware' => ['signup' => null]], 'export' => ['columns' => ['id']], 'manage' => ['token_ttl' => [1]], 'legacy' => 1];
         $once = PackageConfig::merge($app);
 
         expect(PackageConfig::merge($once))->toBe($once);

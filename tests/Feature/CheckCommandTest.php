@@ -7,8 +7,8 @@ use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Exceptions;
-use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
+use Taldres\Waitlist\Config\PackageConfig;
 use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
@@ -194,6 +194,18 @@ it('warns of settings in the config that the package does not read', function ()
     expect($strict)->toBe(1);
 });
 
+it('names the limiters of a config published before, which the routes no longer read', function () {
+    $published = require __DIR__.'/../../config/waitlist.php';
+    $published['routes']['limiters'] = ['signup' => 'waitlist', 'links' => 'waitlist-links'];
+    config()->set('waitlist', PackageConfig::merge($published));
+
+    [$exit, $output] = checkOutput();
+
+    expect(SetupAudit::unknownSettings())->toBe(['waitlist.routes.limiters'])
+        ->and($exit)->toBe(0)
+        ->and($output)->toContain('waitlist.routes.limiters is not a setting the package reads');
+});
+
 it('lists a group of unknown settings once, and leaves the settings of this version alone', function () {
     config()->set('waitlist.lists', ['beta' => ['purpose' => 'waitlist'], 'launch' => ['purpose' => 'waitlist']]);
 
@@ -335,12 +347,10 @@ it('tells a setting that does not read from an implementation that is unavailabl
 it('keeps every row apart, those that read no contract included', function () {
     app()->forgetInstance(Schedule::class);
     app()->bind(Schedule::class, fn () => throw new RuntimeException('The scheduler is down.'));
-    RateLimiter::shouldReceive('limiter')->andThrow(new RuntimeException('The limiters are down.'));
 
     $about = aboutSection();
 
-    expect($about['settings'])->toBe('unavailable')
-        ->and($about['prune_schedule'])->toBe('unavailable')
+    expect($about['prune_schedule'])->toBe('unavailable')
         ->and($about['projects'])->toBe('default')
         ->and($about['double_opt-in'])->toBe('on');
 });

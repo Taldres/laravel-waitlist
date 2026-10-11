@@ -85,8 +85,8 @@ function edgeCaseFlows(): array
 {
     $store = [ConfigKey::Model, ConfigKey::SubscriptionModel, ConfigKey::ConsentModel, ConfigKey::ActivityModel, ConfigKey::Connection];
     // The limits of the links fall back to the shipped ones when they do not read.
-    $links = [ConfigKey::RoutesEnabled, ConfigKey::RoutesPrefix, ConfigKey::RoutesName, ConfigKey::RoutesMiddleware, ConfigKey::LinksMiddleware, ConfigKey::LinksLimiter];
-    $signup = [ConfigKey::RoutesEnabled, ConfigKey::RoutesPrefix, ConfigKey::RoutesName, ConfigKey::RoutesMiddleware, ConfigKey::SignupMiddleware, ConfigKey::SignupLimiter, ConfigKey::SignupPerMinute];
+    $links = [ConfigKey::RoutesEnabled, ConfigKey::RoutesPrefix, ConfigKey::RoutesName, ConfigKey::RoutesMiddleware, ConfigKey::LinksMiddleware];
+    $signup = [ConfigKey::RoutesEnabled, ConfigKey::RoutesPrefix, ConfigKey::RoutesName, ConfigKey::RoutesMiddleware, ConfigKey::SignupMiddleware, ConfigKey::SignupPerMinute];
     $manageLink = [ConfigKey::ManageTokenTtl, ConfigKey::ManageRequestCooldown, ConfigKey::RoutesEnabled, ConfigKey::EmailNormalizer, ConfigKey::UrlGenerator, ConfigKey::Catalog];
     $erasure = [ConfigKey::Model, ConfigKey::ActivityModel, ConfigKey::Connection, ConfigKey::EmailNormalizer];
     $retention = [ConfigKey::RetentionPendingDays, ConfigKey::RetentionUnsubscribedDays, ConfigKey::RetentionRequestMetadataDays];

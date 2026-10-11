@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Taldres\Waitlist\Config;
 
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\RateLimiter;
 use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
 use Taldres\Waitlist\Contracts\EmailNormalizer;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
@@ -248,22 +247,6 @@ final class WaitlistConfig
         return ConfigReader::of(config('waitlist'))->middleware(ConfigKey::LinksMiddleware);
     }
 
-    /**
-     * The limiter of the signup group; null turns its limit off.
-     */
-    public static function signupLimiter(): ?string
-    {
-        return ConfigReader::of(config('waitlist'))->stringOrNull(ConfigKey::SignupLimiter);
-    }
-
-    /**
-     * The limiter of the links group; null turns its limit off.
-     */
-    public static function linksLimiter(): ?string
-    {
-        return ConfigReader::of(config('waitlist'))->stringOrNull(ConfigKey::LinksLimiter);
-    }
-
     public static function signupPerMinute(): int
     {
         return ConfigReader::of(config('waitlist'))->integer(ConfigKey::SignupPerMinute, min: 1);
@@ -397,8 +380,6 @@ final class WaitlistConfig
             self::routeMiddleware(...),
             self::signupMiddleware(...),
             self::linksMiddleware(...),
-            static fn () => self::definedLimiter(ConfigKey::SignupLimiter, self::signupLimiter()),
-            static fn () => self::definedLimiter(ConfigKey::LinksLimiter, self::linksLimiter()),
             self::signupPerMinute(...),
             self::linkPerMinute(...),
             self::linksPerIpPerMinute(...),
@@ -427,17 +408,5 @@ final class WaitlistConfig
         }
 
         return array_values($problems);
-    }
-
-    /**
-     * Laravel meets a name nothing defines only when a request arrives. A
-     * number is no name: throttle:60 is a limit per minute. Asked here only, as
-     * an app may define its limiters after the package registers its routes.
-     */
-    private static function definedLimiter(ConfigKey $key, ?string $limiter): void
-    {
-        if ($limiter !== null && ! is_numeric($limiter) && RateLimiter::limiter($limiter) === null) {
-            throw new InvalidConfigurationException("The {$key->value} config must name a limiter defined with RateLimiter::for(), or null, got one that is not defined.");
-        }
     }
 }

@@ -17,8 +17,8 @@ use Taldres\Waitlist\WaitlistServiceProvider;
 | https://github.com/Taldres/laravel-waitlist/blob/main/docs/reference/configuration.md
 |
 | An empty variable in .env is refused, naming the key, for every setting but
-| four that read it as unset, like null: the connection, the two limiters and
-| the client IP header. Their comments say so.
+| two that read it as unset, like null: the connection and the client IP
+| header. Their comments say so.
 */
 
 return [
@@ -233,11 +233,11 @@ return [
     | check, which the token links that mail providers call must not face.
     |
     | Rate limits apply per group: "signup" (signup, wording, manage links by
-    | address) and "links" (everything with a token). The numbers under
-    | rate_limits are whole numbers, at least 1, counted per minute. Each names a limiter: the
-    | package's "waitlist" and "waitlist-links", tuned by rate_limits, or one
-    | you define with RateLimiter::for(); a name nothing defines is refused.
-    | Null, or an empty value, turns a group's limit off.
+    | address) through the limiter "waitlist", and "links" (everything with a
+    | token) through "waitlist-links". The numbers under rate_limits tune the
+    | package's own two: whole numbers, at least 1, counted per minute. To
+    | replace a group's limit, define the limiter of its name yourself with
+    | RateLimiter::for(); to turn it off, return Limit::none() from there.
     | Guests are limited per IP; a server calling for its project (see
     | "authentication") per server, since all its visitors share its address.
     |
@@ -251,10 +251,6 @@ return [
         'group_middleware' => [
             'signup' => [],
             'links' => [],
-        ],
-        'limiters' => [
-            'signup' => 'waitlist',
-            'links' => 'waitlist-links',
         ],
         'rate_limits' => [
             'signup_per_minute' => env('WAITLIST_RATE_LIMIT_SIGNUP', 10),           // per visitor and endpoint

@@ -10,9 +10,9 @@ switches a limit or period off where a table below says so. Any other value is
 refused with an `InvalidConfigurationException` that names the key and what it
 must be, an empty variable included: a blank line in `.env` never turns double
 opt-in or a retention period off. If an empty variable in `.env` causes it,
-remove the variable to keep the default. Four settings read an empty value as
-unset, like `null`, and say so in the tables below: the connection, the client
-IP header and the two limiters.
+remove the variable to keep the default. Two settings read an empty value as
+unset, like `null`, and say so in the tables below: the connection and the
+client IP header.
 
 A period is bounded by the `timestamp` columns it is stored in or compared
 with, and a value beyond is refused with an `InvalidConfigurationException`
@@ -139,14 +139,16 @@ itself](../projects.md#periods-a-project-promises-itself).
 | `middleware` | | `['api']` | applies to every route, token links included: no authentication here |
 | `group_middleware.signup` | | `[]` | added to signup, wording and manage links by address only, after the rate limit, apart from what Laravel always sorts ahead of it, such as the session of `web`: checks for your forms, such as CSRF or an origin check, see [Checks for your forms only](../securing-the-endpoints.md#checks-for-your-forms-only) |
 | `group_middleware.links` | | `[]` | added to everything with a token only |
-| `limiters.signup` | | `waitlist` | named limiter for signup, wording and manage links by address; `null` or empty off; a name no `RateLimiter::for()` defines is refused |
-| `limiters.links` | | `waitlist-links` | named limiter for everything with a token; `null` or empty off; a name no `RateLimiter::for()` defines is refused |
 | `rate_limits.signup_per_minute` | `WAITLIST_RATE_LIMIT_SIGNUP` | 10 | per visitor and endpoint: a guest's IP, or the address a server forwards; at least 1, as do all four |
 | `rate_limits.link_per_minute` | `WAITLIST_RATE_LIMIT_LINK` | 10 | per token; one that does not read gives way to 10, reported |
 | `rate_limits.links_per_ip_per_minute` | `WAITLIST_RATE_LIMIT_LINKS_PER_IP` | 600 | bounds made-up tokens per IP, per server, or per visitor a server forwards; one that does not read gives way to 600, reported |
 | `rate_limits.caller_signup_per_minute` | `WAITLIST_RATE_LIMIT_CALLER_SIGNUP` | 120 | per server calling for a project and endpoint, see [Servers calling for a project](../securing-the-endpoints.md#servers-calling-for-a-project) |
 
-See [Securing the endpoints](../securing-the-endpoints.md#rate-limits) for your own limiters.
+The numbers tune the package's limiters, `waitlist` for signup, wording and manage
+links by address and `waitlist-links` for everything with a token. To replace one,
+or to turn it off with `Limit::none()`, define a limiter of that name with
+`RateLimiter::for()`; no setting turns a limit off. See [Securing the
+endpoints](../securing-the-endpoints.md#rate-limits).
 
 ## Who may call: `authentication`
 

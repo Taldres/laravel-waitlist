@@ -82,12 +82,13 @@ Waitlist::define(function (ProjectDefinition $project): void {
 - Frontend pages per project in `$project->urls(...)`: `confirm`, `unsubscribe`,
   `manage` (mail links, `{token}` replaced) and `confirmed`, `expired`, `invalid`,
   `unsubscribed`, `erased` (where a browser lands after posting).
-- Rate limits per group in `routes.limiters`: `signup` → `waitlist` (per IP),
-  `links` → `waitlist-links` (per token). Tune `routes.rate_limits`, point a group at
-  your own `RateLimiter::for()` name (a name nothing defines is refused), or set it
-  to `null`. An own limiter decides the key (`->by()`), the limits, exemptions
-  (`Limit::none()`), per-route rules (`$request->routeIs()`) and the response;
-  `rate_limits` does not apply to it.
+- Rate limits per group, each through a fixed limiter name: `signup` → `waitlist`
+  (per IP), `links` → `waitlist-links` (per token). Tune `routes.rate_limits`, or
+  replace a group's limiter by defining that name with `RateLimiter::for()` in a
+  service provider; returning `Limit::none()` from it turns the group's limit off.
+  No setting turns a limit off. An own limiter decides the key (`->by()`), the
+  limits, exemptions (`Limit::none()`), per-route rules (`$request->routeIs()`) and
+  the response; `rate_limits` does not apply to it.
   Never key `links` by IP alone: one-click unsubscribes share mail providers' IPs.
   A caller acting for a project (`HasWaitlistProject`) is a server: it is capped
   as a whole (`rate_limits.caller_signup_per_minute`) and limits its visitors
@@ -204,7 +205,7 @@ $entry->hasConsentFor('newsletter');
   `on`/`off`, `yes`/`no`, `1`/`0` and whole numbers (`05` is 5); anything else is
   refused, an empty `KEY=` line included: delete the line to keep the default.
   `null` says never or off (`double_opt_in.token_ttl`, retention periods, cooldowns,
-  caps, a limiter); a manage link always expires. A confirm or
+  caps); a manage link always expires. A confirm or
   manage link may not end after 2038-01-19, and a retention period or cooldown may
   not reach back before 1970, so a 36500-day "forever" is refused: write `null`. A
   cron expression that can never run and a route `prefix` with `{}` are refused too.

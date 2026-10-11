@@ -2,9 +2,7 @@
 
 declare(strict_types=1);
 
-use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\RateLimiter;
 use Taldres\Waitlist\Config\PackageConfig;
 use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
@@ -63,9 +61,6 @@ describe('ConfigKey', function () {
 
     // Several defaults are equal (5, 10, false), so only distinct values show a setting read from another one's place.
     it('is read from its own place', function () {
-        RateLimiter::for('mine-signup', fn () => Limit::perMinute(1));
-        RateLimiter::for('mine-links', fn () => Limit::perMinute(1));
-
         foreach ([
             'connection' => 'side',
             'default_list' => 'beta',
@@ -88,8 +83,6 @@ describe('ConfigKey', function () {
             'routes.middleware' => ['web'],
             'routes.group_middleware.signup' => ['csrf'],
             'routes.group_middleware.links' => ['signed'],
-            'routes.limiters.signup' => 'mine-signup',
-            'routes.limiters.links' => 'mine-links',
             'routes.rate_limits.signup_per_minute' => 111,
             'routes.rate_limits.link_per_minute' => 112,
             'routes.rate_limits.links_per_ip_per_minute' => 113,
@@ -118,7 +111,6 @@ describe('ConfigKey', function () {
             ->and(WaitlistConfig::routesEnabled())->toBeTrue()
             ->and([WaitlistConfig::routePrefix(), WaitlistConfig::routeName()])->toBe(['lists', 'lists.'])
             ->and([WaitlistConfig::routeMiddleware(), WaitlistConfig::signupMiddleware(), WaitlistConfig::linksMiddleware()])->toBe([['web'], ['csrf'], ['signed']])
-            ->and([WaitlistConfig::signupLimiter(), WaitlistConfig::linksLimiter()])->toBe(['mine-signup', 'mine-links'])
             ->and([WaitlistConfig::signupPerMinute(), WaitlistConfig::linkPerMinute(), WaitlistConfig::linksPerIpPerMinute(), WaitlistConfig::callerSignupPerMinute()])->toBe([111, 112, 113, 114])
             ->and(WaitlistConfig::guards())->toBe(['sanctum'])
             ->and(WaitlistConfig::authenticationRequired())->toBeTrue()

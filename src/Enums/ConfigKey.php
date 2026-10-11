@@ -41,8 +41,6 @@ enum ConfigKey: string
     case RoutesMiddleware = 'waitlist.routes.middleware';
     case SignupMiddleware = 'waitlist.routes.group_middleware.signup';
     case LinksMiddleware = 'waitlist.routes.group_middleware.links';
-    case SignupLimiter = 'waitlist.routes.limiters.signup';
-    case LinksLimiter = 'waitlist.routes.limiters.links';
     case SignupPerMinute = 'waitlist.routes.rate_limits.signup_per_minute';
     case LinkPerMinute = 'waitlist.routes.rate_limits.link_per_minute';
     case LinksPerIpPerMinute = 'waitlist.routes.rate_limits.links_per_ip_per_minute';

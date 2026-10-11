@@ -475,6 +475,13 @@ Your own controllers need no resolver: they name the project themselves with
 Listeners see the project on the entry, `$event->entry->project`, and pick the
 sender, template and mailer from it. See [Mail](mail.md#several-projects).
 
+### Limits per project
+
+A project's definition has no rate limits: the numbers under `routes.rate_limits`
+are the same for every project. A limiter of your own that asks which project a
+request is for sets them apart, see "Different limits per project" under
+[Rate limits](securing-the-endpoints.md#rate-limits).
+
 ## Who may call: the `useWaitlist` gate
 
 Two setups cover most apps; the settings below each do one job in them, and every

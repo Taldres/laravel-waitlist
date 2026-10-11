@@ -9,10 +9,12 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Facade;
+use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\EntryStatus;
 use Taldres\Waitlist\Events\EntrySubscribed;
 use Taldres\Waitlist\Facades\Waitlist;
+use Taldres\Waitlist\Http\RouteRegistration;
 use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\WaitlistServiceProvider;
 
@@ -88,6 +90,18 @@ describe('registering the routes', function () {
         expect(packageRoutes())->toBe([]);
     });
 
+    it('puts the throttle of its group on every route', function () {
+        registerRoutes();
+
+        foreach (RouteRegistration::GROUPS as $group => $names) {
+            $limiter = $group === 'signup' ? WaitlistServiceProvider::SIGNUP_LIMITER : WaitlistServiceProvider::LINKS_LIMITER;
+
+            foreach ($names as $name) {
+                expect(app('router')->getRoutes()->getByName(WaitlistConfig::routeName().$name)?->gatherMiddleware())->toContain("throttle:{$limiter}");
+            }
+        }
+    });
+
     it('leaves one set of routes when the provider boots twice', function () {
         registerRoutes();
         $once = packageRoutes();
@@ -109,11 +123,11 @@ describe('a route cache', function () {
     });
 
     it('keeps a group left out after its setting is fixed, until the cache is built again', function () {
-        registerRoutes(['api'], [ConfigKey::SignupLimiter->value => 5]);
+        registerRoutes(['api'], [ConfigKey::SignupMiddleware->value => null]);
         cacheRoutes();
 
         // The deploy fixed the config but did not build the cache again.
-        config()->set(ConfigKey::SignupLimiter->value, 'waitlist');
+        config()->set(ConfigKey::SignupMiddleware->value, []);
 
         $this->getJson('/waitlist/purposes?list=beta')->assertNotFound();
         $this->postJson("/waitlist/unsubscribe/{$this->tokens['unsubscribe']}")->assertOk();
