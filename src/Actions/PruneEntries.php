@@ -77,26 +77,28 @@ class PruneEntries
     }
 
     /**
+     * Erasing cannot be undone, so a catalog that does not read stops the run
+     * before anything is deleted: the configured periods are not a stand-in for
+     * the ones a project promised, which may be longer.
+     *
      * @return array<string, ProjectPeriods> project => periods, of the projects with a retention period of their own
+     *
+     * @throws InvalidConfigurationException
      */
     private function projectsWithOwnPeriods(?string $project): array
     {
-        // A catalog that does not read is reported, and the configured periods
-        // still apply: it must not keep the data past them.
-        return ConfigFallback::read(function () use ($project): array {
-            $catalog = app(ProjectCatalog::class);
-            $own = [];
+        $catalog = app(ProjectCatalog::class);
+        $own = [];
 
-            foreach ($project === null ? $catalog->projects() : [$project] as $name) {
-                $periods = $catalog->periods($name);
+        foreach ($project === null ? $catalog->projects() : [$project] as $name) {
+            $periods = $catalog->periods($name);
 
-                if ($periods->overridesRetention()) {
-                    $own[$name] = $periods;
-                }
+            if ($periods->overridesRetention()) {
+                $own[$name] = $periods;
             }
+        }
 
-            return $own;
-        }, fallback: []);
+        return $own;
     }
 
     /**

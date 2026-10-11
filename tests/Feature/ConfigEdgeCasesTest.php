@@ -263,7 +263,7 @@ function edgeCaseFlows(): array
                     ->and(WaitlistEntry::query()->count())->toBe(0);
             };
         }],
-        'waitlist:prune' => [[...$store, ...$retention], false, function ($test): Closure {
+        'waitlist:prune' => [[...$store, ...$retention, ConfigKey::Catalog], false, function ($test): Closure {
             subscribeAndCapture('beta', 'pending@example.com');
 
             $left = subscribeAndCapture('beta', 'left@example.com');
