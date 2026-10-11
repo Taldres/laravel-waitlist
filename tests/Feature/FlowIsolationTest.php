@@ -15,7 +15,6 @@ use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Facades\Waitlist;
 use Taldres\Waitlist\Models\WaitlistConsent;
 use Taldres\Waitlist\Models\WaitlistEntry;
-use Taldres\Waitlist\Support\DefaultEmailNormalizer;
 
 /*
  * Leaving, withdrawing, requesting a manage link by token, erasing and
@@ -168,23 +167,19 @@ describe('an email normalizer that does not work', function () {
         Exceptions::assertReportedCount(1);
     });
 
-    it('leaves the address on its other lists until the withdrawal is repeated with a working one', function () {
+    it('still reaches the address on its other lists through the entry\'s own hash', function () {
         Exceptions::fake();
         $tokens = flowIsolationSubscribe('beta');
         flowIsolationSubscribe('gamma');
+        flowIsolationSubscribe('delta', 'other@example.com');
 
         bindUnreadable(EmailNormalizer::class);
 
         Waitlist::withdrawConsent($tokens['unsubscribe'], 'newsletter');
 
         expect(flowIsolationNewsletterWithdrawnOn('beta'))->toBeTrue()
-            ->and(flowIsolationNewsletterWithdrawnOn('gamma'))->toBeFalse();
-
-        app()->bind(EmailNormalizer::class, DefaultEmailNormalizer::class);
-
-        Waitlist::withdrawConsent($tokens['unsubscribe'], 'newsletter');
-
-        expect(flowIsolationNewsletterWithdrawnOn('gamma'))->toBeTrue();
+            ->and(flowIsolationNewsletterWithdrawnOn('gamma'))->toBeTrue()
+            ->and(flowIsolationNewsletterWithdrawnOn('delta'))->toBeFalse();
     });
 });
 
