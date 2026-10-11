@@ -6,6 +6,10 @@ on:
       - main
       - '*.x'
   pull_request:
+  # composer.lock is not committed, so a new upstream release can break the
+  # matrix; this shows it on main before the next pull request runs into it.
+  schedule:
+    - cron: '17 4 * * 1'
 
 permissions:
   contents: read
@@ -19,7 +23,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
         php: [8.3, 8.4, 8.5]
