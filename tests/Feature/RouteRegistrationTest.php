@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 use Illuminate\Cache\RateLimiter as CacheRateLimiter;
 use Illuminate\Routing\Route;
+use Illuminate\Routing\RouteCollection;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Facade;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\EntryStatus;
@@ -53,6 +56,29 @@ function packageRoutes(): array
         ->all();
 }
 
+/**
+ * What php artisan route:cache writes and a cached boot reads back: the
+ * provider then loads no routes file, the cache is all there is.
+ */
+function cacheRoutes(): void
+{
+    $routes = app('router')->getRoutes();
+    $routes->refreshNameLookups();
+
+    app('router')->setCompiledRoutes(unserialize(serialize($routes->compile())));
+}
+
+/**
+ * php artisan route:clear, then a boot that registers the routes again.
+ */
+function registerRoutesAgain(): void
+{
+    app('router')->setRoutes(new RouteCollection);
+
+    (new WaitlistServiceProvider(app()))->boot();
+    app('router')->getRoutes()->refreshNameLookups();
+}
+
 describe('registering the routes', function () {
     it('registers none while the switch is off', function () {
         config()->set(ConfigKey::RoutesEnabled->value, false);
@@ -71,6 +97,68 @@ describe('registering the routes', function () {
 
         expect($once)->not->toBeEmpty()
             ->and(packageRoutes())->toBe($once);
+    });
+});
+
+describe('a route cache', function () {
+    beforeEach(function () {
+        Exceptions::fake();
+
+        // Before the routes are on, which the confirm links would point at.
+        $this->tokens = subscribeAndCapture('beta', 'user@example.com');
+    });
+
+    it('keeps a group left out after its setting is fixed, until the cache is built again', function () {
+        registerRoutes(['api'], [ConfigKey::SignupLimiter->value => 5]);
+        cacheRoutes();
+
+        // The deploy fixed the config but did not build the cache again.
+        config()->set(ConfigKey::SignupLimiter->value, 'waitlist');
+
+        $this->getJson('/waitlist/purposes?list=beta')->assertNotFound();
+        $this->postJson("/waitlist/unsubscribe/{$this->tokens['unsubscribe']}")->assertOk();
+
+        expect(Artisan::call('waitlist:check'))->toBe(1)
+            ->and(Artisan::output())->toContain('The signup routes are not registered although routes.enabled is on');
+
+        registerRoutesAgain();
+
+        $this->getJson('/waitlist/purposes?list=beta')->assertOk();
+
+        expect(Artisan::call('waitlist:check'))->toBe(0);
+    });
+
+    it('keeps every route out when a setting that places them did not read, until it is built again', function () {
+        registerRoutes(['api'], [ConfigKey::RoutesPrefix->value => ['waitlist']]);
+        cacheRoutes();
+
+        config()->set(ConfigKey::RoutesPrefix->value, 'waitlist');
+
+        $this->postJson("/waitlist/unsubscribe/{$this->tokens['unsubscribe']}")->assertNotFound();
+
+        expect(Artisan::call('waitlist:check'))->toBe(1)
+            ->and(Artisan::output())->toContain('The signup routes are not registered', 'The links routes are not registered');
+
+        registerRoutesAgain();
+
+        $this->postJson("/waitlist/unsubscribe/{$this->tokens['unsubscribe']}")->assertOk();
+    });
+
+    it('keeps serving routes that were cached while they were on, so routes.enabled is no switch for them', function () {
+        registerRoutes();
+        cacheRoutes();
+
+        config()->set(ConfigKey::RoutesEnabled->value, false);
+
+        $this->getJson('/waitlist/purposes?list=beta')->assertOk();
+
+        expect(Artisan::call('waitlist:check'))->toBe(1)
+            ->and(Artisan::output())->toContain('routes.enabled is off, but the signup routes are still registered');
+
+        registerRoutesAgain();
+
+        $this->getJson('/waitlist/purposes?list=beta')->assertNotFound();
+        expect(Artisan::call('waitlist:check'))->toBe(0);
     });
 });
 

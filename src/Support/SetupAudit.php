@@ -6,9 +6,12 @@ namespace Taldres\Waitlist\Support;
 
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Enums\ConfigKey;
+use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
+use Taldres\Waitlist\Http\RouteRegistration;
 use Taldres\Waitlist\Models\WaitlistWording;
 
 /**
@@ -46,6 +49,41 @@ final class SetupAudit
         }
 
         return null;
+    }
+
+    /**
+     * Where the package routes as registered now differ from what the config
+     * says: a group left out because a setting did not read when they were
+     * registered, or a route cache built that way, or built while the routes
+     * were on. Routes are registered on boot and by the route cache, so
+     * routes.enabled does not switch a cached route off.
+     *
+     * @return list<string>
+     */
+    public static function routeProblems(): array
+    {
+        try {
+            $enabled = WaitlistConfig::routesEnabled();
+            $prefix = WaitlistConfig::routeName();
+        } catch (InvalidConfigurationException) {
+            return [];
+        }
+
+        $problems = [];
+
+        foreach (RouteRegistration::GROUPS as $group => $names) {
+            $registered = count(array_filter($names, fn (string $name): bool => Route::has($prefix.$name)));
+
+            if ($enabled && $registered < count($names)) {
+                $problems[] = "The {$group} routes are not registered although routes.enabled is on: a setting did not read when they were registered, or the route cache was built without them. Fix the setting, then run php artisan route:cache again, or route:clear.";
+            }
+
+            if (! $enabled && $registered > 0) {
+                $problems[] = "routes.enabled is off, but the {$group} routes are still registered, as from a route cache built while it was on. Run php artisan route:clear, or route:cache again.";
+            }
+        }
+
+        return $problems;
     }
 
     /**

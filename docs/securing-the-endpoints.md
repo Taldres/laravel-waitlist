@@ -309,9 +309,33 @@ The package does not touch Laravel's middleware: the rate limit, route bindings
 and, with `web`, the cookies and the session run in the order Laravel sorts them.
 Middleware of your own goes in `routes.middleware` or `routes.group_middleware`.
 
-A route cache holds the routes as they were when it was built. Build it again
-(`php artisan route:cache`) after changing a `routes.*` setting, and run
-`php artisan route:clear` when you switch the routes off, as for any route.
+A route cache holds the routes as they were when it was built, so two things
+follow, and neither is a runtime check of the package:
+
+- A cache built while a setting did not read keeps the routes out, also once the
+  config is fixed.
+- `routes.enabled=false` does not switch off routes that were cached while it was
+  on. It is a switch for the registration, not an emergency stop; to stop the
+  routes at once, run `php artisan route:clear` (or build the cache again), or
+  block the URLs in front of the app.
+
+### Deploying
+
+Let the deploy fail on these errors instead of finding a `404` in production:
+
+```bash
+php artisan config:cache
+php artisan waitlist:check --strict
+php artisan route:cache
+php artisan waitlist:check --strict
+```
+
+The first check reads the settings and the tables. After `route:cache` the second
+compares the routes that are registered with the config: it fails when
+`routes.enabled` is on and a group is missing, because a setting did not read when
+the cache was built, and when it is off and routes are still registered.
+Afterwards, call one endpoint of each group, for example the wording
+(`GET /waitlist/purposes?list=...`) and an unsubscribe link of a test address.
 
 ## Rate limits
 
@@ -357,9 +381,9 @@ it under a name of your own and point the group at it:
 ```
 
 Define it in a service provider's `boot()`, so it exists by the first request.
-A name that no `RateLimiter::for()` defines refuses the requests of the group
-with an `InvalidConfigurationException` that names the config key, token links
-included.
+A name that no `RateLimiter::for()` defines makes Laravel refuse the requests of
+the group with a `500`, token links included; `php artisan waitlist:check` names
+the config key.
 
 Your limiter then decides everything for that group, the way any Laravel
 [named rate limiter](https://laravel.com/docs/routing#rate-limiting) does; the

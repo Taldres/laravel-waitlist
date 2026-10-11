@@ -56,8 +56,11 @@ say where they looked.
   by the first request that needs it. It also warns of settings in a published
   `config/waitlist.php` that the package does not read (a typo, say, which stays
   ignored otherwise), warns while no scheduled task of your application runs
-  `waitlist:prune`, and compares the tables and columns with the database,
-  naming what your migrations lack. The exit code is 1 for a setting or
+  `waitlist:prune`, compares the tables and columns with the database, naming
+  what your migrations lack, and compares the registered package routes with
+  `routes.enabled`: a group missing although the routes are on, or routes still
+  registered although they are off, as when a route cache was built under other
+  settings. Run it again after `route:cache`. The exit code is 1 for a setting or
   a table, and with `--strict` for a warning too. `php artisan about` shows a
   Laravel Waitlist section with the same state.
 - **`waitlist:privacy`** describes the configured package storage, the fields

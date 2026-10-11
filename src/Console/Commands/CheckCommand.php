@@ -32,6 +32,11 @@ class CheckCommand extends Command
             $failed = true;
         }
 
+        foreach (SetupAudit::routeProblems() as $problem) {
+            $this->components->error($problem);
+            $failed = true;
+        }
+
         foreach (SetupAudit::unknownSettings() as $setting) {
             $this->components->warn("{$setting} is not a setting the package reads; check it for a typo, or remove it from config/waitlist.php and its variable from .env.");
             $warned = true;

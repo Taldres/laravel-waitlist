@@ -7,6 +7,7 @@ namespace Taldres\Waitlist\Http;
 use Closure;
 use Taldres\Waitlist\Config\ConfigFallback;
 use Taldres\Waitlist\Config\WaitlistConfig;
+use Taldres\Waitlist\Enums\Page;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 
 /**
@@ -24,6 +25,15 @@ use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
  */
 final class RouteRegistration
 {
+    /**
+     * The names, without the name prefix, of the routes of each group in
+     * routes/waitlist.php; a test keeps the lists in step with the file.
+     */
+    public const array GROUPS = [
+        'signup' => ['subscribe', 'purposes', 'manage-link'],
+        'links' => [Page::Confirm->value, Page::Unsubscribe->value, 'unsubscribe.manage-link', Page::Manage->value, 'manage.data', 'manage.purposes', 'manage.unsubscribe', 'manage.erase'],
+    ];
+
     /**
      * Whether the routes are on and the settings that place them read.
      */

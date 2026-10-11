@@ -195,7 +195,9 @@ keeping or dropping one does not.
   registers no route; `false` turns the routes off. After a change of a `routes.*`
   setting, build the route cache again (`route:cache`, or `route:clear` when they
   go off). A setting that does not read is reported to the logs and leaves out its
-  routes only; `waitlist:check` names it.
+  routes only; `waitlist:check` names it. `routes.enabled=false` does not stop routes
+  a route cache holds, so deploy with `waitlist:check --strict` before and after
+  `route:cache`; the second run compares the registered routes with the config.
 
 ## Rules, References, and Templates
 
