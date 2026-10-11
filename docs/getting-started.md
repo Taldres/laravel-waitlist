@@ -342,6 +342,8 @@ mails `$event->manageUrl` to `$event->entry->email`, see
 - `waitlist:prune` is scheduled and Laravel's scheduler runs: it applies the
   retention periods. In `routes/console.php`:
   `Schedule::command('waitlist:prune')->daily();`
+- The deploy runs `php artisan waitlist:check --strict` before and after
+  `route:cache`, see [When the routes are registered](securing-the-endpoints.md#deploying).
 - Trusted proxies are set, or every client looks like your proxy to the rate
   limiter.
 - Bot protection guards the signup: [Securing the endpoints](securing-the-endpoints.md).

@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schema;
 use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Enums\ConfigKey;
+use Taldres\Waitlist\Http\RouteRegistration;
 use Taldres\Waitlist\Support\SetupAudit;
 
 beforeEach(function () {
@@ -46,6 +47,54 @@ it('warns while no scheduled task runs the retention, and fails on it with --str
     Artisan::call('about', ['--only' => 'laravel_waitlist', '--json' => true]);
 
     expect(json_decode(Artisan::output(), true)['laravel_waitlist']['prune_schedule'])->toBe('not scheduled');
+});
+
+it('finds package routes that are switched on but not registered, and ones that are registered though switched off', function () {
+    config()->set(ConfigKey::RoutesEnabled->value, true);
+    config()->set(ConfigKey::RoutesMiddleware->value, []);
+
+    [$exit, $output] = checkOutput();
+
+    expect($exit)->toBe(1)
+        ->and($output)->toContain('The signup routes are not registered although routes.enabled is on')
+        ->and($output)->toContain('The links routes are not registered although routes.enabled is on');
+
+    require __DIR__.'/../../routes/waitlist.php';
+    app('router')->getRoutes()->refreshNameLookups();
+
+    expect(checkOutput()[0])->toBe(0);
+
+    config()->set(ConfigKey::RoutesEnabled->value, false);
+
+    [$exit, $output] = checkOutput();
+
+    expect($exit)->toBe(1)
+        ->and($output)->toContain('routes.enabled is off, but the signup routes are still registered')
+        ->and($output)->toContain('routes.enabled is off, but the links routes are still registered');
+});
+
+it('leaves the routes alone while the switch does not read, as that is reported on its own', function () {
+    config()->set(ConfigKey::RoutesEnabled->value, 'maybe');
+
+    expect(SetupAudit::routeProblems())->toBe([]);
+});
+
+it('knows the routes of each group, so the check cannot drift from routes/waitlist.php', function () {
+    config()->set(ConfigKey::RoutesEnabled->value, true);
+    config()->set(ConfigKey::RoutesMiddleware->value, []);
+
+    require __DIR__.'/../../routes/waitlist.php';
+    app('router')->getRoutes()->refreshNameLookups();
+
+    $registered = collect(app('router')->getRoutes()->getRoutes())
+        ->map(fn ($route): string => (string) $route->getName())
+        ->filter(fn (string $name): bool => str_starts_with($name, 'waitlist.'))
+        ->map(fn (string $name): string => substr($name, strlen('waitlist.')))
+        ->sort()
+        ->values()
+        ->all();
+
+    expect($registered)->toBe(collect(RouteRegistration::GROUPS)->flatten()->sort()->values()->all());
 });
 
 it('names every setting that does not read at once, never its value', function () {

@@ -70,7 +70,7 @@ Statuses besides the package's own `error` codes, as a client sees them:
 | --- | --- | --- | --- |
 | `401` | The caller sent no credentials the API accepts: `authentication.required` is on, or the project resolver needs them. A wrong token looks the same. | No, fix the token | Yes, as a setup error |
 | `403` | The `useWaitlist` gate refused the caller: a project that is not its own, or wording from a guest; or the project lists origins and the browser's website is not among them. | No | Yes |
-| `404` without `error` | Not the package: a URL without the routes' prefix, routes switched off, or the gate keeping the caller from the project. | No | Yes, as a setup error |
+| `404` without `error` | Not the package: a URL without the routes' prefix, routes switched off, a group of routes left out for a setting that did not read, or the gate keeping the caller from the project. | No | Yes, as a setup error |
 | `419` | A CSRF or form check of your own on the signup group, such as `web`. | No, send what the check wants | Yes |
 | `422` | Validation (`errors`), or `spam_check_failed` | No, fix the input | No, show it to the person |
 | `429` | A rate limit. `Retry-After` says when. | After the wait | Count it |
@@ -84,18 +84,19 @@ personal data.
 
 ## Routes that are off
 
-While `waitlist.routes.enabled` is off, every route answers `404`, also when a
-route cache still holds it. The request counts against no rate limit and starts
-no session, see [Middleware order](../securing-the-endpoints.md#middleware-order).
-Only what Laravel answers before any middleware runs still gets through: a
-method the route does not take (`405`) and `OPTIONS` (the allowed methods).
-Neither acts: no entry is written and no event fires.
+While `waitlist.routes.enabled` is off the package registers no route, so every
+URL under the prefix is Laravel's plain `404`. A route cache built while they
+were on still holds them: run `php artisan route:clear`, see
+[When the routes are registered](../securing-the-endpoints.md#when-the-routes-are-registered).
 
-A setting that does not read refuses the request of its group with an
-`InvalidConfigurationException`, which Laravel renders as a `500`; the message
-in your logs names the config key. That includes an empty
-`WAITLIST_ROUTES_ENABLED=`, which is no decision to turn the routes off, and a
-limiter name that no `RateLimiter::for()` defines.
+A route setting that does not read is reported to your logs when the routes are
+registered, naming the config key, and leaves out the routes it belongs to: those
+requests are a plain `404`, not a `500`. That includes an empty
+`WAITLIST_ROUTES_ENABLED=`, which is no decision to turn the routes off. A
+limiter name that no `RateLimiter::for()` defines is different: the route exists
+and Laravel answers its requests with a `500`, "Rate limiter [name] is not
+defined"; `php artisan waitlist:check` names the config key. See
+[When the routes are registered](../securing-the-endpoints.md#when-the-routes-are-registered).
 
 ## GET never changes anything
 

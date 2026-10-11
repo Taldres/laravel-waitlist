@@ -190,15 +190,14 @@ keeping or dropping one does not.
   other websites out, not bots).
 - Behind a proxy or CDN: configure trusted proxies, or all visitors share one rate
   limit bucket.
-- Routes that are off (the default) answer `404` before any rate limit or session
-  starts. Laravel still answers `405` for a method a route does not take and
-  `OPTIONS` with the allowed methods before any middleware runs; neither acts. An
-  empty `WAITLIST_ROUTES_ENABLED=` is a config error; `false` turns the routes off.
-  The package puts its check, `CheckRouteConfig`, at the head of Laravel's middleware
-  priority. An app that replaces that list later (`setMiddlewarePriority()` in a
-  provider booting after the package, or in `booted()`) must list
-  `Taldres\Waitlist\Http\Middleware\CheckRouteConfig` first; `priority()` in
-  `bootstrap/app.php` needs nothing.
+- Routes that are off (the default) are not registered: every URL under the prefix
+  is Laravel's `404`. An empty `WAITLIST_ROUTES_ENABLED=` is a config error that
+  registers no route; `false` turns the routes off. After a change of a `routes.*`
+  setting, build the route cache again (`route:cache`, or `route:clear` when they
+  go off). A setting that does not read is reported to the logs and leaves out its
+  routes only; `waitlist:check` names it. `routes.enabled=false` does not stop routes
+  a route cache holds, so deploy with `waitlist:check --strict` before and after
+  `route:cache`; the second run compares the registered routes with the config.
 
 ## Rules, References, and Templates
 

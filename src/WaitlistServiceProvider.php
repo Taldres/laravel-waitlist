@@ -10,7 +10,6 @@ use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Foundation\CachesConfiguration;
-use Illuminate\Contracts\Http\Kernel as HttpKernel;
 use Illuminate\Foundation\Console\AboutCommand;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -40,7 +39,6 @@ use Taldres\Waitlist\Contracts\SpamProtector;
 use Taldres\Waitlist\Definitions\ProjectDefinitions;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
-use Taldres\Waitlist\Http\Middleware\CheckRouteConfig;
 use Taldres\Waitlist\Http\RouteRegistration;
 use Taldres\Waitlist\Support\SetupAudit;
 
@@ -108,19 +106,6 @@ class WaitlistServiceProvider extends ServiceProvider
                     ->by(self::linkSource($request).'|links'),
             ]);
         }
-
-        // Laravel sorts the middleware of a route by its priority list, which
-        // puts the limiter and the bindings, with "web" the cookies and the
-        // session too, ahead of the check. A route that is off must count and
-        // set nothing, and a route cache still holds routes the config has
-        // since turned off. An app's priority() in bootstrap/app.php is applied
-        // when the kernel resolves, before any provider boots, so this goes in
-        // front of that list as well.
-        $this->callAfterResolving(HttpKernel::class, function (HttpKernel $kernel): void {
-            if (method_exists($kernel, 'prependToMiddlewarePriority')) {
-                $kernel->prependToMiddlewarePriority(CheckRouteConfig::class);
-            }
-        });
 
         if (RouteRegistration::wanted()) {
             $this->loadRoutesFrom(__DIR__.'/../routes/waitlist.php');

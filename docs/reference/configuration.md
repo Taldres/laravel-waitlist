@@ -65,10 +65,9 @@ reported once per request, job or command:
   decides for itself.
 
 Nothing in this config stops the app from booting, artisan included: a route
-setting that does not read refuses the requests of its group. A route group
-registered while one of its settings did not read lacks what that setting meant
-to add, so it keeps refusing its requests until the routes are registered again:
-with cached routes, run `php artisan route:cache` once the config is fixed.
+setting that does not read is reported to your logs and leaves out the routes it
+belongs to, see [When the routes are registered](../securing-the-endpoints.md#when-the-routes-are-registered).
+With cached routes, run `php artisan route:cache` once the config is fixed.
 
 The package merges its defaults into your config when it registers: a key your
 published `config/waitlist.php` lacks takes the package's value, while a list
@@ -132,7 +131,7 @@ itself](../projects.md#periods-a-project-promises-itself).
 
 | Key | Variable | Default | |
 | --- | --- | --- | --- |
-| `enabled` | `WAITLIST_ROUTES_ENABLED` | off | the package's JSON API, see [HTTP API](http-api.md). While off, every route answers `404`, also from a route cache, except a method it does not take (`405`) and `OPTIONS`, which Laravel answers before any middleware runs; neither acts. An empty `WAITLIST_ROUTES_ENABLED=` is no decision: it refuses every request, naming the key; write `false` to turn the routes off |
+| `enabled` | `WAITLIST_ROUTES_ENABLED` | off | the package's JSON API, see [HTTP API](http-api.md). While off, no route is registered and every URL under the prefix is Laravel's `404`; after a route cache was built with them on, run `php artisan route:clear`. An empty `WAITLIST_ROUTES_ENABLED=` is no decision: it registers no route and is reported, naming the key; write `false` to turn the routes off |
 | `prefix` | | `waitlist` | the path the routes live under, empty for the root; no `{placeholder}`, as the links in mails cannot be built for one |
 | `name` | | `waitlist.` | the route name prefix |
 | `middleware` | | `['api']` | applies to every route, token links included: no authentication here |
@@ -146,13 +145,6 @@ itself](../projects.md#periods-a-project-promises-itself).
 | `rate_limits.caller_signup_per_minute` | `WAITLIST_RATE_LIMIT_CALLER_SIGNUP` | 120 | per server calling for a project and endpoint, see [Servers calling for a project](../securing-the-endpoints.md#servers-calling-for-a-project) |
 
 See [Securing the endpoints](../securing-the-endpoints.md#rate-limits) for your own limiters.
-
-The check of `enabled` and these settings runs ahead of the middleware Laravel
-sorts by its priority list: the package puts it at the head of that list when it
-boots, after a list set with `priority()` in `bootstrap/app.php`. An app that
-replaces the list later with `setMiddlewarePriority()` must list
-`Taldres\Waitlist\Http\Middleware\CheckRouteConfig` first, see
-[Middleware order](../securing-the-endpoints.md#middleware-order).
 
 ## Who may call: `authentication`
 

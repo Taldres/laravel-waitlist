@@ -431,23 +431,3 @@ describe('link limits that do not read', function () {
             ->toBe([WaitlistServiceProvider::LINK_PER_MINUTE, WaitlistServiceProvider::LINKS_PER_IP_PER_MINUTE]);
     });
 });
-
-describe('the routes switch', function () {
-    it('turns the routes off with false', function () {
-        $tokens = isolationSubscribe();
-
-        config()->set(ConfigKey::RoutesEnabled->value, false);
-
-        $this->getJson("/waitlist/unsubscribe/{$tokens['unsubscribe']}")->assertNotFound();
-    });
-
-    it('refuses every request when it is empty, as an empty variable is no decision', function () {
-        $tokens = isolationSubscribe();
-        $this->withoutExceptionHandling();
-
-        config()->set(ConfigKey::RoutesEnabled->value, '');
-
-        expect(fn () => $this->getJson("/waitlist/unsubscribe/{$tokens['unsubscribe']}"))
-            ->toThrow(InvalidConfigurationException::class, ConfigKey::RoutesEnabled->value);
-    });
-});

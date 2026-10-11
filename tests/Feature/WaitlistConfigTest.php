@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Env;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\RateLimiter;
 use Taldres\Waitlist\Actions\PruneEntries;
 use Taldres\Waitlist\Config\PackageConfig;
@@ -357,9 +358,11 @@ describe('a mistake in the config while the app boots', function () {
         config()->set(ConfigKey::RoutesEnabled->value, true);
         config()->set(ConfigKey::RoutesMiddleware->value, []);
         $this->signUp = fn () => $this->postJson('/waitlist', ['email' => 'other@example.com', 'list' => 'beta', 'purposes' => waitlistConsent()]);
+
+        Exceptions::fake();
     });
 
-    it('only refuses the routes of its group', function (ConfigKey $key, mixed $value, string $message) {
+    it('leaves out only the routes of its group, and reports the setting', function (ConfigKey $key, mixed $value, string $message) {
         config()->set($key->value, $value);
 
         (new WaitlistServiceProvider(app()))->boot();
@@ -367,72 +370,35 @@ describe('a mistake in the config while the app boots', function () {
         $this->postJson("/waitlist/unsubscribe/{$this->tokens['unsubscribe']}")
             ->assertOk()
             ->assertJsonPath('data.status', EntryStatus::Unsubscribed->value);
+        ($this->signUp)()->assertNotFound();
+        $this->getJson('/waitlist/purposes?list=beta')->assertNotFound();
 
-        $this->withoutExceptionHandling();
-
-        expect($this->signUp)->toThrow(InvalidConfigurationException::class, $message);
+        Exceptions::assertReported(fn (InvalidConfigurationException $exception) => $exception->getMessage() === $message);
     })->with([
         'signup middleware' => [ConfigKey::SignupMiddleware, null, 'The waitlist.routes.group_middleware.signup config must be a list of middleware names, got null.'],
         'the signup limiter' => [ConfigKey::SignupLimiter, 5, 'The waitlist.routes.limiters.signup config must be a text or null, got int.'],
     ]);
 
-    it('keeps refusing a group registered with a fallback once the config is fixed, until the routes are registered again', function () {
-        RateLimiter::for('tight', fn () => Limit::perMinute(1)->by('everyone'));
-        config()->set(ConfigKey::SignupLimiter->value, 5);
+    it('leaves out the token links of a group that does not read, and leaves the signup alone', function (ConfigKey $key, mixed $value, string $message) {
+        // The pages are the project's own, so the signup builds no package link.
+        defineDefaultProject(fn (ProjectDefinition $project) => $project->urls(
+            confirm: 'https://app.test/confirm/{token}',
+            unsubscribe: 'https://app.test/leave/{token}',
+        ));
+        config()->set($key->value, $value);
 
         (new WaitlistServiceProvider(app()))->boot();
 
-        // Fixed, but the routes stay as registered, as in a route cache.
-        config()->set(ConfigKey::SignupLimiter->value, 'tight');
-
-        $this->withoutExceptionHandling();
-
-        expect(fn () => $this->getJson('/waitlist/purposes?list=beta'))->toThrow(InvalidConfigurationException::class, 'The waitlist routes were registered while their config did not read, so they lack its middleware or limits.');
-
-        (new WaitlistServiceProvider(app()))->boot();
-        $this->withExceptionHandling();
-
+        ($this->signUp)()->assertStatus(202);
         $this->getJson('/waitlist/purposes?list=beta')->assertOk();
-        $this->getJson('/waitlist/purposes?list=beta')->assertStatus(429);
-        $this->postJson("/waitlist/unsubscribe/{$this->tokens['unsubscribe']}")->assertOk();
-    });
-
-    it('follows the routes switch once it reads, even where routes were kept as registered', function () {
-        config()->set(ConfigKey::RoutesEnabled->value, 'maybe');
-
-        (new WaitlistServiceProvider(app()))->boot();
-
-        // As in a route cache: the routes stay, the config changes.
-        config()->set(ConfigKey::RoutesEnabled->value, false);
-
-        $this->getJson('/waitlist/purposes?list=beta')->assertNotFound();
         $this->postJson("/waitlist/unsubscribe/{$this->tokens['unsubscribe']}")->assertNotFound();
+        $this->getJson("/waitlist/confirm/{$this->tokens['confirm']}")->assertNotFound();
 
-        config()->set(ConfigKey::RoutesEnabled->value, true);
-
-        $this->withoutExceptionHandling();
-
-        expect(fn () => $this->getJson('/waitlist/purposes?list=beta'))->toThrow(InvalidConfigurationException::class, 'The waitlist routes were registered while their config did not read');
-    });
-
-    it('answers 404 once the routes are switched off, also where they are still registered', function () {
-        (new WaitlistServiceProvider(app()))->boot();
-
-        config()->set(ConfigKey::RoutesEnabled->value, false);
-
-        $this->getJson('/waitlist/purposes?list=beta')->assertNotFound();
-    });
-
-    it('answers 404 for switched off routes before reading any of their other settings', function () {
-        (new WaitlistServiceProvider(app()))->boot();
-
-        config()->set(ConfigKey::RoutesEnabled->value, false);
-        config()->set(ConfigKey::SignupMiddleware->value, null);
-        config()->set(ConfigKey::RoutesPrefix->value, ['waitlist']);
-
-        $this->getJson('/waitlist/purposes?list=beta')->assertNotFound();
-        $this->postJson("/waitlist/unsubscribe/{$this->tokens['unsubscribe']}")->assertNotFound();
-    });
+        Exceptions::assertReported(fn (InvalidConfigurationException $exception) => $exception->getMessage() === $message);
+    })->with([
+        'links middleware' => [ConfigKey::LinksMiddleware, null, 'The waitlist.routes.group_middleware.links config must be a list of middleware names, got null.'],
+        'the links limiter' => [ConfigKey::LinksLimiter, 5, 'The waitlist.routes.limiters.links config must be a text or null, got int.'],
+    ]);
 
     it('boots with a key missing from a stale config cache, so artisan can cache it again', function () {
         $config = config()->array('waitlist');
@@ -442,20 +408,20 @@ describe('a mistake in the config while the app boots', function () {
         (new WaitlistServiceProvider(app()))->boot();
 
         $this->postJson("/waitlist/unsubscribe/{$this->tokens['unsubscribe']}")->assertOk();
+        ($this->signUp)()->assertNotFound();
 
-        $this->withoutExceptionHandling();
-
-        expect($this->signUp)->toThrow(InvalidConfigurationException::class, 'The waitlist.routes.group_middleware.signup config is missing.');
+        Exceptions::assertReported(fn (InvalidConfigurationException $exception) => str_starts_with($exception->getMessage(), 'The waitlist.routes.group_middleware.signup config is missing.'));
     });
 
-    it('registers the routes when a shared setting does not read, refusing every request', function (ConfigKey $key, mixed $value, string $message) {
+    it('leaves out every route when a setting that places them does not read', function (ConfigKey $key, mixed $value, string $message) {
         config()->set($key->value, $value);
 
         (new WaitlistServiceProvider(app()))->boot();
 
-        $this->withoutExceptionHandling();
+        $this->postJson("/waitlist/unsubscribe/{$this->tokens['unsubscribe']}")->assertNotFound();
+        $this->getJson('/waitlist/purposes?list=beta')->assertNotFound();
 
-        expect(fn () => $this->postJson("/waitlist/unsubscribe/{$this->tokens['unsubscribe']}"))->toThrow(InvalidConfigurationException::class, $message);
+        Exceptions::assertReported(fn (InvalidConfigurationException $exception) => $exception->getMessage() === $message);
     })->with([
         'their switch' => [ConfigKey::RoutesEnabled, 'maybe', 'The waitlist.routes.enabled config must be true or false, got a text it does not read.'],
         'their prefix' => [ConfigKey::RoutesPrefix, ['waitlist'], 'The waitlist.routes.prefix config must be a text, got array.'],
@@ -463,68 +429,12 @@ describe('a mistake in the config while the app boots', function () {
         'their middleware' => [ConfigKey::RoutesMiddleware, 5, 'The waitlist.routes.middleware config must be a list of middleware names, got int.'],
     ]);
 
-    it('also refuses a browser that would be sent on to a page of the frontend', function (string $method) {
-        defineDefaultProject(fn (ProjectDefinition $project) => $project->urls(
-            confirm: 'https://app.test/confirm/{token}',
-            unsubscribe: 'https://app.test/leave/{token}',
-        ));
-        config()->set(ConfigKey::RoutesEnabled->value, 'maybe');
-
-        (new WaitlistServiceProvider(app()))->boot();
-
-        $this->withoutExceptionHandling();
-
-        expect(fn () => $this->call($method, "/waitlist/confirm/{$this->tokens['confirm']}"))
-            ->toThrow(InvalidConfigurationException::class, ConfigKey::RoutesEnabled->value)
-            ->and(fn () => $this->call($method, "/waitlist/unsubscribe/{$this->tokens['unsubscribe']}"))
-            ->toThrow(InvalidConfigurationException::class, ConfigKey::RoutesEnabled->value)
-            ->and(WaitlistEntry::query()->firstOrFail()->status)->toBe(EntryStatus::Pending);
-    })->with(['GET', 'HEAD']);
-
-    it('only refuses the token links when their group does not read, and leaves the signup alone', function (ConfigKey $key, mixed $value, string $message) {
-        config()->set($key->value, $value);
-
-        (new WaitlistServiceProvider(app()))->boot();
-
-        ($this->signUp)()->assertStatus(202);
-        $this->getJson('/waitlist/purposes?list=beta')->assertOk();
-
-        $this->withoutExceptionHandling();
-
-        expect(fn () => $this->postJson("/waitlist/unsubscribe/{$this->tokens['unsubscribe']}"))
-            ->toThrow(InvalidConfigurationException::class, $message)
-            ->and(fn () => $this->getJson("/waitlist/confirm/{$this->tokens['confirm']}"))
-            ->toThrow(InvalidConfigurationException::class, $message);
-    })->with([
-        'links middleware' => [ConfigKey::LinksMiddleware, null, 'The waitlist.routes.group_middleware.links config must be a list of middleware names, got null.'],
-        'the links limiter' => [ConfigKey::LinksLimiter, 5, 'The waitlist.routes.limiters.links config must be a text or null, got int.'],
-    ]);
-
-    it('holds a route cache to the group as it was registered, and to the switch as it is now', function () {
-        RateLimiter::for('tight', fn () => Limit::perMinute(1)->by('everyone'));
+    it('reports a setting once, however many routes it belongs to', function () {
         config()->set(ConfigKey::SignupLimiter->value, 5);
 
         (new WaitlistServiceProvider(app()))->boot();
 
-        // What php artisan route:cache writes and a cached boot reads back.
-        $router = app('router');
-        $router->getRoutes()->refreshNameLookups();
-        $router->setCompiledRoutes(unserialize(serialize($router->getRoutes()->compile())));
-
-        config()->set(ConfigKey::SignupLimiter->value, 'tight');
-
-        $this->postJson("/waitlist/unsubscribe/{$this->tokens['unsubscribe']}")->assertOk();
-
-        $this->withoutExceptionHandling();
-
-        expect(fn () => $this->getJson('/waitlist/purposes?list=beta'))
-            ->toThrow(InvalidConfigurationException::class, 'The waitlist routes were registered while their config did not read');
-
-        $this->withExceptionHandling();
-        config()->set(ConfigKey::RoutesEnabled->value, false);
-
-        $this->getJson('/waitlist/purposes?list=beta')->assertNotFound();
-        $this->call('HEAD', '/waitlist/purposes')->assertNotFound();
+        Exceptions::assertReportedCount(1);
     });
 });
 
