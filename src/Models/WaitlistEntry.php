@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -203,7 +204,7 @@ class WaitlistEntry extends Model
      */
     protected function confirmedAt(): Attribute
     {
-        return Attribute::get(fn (): ?Carbon => $this->latestSubscription?->confirmed_at);
+        return Attribute::get(fn (): ?CarbonInterface => $this->latestSubscription?->confirmed_at);
     }
 
     /**
@@ -213,7 +214,7 @@ class WaitlistEntry extends Model
      */
     protected function unsubscribedAt(): Attribute
     {
-        return Attribute::get(fn (): ?Carbon => $this->latestSubscription?->ended_at);
+        return Attribute::get(fn (): ?CarbonInterface => $this->latestSubscription?->ended_at);
     }
 
     /**
