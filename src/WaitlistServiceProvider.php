@@ -67,14 +67,16 @@ class WaitlistServiceProvider extends ServiceProvider
         $this->app->singleton(ProjectDefinitions::class);
         $this->app->scoped(ConfigFallback::class);
 
-        $this->app->bind(EmailNormalizer::class, fn (Application $app): EmailNormalizer => self::make($app, ConfigKey::EmailNormalizer, WaitlistConfig::emailNormalizer(), EmailNormalizer::class));
-        $this->app->bind(ConfirmationUrlGenerator::class, fn (Application $app): ConfirmationUrlGenerator => self::make($app, ConfigKey::UrlGenerator, WaitlistConfig::urlGenerator(), ConfirmationUrlGenerator::class));
-        $this->app->bind(ProjectCatalog::class, fn (Application $app): ProjectCatalog => self::make($app, ConfigKey::Catalog, WaitlistConfig::catalog(), ProjectCatalog::class));
-        $this->app->bind(ProjectResolver::class, fn (Application $app): ProjectResolver => self::make($app, ConfigKey::ProjectResolver, WaitlistConfig::projectResolver(), ProjectResolver::class));
+        // bindIf(): a contract the app or another package has bound already is
+        // theirs; the config keys name what the package binds when nobody did.
+        $this->app->bindIf(EmailNormalizer::class, fn (Application $app): EmailNormalizer => self::make($app, ConfigKey::EmailNormalizer, WaitlistConfig::emailNormalizer(), EmailNormalizer::class));
+        $this->app->bindIf(ConfirmationUrlGenerator::class, fn (Application $app): ConfirmationUrlGenerator => self::make($app, ConfigKey::UrlGenerator, WaitlistConfig::urlGenerator(), ConfirmationUrlGenerator::class));
+        $this->app->bindIf(ProjectCatalog::class, fn (Application $app): ProjectCatalog => self::make($app, ConfigKey::Catalog, WaitlistConfig::catalog(), ProjectCatalog::class));
+        $this->app->bindIf(ProjectResolver::class, fn (Application $app): ProjectResolver => self::make($app, ConfigKey::ProjectResolver, WaitlistConfig::projectResolver(), ProjectResolver::class));
         // A closure from Waitlist::verifySpamUsing() wins over the configured
         // class; bind() re-evaluates on every resolution, so registering in any
         // boot() works regardless of provider order.
-        $this->app->bind(SpamProtector::class, fn (Application $app): SpamProtector => $app->make(WaitlistManager::class)->spamProtector()
+        $this->app->bindIf(SpamProtector::class, fn (Application $app): SpamProtector => $app->make(WaitlistManager::class)->spamProtector()
             ?? self::make($app, ConfigKey::SpamProtector, WaitlistConfig::spamProtector(), SpamProtector::class));
     }
 
@@ -86,16 +88,22 @@ class WaitlistServiceProvider extends ServiceProvider
             Gate::define(WaitlistGate::ABILITY, WaitlistGate::default(...));
         }
 
-        // Registered even with the package routes off, for your own routes.
-        RateLimiter::for(self::SIGNUP_LIMITER, self::signupLimits(...));
+        // Registered even with the package routes off, for your own routes. A
+        // limiter of the same name that the app defines keeps its place, as the
+        // gate does.
+        if (RateLimiter::limiter(self::SIGNUP_LIMITER) === null) {
+            RateLimiter::for(self::SIGNUP_LIMITER, self::signupLimits(...));
+        }
 
         // Per token, not per IP: one-click requests share mail providers' IPs.
-        RateLimiter::for(self::LINKS_LIMITER, fn (Request $request): array => [
-            Limit::perMinute(ConfigFallback::read(WaitlistConfig::linkPerMinute(...), fallback: self::LINK_PER_MINUTE))
-                ->by($request->route()?->uri().'|'.hash('sha256', (string) $request->route('token'))),
-            Limit::perMinute(ConfigFallback::read(WaitlistConfig::linksPerIpPerMinute(...), fallback: self::LINKS_PER_IP_PER_MINUTE))
-                ->by(self::linkSource($request).'|links'),
-        ]);
+        if (RateLimiter::limiter(self::LINKS_LIMITER) === null) {
+            RateLimiter::for(self::LINKS_LIMITER, fn (Request $request): array => [
+                Limit::perMinute(ConfigFallback::read(WaitlistConfig::linkPerMinute(...), fallback: self::LINK_PER_MINUTE))
+                    ->by($request->route()?->uri().'|'.hash('sha256', (string) $request->route('token'))),
+                Limit::perMinute(ConfigFallback::read(WaitlistConfig::linksPerIpPerMinute(...), fallback: self::LINKS_PER_IP_PER_MINUTE))
+                    ->by(self::linkSource($request).'|links'),
+            ]);
+        }
 
         // Laravel sorts the middleware of a route by its priority list, which
         // puts the limiter and the bindings, with "web" the cookies and the

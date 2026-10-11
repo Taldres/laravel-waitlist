@@ -395,7 +395,9 @@ failed one-click unsubscribes.
 
 **Turn a group off** with `null`, for example when Cloudflare or a WAF limits
 already. The `waitlist` and `waitlist-links` limiters stay registered either way,
-so your own routes can use them too (`->middleware('throttle:waitlist')`).
+so your own routes can use them too (`->middleware('throttle:waitlist')`). A
+limiter of one of these names that your app defines keeps its place, whichever
+provider boots first.
 
 **Behind a proxy or load balancer:** `$request->ip()` only returns the real
 client IP when [trusted proxies](https://laravel.com/docs/requests#configuring-trusted-proxies)
