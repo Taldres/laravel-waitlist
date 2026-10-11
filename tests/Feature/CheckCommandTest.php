@@ -3,12 +3,28 @@
 declare(strict_types=1);
 
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Database\QueryException;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Exceptions;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
 use Taldres\Waitlist\Config\WaitlistConfig;
+use Taldres\Waitlist\Contracts\ProjectCatalog;
+use Taldres\Waitlist\Contracts\ProjectResolver;
+use Taldres\Waitlist\Contracts\SpamProtector;
+use Taldres\Waitlist\Definitions\ProjectDefinitions;
 use Taldres\Waitlist\Enums\ConfigKey;
+use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
+use Taldres\Waitlist\Facades\Waitlist;
 use Taldres\Waitlist\Http\RouteRegistration;
+use Taldres\Waitlist\Support\ClosureSpamProtector;
+use Taldres\Waitlist\Support\DefaultProjectResolver;
+use Taldres\Waitlist\Support\DefinedProjectCatalog;
+use Taldres\Waitlist\Support\NullSpamProtector;
 use Taldres\Waitlist\Support\SetupAudit;
+use Taldres\Waitlist\Tests\Fixtures\ArrayProjectCatalog;
+use Taldres\Waitlist\Tests\Fixtures\HeaderProjectResolver;
 
 beforeEach(function () {
     // An app schedules waitlist:prune; without it the check warns.
@@ -235,4 +251,96 @@ it('adds a section to about that shows a setting that does not read instead of f
     expect($about['settings'])->toBe('1 do not read, run waitlist:check')
         ->and($about['retention'])->toBe('does not read')
         ->and($about['routes'])->toBe('/waitlist');
+});
+
+function aboutSection(): array
+{
+    expect(Artisan::call('about', ['--only' => 'laravel_waitlist', '--json' => true]))->toBe(0);
+
+    return json_decode(Artisan::output(), true)['laravel_waitlist'];
+}
+
+class UnreachableProjectCatalog extends DefinedProjectCatalog
+{
+    public function __construct(ProjectDefinitions $definitions, private readonly Throwable $failure)
+    {
+        parent::__construct($definitions);
+    }
+
+    public function projects(): array
+    {
+        throw $this->failure;
+    }
+}
+
+it('shows the implementations the container resolves, as the defaults come out', function () {
+    $about = aboutSection();
+
+    expect($about['projects'])->toBe('default')
+        ->and($about['catalog'])->toBe(DefinedProjectCatalog::class)
+        ->and($about['project_resolver'])->toBe(DefaultProjectResolver::class)
+        ->and($about['spam_protector'])->toBe(NullSpamProtector::class);
+});
+
+it('names the implementations an app binds instead of the classes in the config', function () {
+    app()->bind(ProjectCatalog::class, ArrayProjectCatalog::class);
+    app()->bind(ProjectResolver::class, HeaderProjectResolver::class);
+
+    $about = aboutSection();
+
+    expect($about['projects'])->toBe('shop')
+        ->and($about['catalog'])->toBe(ArrayProjectCatalog::class)
+        ->and($about['project_resolver'])->toBe(HeaderProjectResolver::class);
+});
+
+it('names the protector behind verifySpamUsing, and the configured one again once it is cleared', function () {
+    Waitlist::verifySpamUsing(fn (Request $request): bool => true);
+
+    expect(aboutSection()['spam_protector'])->toBe(ClosureSpamProtector::class);
+
+    Waitlist::verifySpamUsing(null);
+
+    expect(aboutSection()['spam_protector'])->toBe(NullSpamProtector::class);
+});
+
+it('shows a catalog that cannot list its projects as unavailable, without reporting it, and prints the other rows', function (Throwable $failure) {
+    Exceptions::fake();
+    app()->bind(ProjectCatalog::class, fn () => new UnreachableProjectCatalog(app(ProjectDefinitions::class), $failure));
+
+    $about = aboutSection();
+
+    expect($about['projects'])->toBe('unavailable')
+        ->and($about['catalog'])->toBe(UnreachableProjectCatalog::class)
+        ->and($about['settings'])->toBe('every setting reads')
+        ->and($about['double_opt-in'])->toBe('on')
+        ->and($about['retention'])->toBe('unconfirmed 30 days, left 1095 days, request metadata 30 days');
+
+    Exceptions::assertNothingReported();
+})->with([
+    'a runtime error' => fn () => new RuntimeException('The catalog is down.'),
+    'a database error' => fn () => new QueryException('testing', 'select * from waitlist_projects', [], new PDOException('no such table: waitlist_projects')),
+]);
+
+it('tells a setting that does not read from an implementation that is unavailable', function () {
+    app()->bind(ProjectResolver::class, fn () => throw new InvalidConfigurationException('The resolver does not read.'));
+    app()->bind(SpamProtector::class, fn () => throw new RuntimeException('The protector is down.'));
+
+    $about = aboutSection();
+
+    expect($about['project_resolver'])->toBe('does not read')
+        ->and($about['spam_protector'])->toBe('unavailable')
+        ->and($about['catalog'])->toBe(DefinedProjectCatalog::class);
+});
+
+it('keeps every row apart, those that read no contract included', function () {
+    app()->forgetInstance(Schedule::class);
+    app()->bind(Schedule::class, fn () => throw new RuntimeException('The scheduler is down.'));
+    RateLimiter::shouldReceive('limiter')->andThrow(new RuntimeException('The limiters are down.'));
+
+    $about = aboutSection();
+
+    expect($about['settings'])->toBe('unavailable')
+        ->and($about['prune_schedule'])->toBe('unavailable')
+        ->and($about['projects'])->toBe('default')
+        ->and($about['double_opt-in'])->toBe('on');
 });
