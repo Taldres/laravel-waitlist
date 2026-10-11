@@ -317,7 +317,7 @@ class PrivacyCommand extends Command
 
         $lines = [];
 
-        if (WaitlistConfig::signupLimiter() === WaitlistServiceProvider::SIGNUP_LIMITER) {
+        if (WaitlistConfig::signupLimiter() === WaitlistServiceProvider::SIGNUP_LIMITER && WaitlistServiceProvider::ownsLimiter(WaitlistServiceProvider::SIGNUP_LIMITER)) {
             $lines[] = '- Rate limits for servers calling for a project: signups '.WaitlistConfig::callerSignupPerMinute().' per minute and server'
                 .($header !== null ? ', and '.WaitlistConfig::signupPerMinute().' per minute and visitor' : '');
         }
@@ -491,7 +491,7 @@ class PrivacyCommand extends Command
     {
         return match (true) {
             $limiter === null => 'not limited by the package',
-            $limiter === $packageLimiter => $packageLimit,
+            $limiter === $packageLimiter && WaitlistServiceProvider::ownsLimiter($packageLimiter) => $packageLimit,
             default => "by your [{$limiter}] limiter",
         };
     }

@@ -6,6 +6,7 @@ namespace Taldres\Waitlist;
 
 use Closure;
 use Composer\InstalledVersions;
+use Illuminate\Cache\RateLimiter as CacheRateLimiter;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Foundation\Application;
@@ -16,6 +17,8 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use ReflectionClass;
+use ReflectionException;
+use ReflectionProperty;
 use Taldres\Waitlist\Auth\WaitlistCaller;
 use Taldres\Waitlist\Auth\WaitlistGate;
 use Taldres\Waitlist\Config\ConfigFallback;
@@ -58,6 +61,9 @@ class WaitlistServiceProvider extends ServiceProvider
 
     public const int LINKS_PER_IP_PER_MINUTE = 600;
 
+    /** @var array<string, Closure> */
+    private static array $limiters = [];
+
     public function register(): void
     {
         if (! ($this->app instanceof CachesConfiguration && $this->app->configurationIsCached())) {
@@ -93,19 +99,15 @@ class WaitlistServiceProvider extends ServiceProvider
         // Registered even with the package routes off, for your own routes. A
         // limiter of the same name that the app defines keeps its place, as the
         // gate does.
-        if (RateLimiter::limiter(self::SIGNUP_LIMITER) === null) {
-            RateLimiter::for(self::SIGNUP_LIMITER, self::signupLimits(...));
-        }
+        self::defineLimiter(self::SIGNUP_LIMITER, self::signupLimits(...));
 
         // Per token, not per IP: one-click requests share mail providers' IPs.
-        if (RateLimiter::limiter(self::LINKS_LIMITER) === null) {
-            RateLimiter::for(self::LINKS_LIMITER, fn (Request $request): array => [
-                Limit::perMinute(ConfigFallback::read(WaitlistConfig::linkPerMinute(...), fallback: self::LINK_PER_MINUTE))
-                    ->by($request->route()?->uri().'|'.hash('sha256', (string) $request->route('token'))),
-                Limit::perMinute(ConfigFallback::read(WaitlistConfig::linksPerIpPerMinute(...), fallback: self::LINKS_PER_IP_PER_MINUTE))
-                    ->by(self::linkSource($request).'|links'),
-            ]);
-        }
+        self::defineLimiter(self::LINKS_LIMITER, static fn (Request $request): array => [
+            Limit::perMinute(ConfigFallback::read(WaitlistConfig::linkPerMinute(...), fallback: self::LINK_PER_MINUTE))
+                ->by($request->route()?->uri().'|'.hash('sha256', (string) $request->route('token'))),
+            Limit::perMinute(ConfigFallback::read(WaitlistConfig::linksPerIpPerMinute(...), fallback: self::LINKS_PER_IP_PER_MINUTE))
+                ->by(self::linkSource($request).'|links'),
+        ]);
 
         if (RouteRegistration::wanted()) {
             $this->loadRoutesFrom(__DIR__.'/../routes/waitlist.php');
@@ -142,6 +144,33 @@ class WaitlistServiceProvider extends ServiceProvider
             ShowCommand::class,
             WordingCommand::class,
         ]);
+    }
+
+    /**
+     * Whether the limiter now stored under the name is still the package's own:
+     * an app that defines the name after the package booted replaces it.
+     *
+     * @internal
+     */
+    public static function ownsLimiter(string $name): bool
+    {
+        // RateLimiter::limiter() wraps what it returns anew on every call, so
+        // only the stored closure can be compared with the one registered.
+        try {
+            $stored = (new ReflectionProperty(CacheRateLimiter::class, 'limiters'))->getValue(app(CacheRateLimiter::class));
+        } catch (ReflectionException) {
+            return false;
+        }
+
+        return isset(self::$limiters[$name]) && is_array($stored) && ($stored[$name] ?? null) === self::$limiters[$name];
+    }
+
+    private static function defineLimiter(string $name, Closure $limits): void
+    {
+        if (RateLimiter::limiter($name) === null) {
+            self::$limiters[$name] = $limits;
+            RateLimiter::for($name, $limits);
+        }
     }
 
     /**
