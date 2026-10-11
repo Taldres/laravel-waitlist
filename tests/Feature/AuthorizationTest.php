@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Testing\TestResponse;
 use Taldres\Waitlist\Auth\WaitlistGate;
+use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\WaitlistAction;
@@ -79,7 +80,7 @@ describe('the default gate', function () {
     })->with(authorizationTestEndpoints());
 
     it('keeps a caller with a project to that project', function () {
-        config()->set(ConfigKey::ProjectResolver->value, HeaderProjectResolver::class);
+        app()->bind(ProjectResolver::class, HeaderProjectResolver::class);
 
         $signUp = fn (string $project) => $this->withHeaders(['X-First' => 'project:acme', 'X-Waitlist-Project' => $project])
             ->postJson('/waitlist', ['email' => 'user@example.com', 'list' => 'beta', 'purposes' => ['launch' => 'v1']]);
@@ -99,7 +100,7 @@ describe('the default gate', function () {
     describe('with authentication required', function () {
         beforeEach(function () {
             config()->set(ConfigKey::AuthenticationRequired->value, true);
-            config()->set(ConfigKey::ProjectResolver->value, HeaderProjectResolver::class);
+            app()->bind(ProjectResolver::class, HeaderProjectResolver::class);
             $this->withHeader('X-Waitlist-Project', 'acme');
         });
 
@@ -130,7 +131,7 @@ describe('the default gate', function () {
 });
 
 describe('AuthenticatedProjectResolver', function () {
-    beforeEach(fn () => config()->set(ConfigKey::ProjectResolver->value, AuthenticatedProjectResolver::class));
+    beforeEach(fn () => app()->bind(ProjectResolver::class, AuthenticatedProjectResolver::class));
 
     it('takes the project from the caller', function () {
         Event::fake([ManageLinkRequested::class]);
@@ -165,7 +166,7 @@ describe('AuthenticatedProjectResolver', function () {
 
 describe('several guards', function () {
     it('takes the first guard that authenticates, for the resolver and the gate alike', function (array $headers, string $expected) {
-        config()->set(ConfigKey::ProjectResolver->value, AuthenticatedProjectResolver::class);
+        app()->bind(ProjectResolver::class, AuthenticatedProjectResolver::class);
         $seen = [];
 
         Gate::define(WaitlistGate::ABILITY, function (?Authenticatable $caller, string $project) use (&$seen): bool {
@@ -224,7 +225,7 @@ describe('several guards', function () {
 
 describe('a gate of your own', function () {
     it('answers with the status and the message it chose', function (Closure $request, Response $response, int $status, string $message) {
-        config()->set(ConfigKey::ProjectResolver->value, AuthenticatedProjectResolver::class);
+        app()->bind(ProjectResolver::class, AuthenticatedProjectResolver::class);
         Gate::define(WaitlistGate::ABILITY, fn (?Authenticatable $caller) => $response);
 
         $this->withHeader('X-First', 'project:acme');
@@ -296,7 +297,7 @@ describe('a gate of your own', function () {
         $this->postJson('/waitlist', ['metadata' => 'not even an object'])->assertForbidden();
         $this->postJson('/waitlist/manage-link', ['email' => 'not an address'])->assertForbidden();
 
-        config()->set(ConfigKey::ProjectResolver->value, AuthenticatedProjectResolver::class);
+        app()->bind(ProjectResolver::class, AuthenticatedProjectResolver::class);
 
         $this->postJson('/waitlist', [])->assertUnauthorized();
     });

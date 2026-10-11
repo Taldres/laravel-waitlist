@@ -6,6 +6,7 @@ namespace Taldres\Waitlist\Console\Commands;
 
 use Illuminate\Console\Command;
 use Taldres\Waitlist\Config\WaitlistConfig;
+use Taldres\Waitlist\Support\ReplacedBindings;
 use Taldres\Waitlist\Support\SetupAudit;
 use Throwable;
 
@@ -32,12 +33,21 @@ class CheckCommand extends Command
             $failed = true;
         }
 
-        foreach (SetupAudit::routeProblems() as $problem) {
+        foreach ([...SetupAudit::routeProblems(), ...SetupAudit::bindingProblems()] as $problem) {
             $this->components->error($problem);
             $failed = true;
         }
 
         foreach (SetupAudit::unknownSettings() as $setting) {
+            $refusal = ReplacedBindings::refusal($setting);
+
+            if ($refusal !== null) {
+                $this->components->error($refusal);
+                $failed = true;
+
+                continue;
+            }
+
             $this->components->warn("{$setting} is not a setting the package reads; check it for a typo, or remove it from config/waitlist.php and its variable from .env.");
             $warned = true;
         }

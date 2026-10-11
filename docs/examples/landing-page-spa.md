@@ -107,8 +107,8 @@ class SpaUrlGenerator implements ConfirmationUrlGenerator
 ```
 
 ```php
-// config/waitlist.php
-'url_generator' => App\Waitlist\SpaUrlGenerator::class,
+// app/Providers/WaitlistServiceProvider.php, in register()
+$this->app->bind(\Taldres\Waitlist\Contracts\ConfirmationUrlGenerator::class, \App\Waitlist\SpaUrlGenerator::class);
 ```
 
 The package endpoints work the same way if you would rather not write this one:

@@ -16,7 +16,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
-use ReflectionClass;
 use ReflectionException;
 use ReflectionProperty;
 use Taldres\Waitlist\Auth\WaitlistCaller;
@@ -33,16 +32,13 @@ use Taldres\Waitlist\Console\Commands\PruneCommand;
 use Taldres\Waitlist\Console\Commands\RekeyCommand;
 use Taldres\Waitlist\Console\Commands\ShowCommand;
 use Taldres\Waitlist\Console\Commands\WordingCommand;
-use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
-use Taldres\Waitlist\Contracts\EmailNormalizer;
 use Taldres\Waitlist\Contracts\HasWaitlistProject;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
-use Taldres\Waitlist\Contracts\SpamProtector;
 use Taldres\Waitlist\Definitions\ProjectDefinitions;
-use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Http\RouteRegistration;
+use Taldres\Waitlist\Support\ReplacedBindings;
 use Taldres\Waitlist\Support\SetupAudit;
 use Throwable;
 
@@ -76,16 +72,16 @@ class WaitlistServiceProvider extends ServiceProvider
         $this->app->scoped(ConfigFallback::class);
 
         // bindIf(): a contract the app or another package has bound already is
-        // theirs; the config keys name what the package binds when nobody did.
-        $this->app->bindIf(EmailNormalizer::class, fn (Application $app): EmailNormalizer => self::make($app, ConfigKey::EmailNormalizer, WaitlistConfig::emailNormalizer(), EmailNormalizer::class));
-        $this->app->bindIf(ConfirmationUrlGenerator::class, fn (Application $app): ConfirmationUrlGenerator => self::make($app, ConfigKey::UrlGenerator, WaitlistConfig::urlGenerator(), ConfirmationUrlGenerator::class));
-        $this->app->bindIf(ProjectCatalog::class, fn (Application $app): ProjectCatalog => self::make($app, ConfigKey::Catalog, WaitlistConfig::catalog(), ProjectCatalog::class));
-        $this->app->bindIf(ProjectResolver::class, fn (Application $app): ProjectResolver => self::make($app, ConfigKey::ProjectResolver, WaitlistConfig::projectResolver(), ProjectResolver::class));
-        // A closure from Waitlist::verifySpamUsing() wins over the configured
-        // class; bind() re-evaluates on every resolution, so registering in any
-        // boot() works regardless of provider order.
-        $this->app->bindIf(SpamProtector::class, fn (Application $app): SpamProtector => $app->make(WaitlistManager::class)->spamProtector()
-            ?? self::make($app, ConfigKey::SpamProtector, WaitlistConfig::spamProtector(), SpamProtector::class));
+        // theirs, and an app's bind() after this one replaces it. A key of an
+        // earlier config that still holds more than the default is refused on
+        // resolution, never on boot, so artisan keeps working to fix it.
+        foreach (ReplacedBindings::KEYS as $key => [$contract, $default]) {
+            $this->app->bindIf($contract, static function (Application $app) use ($key, $default): object {
+                $refusal = ReplacedBindings::refusal($key);
+
+                return $refusal === null ? $app->make($default) : throw new InvalidConfigurationException($refusal);
+            });
+        }
     }
 
     public function boot(): void
@@ -191,7 +187,7 @@ class WaitlistServiceProvider extends ServiceProvider
             'Projects' => $read(fn (): string => implode(', ', app(ProjectCatalog::class)->projects())),
             'Catalog' => $read(fn (): string => app(ProjectCatalog::class)::class),
             'Project resolver' => $read(fn (): string => app(ProjectResolver::class)::class),
-            'Spam protector' => $read(fn (): string => app(SpamProtector::class)::class),
+            'Spam protector' => $read(fn (): string => app(WaitlistManager::class)->spamProtector()::class),
             'Authentication required' => $read(fn (): string => WaitlistConfig::authenticationRequired() ? 'yes' : 'no'),
             'Double opt-in' => $read(fn (): string => WaitlistConfig::doubleOptIn() ? 'on' : 'off'),
             'Retention' => $read(fn (): string => sprintf('unconfirmed %s, left %s, request metadata %s', $days(WaitlistConfig::pendingDays()), $days(WaitlistConfig::unsubscribedDays()), $days(WaitlistConfig::requestMetadataDays()))),
@@ -257,39 +253,5 @@ class WaitlistServiceProvider extends ServiceProvider
 
             return WaitlistCaller::key($caller).($visitor === null ? '' : "|{$visitor}");
         }, fallback: (string) $request->ip());
-    }
-
-    /**
-     * WaitlistConfig has checked that the class implements the contract. What
-     * the container resolves it to, a decorator for example, only has to keep
-     * the contract.
-     *
-     * @template T of object
-     *
-     * @param  class-string  $class
-     * @param  class-string<T>  $contract
-     * @return T
-     */
-    private static function make(Application $app, ConfigKey $key, string $class, string $contract): object
-    {
-        // This binding is what resolves the contract, so the contract itself
-        // would send the container back here until memory runs out. A class
-        // that cannot be built is fine only where the app binds it, such as an
-        // interface of its own that extends the contract.
-        if ($class === $contract) {
-            throw new InvalidConfigurationException("The {$key->value} config must name a class that implements {$contract}, not the contract itself.");
-        }
-
-        if (! (new ReflectionClass($class))->isInstantiable() && ! $app->bound($class)) {
-            throw new InvalidConfigurationException("The {$key->value} config names {$class}, which cannot be built and is not bound in the container. Name a class, or bind {$class} in a service provider.");
-        }
-
-        $instance = $app->make($class);
-
-        if (! $instance instanceof $contract) {
-            throw new InvalidConfigurationException("The container resolves {$class} to something that is not a {$contract}. Check the {$key->value} config and the binding of {$class}.");
-        }
-
-        return $instance;
     }
 }

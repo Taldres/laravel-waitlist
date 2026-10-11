@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Exceptions;
+use Taldres\Waitlist\Contracts\EmailNormalizer;
+use Taldres\Waitlist\Contracts\ProjectCatalog;
+use Taldres\Waitlist\Contracts\ProjectResolver;
+use Taldres\Waitlist\Contracts\SpamProtector;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\EntryStatus;
 use Taldres\Waitlist\Events\ManageLinkRequested;
@@ -11,6 +15,7 @@ use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Facades\Waitlist;
 use Taldres\Waitlist\Models\WaitlistConsent;
 use Taldres\Waitlist\Models\WaitlistEntry;
+use Taldres\Waitlist\Support\DefaultEmailNormalizer;
 
 /*
  * Leaving, withdrawing, requesting a manage link by token, erasing and
@@ -51,9 +56,12 @@ function flowIsolationEntry(): WaitlistEntry
     return WaitlistEntry::query()->firstOrFail();
 }
 
-function flowIsolationReportedFor(ConfigKey $setting): Closure
+/**
+ * @param  class-string  $contract
+ */
+function flowIsolationReportedFor(string $contract): Closure
 {
-    return fn (InvalidConfigurationException $exception): bool => str_contains($exception->getMessage(), $setting->value);
+    return fn (InvalidConfigurationException $exception): bool => str_contains($exception->getMessage(), $contract);
 }
 
 /**
@@ -141,11 +149,11 @@ describe('an email normalizer that does not work', function () {
 
         $act = flowIsolationLeaving()[$flow]($this);
 
-        config()->set(ConfigKey::EmailNormalizer->value, stdClass::class);
+        bindUnreadable(EmailNormalizer::class);
 
         $act();
 
-        Exceptions::assertReported(flowIsolationReportedFor(ConfigKey::EmailNormalizer));
+        Exceptions::assertReported(flowIsolationReportedFor(EmailNormalizer::class));
     })->with(array_keys(flowIsolationLeaving()));
 
     it('is reported once for a request, however many lists the sweep would have covered', function () {
@@ -153,7 +161,7 @@ describe('an email normalizer that does not work', function () {
         $tokens = flowIsolationSubscribe('beta');
         flowIsolationSubscribe('gamma');
 
-        config()->set(ConfigKey::EmailNormalizer->value, stdClass::class);
+        bindUnreadable(EmailNormalizer::class);
 
         Waitlist::withdrawConsent($tokens['unsubscribe'], 'newsletter');
 
@@ -162,18 +170,17 @@ describe('an email normalizer that does not work', function () {
 
     it('leaves the address on its other lists until the withdrawal is repeated with a working one', function () {
         Exceptions::fake();
-        $normalizer = config(ConfigKey::EmailNormalizer->value);
         $tokens = flowIsolationSubscribe('beta');
         flowIsolationSubscribe('gamma');
 
-        config()->set(ConfigKey::EmailNormalizer->value, stdClass::class);
+        bindUnreadable(EmailNormalizer::class);
 
         Waitlist::withdrawConsent($tokens['unsubscribe'], 'newsletter');
 
         expect(flowIsolationNewsletterWithdrawnOn('beta'))->toBeTrue()
             ->and(flowIsolationNewsletterWithdrawnOn('gamma'))->toBeFalse();
 
-        config()->set(ConfigKey::EmailNormalizer->value, $normalizer);
+        app()->bind(EmailNormalizer::class, DefaultEmailNormalizer::class);
 
         Waitlist::withdrawConsent($tokens['unsubscribe'], 'newsletter');
 
@@ -187,31 +194,31 @@ describe('a manage link requested by token', function () {
         Event::fake([ManageLinkRequested::class]);
     });
 
-    it('is mailed whatever the spam protector or the project resolver say', function (ConfigKey $setting) {
+    it('is mailed whatever the spam protector or the project resolver say', function (string $contract) {
         $this->withoutExceptionHandling();
 
-        config()->set($setting->value, stdClass::class);
+        bindUnreadable($contract);
 
         $this->postJson("/waitlist/unsubscribe/{$this->tokens['unsubscribe']}/manage-link")->assertStatus(202);
 
         Event::assertDispatchedTimes(ManageLinkRequested::class, 1);
     })->with([
-        'spam_protector' => ConfigKey::SpamProtector,
-        'project_resolver' => ConfigKey::ProjectResolver,
+        'the spam protector' => SpamProtector::class,
+        'the project resolver' => ProjectResolver::class,
     ]);
 
-    it('is still refused by address when the setting the address needs does not work', function (ConfigKey $setting) {
+    it('is still refused by address when the binding the address needs does not work', function (string $contract) {
         $this->withoutExceptionHandling();
 
-        config()->set($setting->value, stdClass::class);
+        bindUnreadable($contract);
 
         expect(fn () => $this->postJson('/waitlist/manage-link', ['email' => 'user@example.com', 'list' => 'beta']))
-            ->toThrow(InvalidConfigurationException::class, $setting->value);
+            ->toThrow(InvalidConfigurationException::class, $contract);
 
         Event::assertNotDispatched(ManageLinkRequested::class);
     })->with([
-        'spam_protector' => ConfigKey::SpamProtector,
-        'project_resolver' => ConfigKey::ProjectResolver,
+        'the spam protector' => SpamProtector::class,
+        'the project resolver' => ProjectResolver::class,
     ]);
 });
 
@@ -221,7 +228,7 @@ describe('erasing and exporting the default project', function () {
         flowIsolationSubscribe('beta');
         flowIsolationSubscribe('gamma');
 
-        config()->set(ConfigKey::Catalog->value, stdClass::class);
+        bindUnreadable(ProjectCatalog::class);
 
         expect(Waitlist::personalData('user@example.com'))->toHaveCount(2)
             ->and(Waitlist::personalData('user@example.com', 'beta'))->toHaveCount(1)
@@ -234,16 +241,16 @@ describe('erasing and exporting the default project', function () {
         $this->withoutExceptionHandling();
         flowIsolationSubscribe('beta');
 
-        config()->set(ConfigKey::Catalog->value, stdClass::class);
+        bindUnreadable(ProjectCatalog::class);
 
         expect(Waitlist::allProjects()->personalData('user@example.com'))->toHaveCount(1)
             ->and(Waitlist::allProjects()->forget('user@example.com'))->toBe(1);
     });
 
     it('still asks the catalog before it reaches another project', function () {
-        config()->set(ConfigKey::Catalog->value, stdClass::class);
+        bindUnreadable(ProjectCatalog::class);
 
-        expect(fn () => Waitlist::project('acme'))->toThrow(InvalidConfigurationException::class, ConfigKey::Catalog->value);
+        expect(fn () => Waitlist::project('acme'))->toThrow(InvalidConfigurationException::class, ProjectCatalog::class);
     });
 });
 
@@ -260,12 +267,12 @@ describe('a browser that unsubscribed', function () {
         defineDefaultProject(fn ($project) => $project->urls(unsubscribed: 'https://app.test/goodbye'));
         $tokens = flowIsolationSubscribe();
 
-        config()->set(ConfigKey::Catalog->value, stdClass::class);
+        bindUnreadable(ProjectCatalog::class);
 
         $this->post("/waitlist/unsubscribe/{$tokens['unsubscribe']}{$query}")->assertOk()->assertJsonPath('data.status', $status->value);
 
         expect(flowIsolationEntry()->status)->toBe($status);
-        Exceptions::assertReported(flowIsolationReportedFor(ConfigKey::Catalog));
+        Exceptions::assertReported(flowIsolationReportedFor(ProjectCatalog::class));
     })->with([
         'leaving the list' => ['', EntryStatus::Unsubscribed],
         'withdrawing a purpose' => ['?purpose=newsletter', EntryStatus::Confirmed],
@@ -277,10 +284,10 @@ describe('a browser that unsubscribed', function () {
         flowIsolationSubscribe();
         $manage = Waitlist::manageLink(flowIsolationEntry())->token;
 
-        config()->set(ConfigKey::Catalog->value, stdClass::class);
+        bindUnreadable(ProjectCatalog::class);
 
         $this->post("/waitlist/manage/{$manage}/{$step}", ['confirm' => true])->assertOk();
 
-        Exceptions::assertReported(flowIsolationReportedFor(ConfigKey::Catalog));
+        Exceptions::assertReported(flowIsolationReportedFor(ProjectCatalog::class));
     })->with(['unsubscribe', 'erase']);
 });

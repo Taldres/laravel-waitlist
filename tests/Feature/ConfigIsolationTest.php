@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Exceptions;
 use Taldres\Waitlist\Config\ConfigFallback;
+use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
+use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Enums\ActivityType;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\EntryStatus;
@@ -241,21 +243,24 @@ describe('a setting a step falls back from', function () {
 });
 
 describe('a URL generator or catalog that does not resolve', function () {
-    it('keeps no flow that builds no link from working', function (string $flow, string $setting, mixed $value) {
+    it('keeps no flow that builds no link from working', function (string $flow, string $contract) {
         $this->withoutExceptionHandling();
 
-        isolationRun($flow, [$setting => $value], $this);
-    })->with(function () {
-        yield from isolationCases(['unsubscribe by token', 'withdraw one purpose', 'one-click unsubscribe', 'leave from the manage page', 'waitlist:prune an abandoned signup'], [
-            'url_generator' => [ConfigKey::UrlGenerator->value, stdClass::class],
-        ]);
+        $act = isolationFlows()[$flow]($this);
+        bindUnreadable($contract);
 
-        yield from isolationCases(['unsubscribe by token', 'withdraw one purpose', 'one-click unsubscribe', 'leave from the manage page'], [
-            'catalog' => [ConfigKey::Catalog->value, stdClass::class],
-        ]);
+        $act();
+    })->with(function () {
+        foreach (['unsubscribe by token', 'withdraw one purpose', 'one-click unsubscribe', 'leave from the manage page', 'waitlist:prune an abandoned signup'] as $flow) {
+            yield "{$flow} / the URL generator" => [$flow, ConfirmationUrlGenerator::class];
+        }
+
+        foreach (['unsubscribe by token', 'withdraw one purpose', 'one-click unsubscribe', 'leave from the manage page'] as $flow) {
+            yield "{$flow} / the catalog" => [$flow, ProjectCatalog::class];
+        }
 
         // Saving purposes reads the wording from the catalog, but no link.
-        yield 'update purposes on the manage page / url_generator' => ['update purposes on the manage page', ConfigKey::UrlGenerator->value, stdClass::class];
+        yield 'update purposes on the manage page / the URL generator' => ['update purposes on the manage page', ConfirmationUrlGenerator::class];
     });
 });
 
@@ -263,10 +268,10 @@ describe('a catalog that does not resolve', function () {
     it('stops waitlist:prune before it deletes anything, as the periods a project promised are unknown', function () {
         isolationSubscribe(confirm: false);
         $this->travel(31)->days();
-        config()->set(ConfigKey::Catalog->value, stdClass::class);
+        bindUnreadable(ProjectCatalog::class);
         $this->withoutExceptionHandling();
 
-        expect(fn () => Artisan::call('waitlist:prune'))->toThrow(InvalidConfigurationException::class, ConfigKey::Catalog->value)
+        expect(fn () => Artisan::call('waitlist:prune'))->toThrow(InvalidConfigurationException::class, ProjectCatalog::class)
             ->and(WaitlistEntry::query()->count())->toBe(1);
     });
 });

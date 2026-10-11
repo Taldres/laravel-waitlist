@@ -149,11 +149,12 @@ and you can bind your own to keep them in a database, see
 When the text lives in your frontend or CMS, register it from there instead of
 copying it into the definition. `StoredWordingCatalog` reads the wording from the
 `waitlist_wordings` table and everything else from `Waitlist::define()`; the
-definition then names the lists and their purposes, and leaves out `purpose()`:
+definition then names the lists and their purposes, and leaves out `purpose()`.
+Bind it in place of the default catalog, as the published provider suggests:
 
 ```php
-// config/waitlist.php
-'catalog' => Taldres\Waitlist\Support\StoredWordingCatalog::class,
+// app/Providers/WaitlistServiceProvider.php, in register()
+$this->app->bind(\Taldres\Waitlist\Contracts\ProjectCatalog::class, \Taldres\Waitlist\Support\StoredWordingCatalog::class);
 ```
 
 Ship the wording with your frontend, purpose => version => text, and sync it on
@@ -180,8 +181,8 @@ php artisan waitlist:wording resources/wording.json [--project=acme] [--retire-m
   longer has.
 
 Switching from wording in the definition? `php artisan waitlist:wording --from-definitions`
-registers what `purpose()` holds, older versions included, before you change
-`waitlist.catalog`.
+registers what `purpose()` holds, older versions included, before you bind
+`StoredWordingCatalog`.
 
 From code, for a CMS webhook for example:
 

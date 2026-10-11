@@ -54,8 +54,9 @@ Why code and not `config/waitlist.php`:
 - **Everything about a project is in one place**, next to the code that uses it.
 
 The config keeps the settings that are about running the waitlist, not about a
-product: double opt-in, retention, rate limits, routes and the bindings, see
-[Configuration](reference/configuration.md).
+product: double opt-in, retention, rate limits, routes and the models, see
+[Configuration](reference/configuration.md). The contracts are bound in the
+container instead, see [Extending](extending.md).
 
 **Read the environment through `config()`, never `env()`.** Once the config is
 cached, `env()` returns `null` outside the config files, so a URL built from it
@@ -443,8 +444,8 @@ class SiteResolver implements ProjectResolver
 ```
 
 ```php
-// config/waitlist.php
-'project_resolver' => App\Waitlist\SiteResolver::class,
+// app/Providers/WaitlistServiceProvider.php, in register()
+$this->app->bind(\Taldres\Waitlist\Contracts\ProjectResolver::class, \App\Waitlist\SiteResolver::class);
 ```
 
 A signup form is public, so the resolver needs no secret: it only decides which
@@ -490,7 +491,7 @@ other combination is possible.
 | | A public form (architecture A) | Your sites' servers with credentials (architecture C) |
 | --- | --- | --- |
 | Who calls | anyone, as a guest | each site's server, with a token of its own |
-| `project_resolver` | the default (one project), or your own from a publishable key or the Origin | `AuthenticatedProjectResolver`: the project follows from the caller |
+| `ProjectResolver` binding | the default (one project), or your own from a publishable key or the Origin | `AuthenticatedProjectResolver`: the project follows from the caller |
 | `authentication.guards` | not needed | the guard that authenticates the server, such as `sanctum` |
 | `authentication.required` | off | on: guests get `401`, callers without a project `403` |
 | `useWaitlist` gate | the default lets everyone through; define it only to restrict | the default keeps a caller to its own project; define it for abilities per action or list |
@@ -575,9 +576,12 @@ class Project extends Model implements Authenticatable, HasWaitlistProject
 ```
 
 ```php
-// config/waitlist.php
-'project_resolver' => Taldres\Waitlist\Support\AuthenticatedProjectResolver::class,
+// app/Providers/WaitlistServiceProvider.php, in register()
+$this->app->bind(\Taldres\Waitlist\Contracts\ProjectResolver::class, \Taldres\Waitlist\Support\AuthenticatedProjectResolver::class);
+```
 
+```php
+// config/waitlist.php
 'authentication' => [
     'guards' => ['sanctum'],   // in this order; the first that authenticates wins
     'required' => true,

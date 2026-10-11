@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Event;
+use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
+use Taldres\Waitlist\Contracts\EmailNormalizer;
+use Taldres\Waitlist\Contracts\ProjectCatalog;
+use Taldres\Waitlist\Contracts\ProjectResolver;
+use Taldres\Waitlist\Contracts\SpamProtector;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\EntryStatus;
 use Taldres\Waitlist\Events\ManageLinkRequested;
@@ -14,10 +19,10 @@ use Taldres\Waitlist\Models\WaitlistEntry;
 
 /*
  * ConfigIsolationTest and FlowIsolationTest break the settings a flow was found
- * to read by mistake. This breaks every setting a flow does not need, at once,
- * so that a new dependency on an unrelated one is found as well. Each flow
- * lists what it needs; a setting that cannot be read is an object, whatever
- * type it wants.
+ * to read by mistake. This breaks every setting and binding a flow does not
+ * need, at once, so that a new dependency on an unrelated one is found as well.
+ * Each flow lists what it needs; a setting that cannot be read is an object,
+ * whatever type it wants.
  */
 
 /**
@@ -43,12 +48,12 @@ function edgeCaseEntry(): WaitlistEntry
  * The settings, and the groups of settings that hold none the flow needs,
  * shallowest first, so that a group broken as a whole is not broken again below.
  *
- * @param  list<ConfigKey>  $needs
+ * @param  list<ConfigKey|class-string>  $needs
  * @return list<string>
  */
 function edgeCaseUnrelated(array $needs): array
 {
-    $needs = array_map(fn (ConfigKey $key): string => $key->value, $needs);
+    $needs = array_map(fn (ConfigKey $key): string => $key->value, array_filter($needs, fn (ConfigKey|string $need): bool => $need instanceof ConfigKey));
     $candidates = [];
 
     foreach (ConfigKey::cases() as $key) {
@@ -76,10 +81,23 @@ function edgeCaseUnrelated(array $needs): array
 }
 
 /**
- * Every flow with the settings it needs, whether it goes over HTTP, and the
- * arrangement that returns the step which must still work.
+ * The contracts the flow does not resolve.
  *
- * @return array<string, array{0: list<ConfigKey>, 1: bool, 2: Closure(mixed): Closure(): void}>
+ * @param  list<ConfigKey|class-string>  $needs
+ * @return list<class-string>
+ */
+function edgeCaseUnusedContracts(array $needs): array
+{
+    $contracts = [ConfirmationUrlGenerator::class, EmailNormalizer::class, ProjectCatalog::class, ProjectResolver::class, SpamProtector::class];
+
+    return array_values(array_diff($contracts, array_filter($needs, is_string(...))));
+}
+
+/**
+ * Every flow with the settings and contracts it needs, whether it goes over
+ * HTTP, and the arrangement that returns the step which must still work.
+ *
+ * @return array<string, array{0: list<ConfigKey|class-string>, 1: bool, 2: Closure(mixed): Closure(): void}>
  */
 function edgeCaseFlows(): array
 {
@@ -87,8 +105,8 @@ function edgeCaseFlows(): array
     // The limits of the links fall back to the shipped ones when they do not read.
     $links = [ConfigKey::RoutesEnabled, ConfigKey::RoutesPrefix, ConfigKey::RoutesName, ConfigKey::RoutesMiddleware, ConfigKey::LinksMiddleware];
     $signup = [ConfigKey::RoutesEnabled, ConfigKey::RoutesPrefix, ConfigKey::RoutesName, ConfigKey::RoutesMiddleware, ConfigKey::SignupMiddleware, ConfigKey::SignupPerMinute];
-    $manageLink = [ConfigKey::ManageTokenTtl, ConfigKey::ManageRequestCooldown, ConfigKey::RoutesEnabled, ConfigKey::EmailNormalizer, ConfigKey::UrlGenerator, ConfigKey::Catalog];
-    $erasure = [ConfigKey::Model, ConfigKey::ActivityModel, ConfigKey::Connection, ConfigKey::EmailNormalizer];
+    $manageLink = [ConfigKey::ManageTokenTtl, ConfigKey::ManageRequestCooldown, ConfigKey::RoutesEnabled, EmailNormalizer::class, ConfirmationUrlGenerator::class, ProjectCatalog::class];
+    $erasure = [ConfigKey::Model, ConfigKey::ActivityModel, ConfigKey::Connection, EmailNormalizer::class];
     $retention = [ConfigKey::RetentionPendingDays, ConfigKey::RetentionUnsubscribedDays, ConfigKey::RetentionRequestMetadataDays];
 
     $manage = fn (): string => Waitlist::manageLink(edgeCaseEntry())->token;
@@ -130,7 +148,7 @@ function edgeCaseFlows(): array
                 $test->getJson("/waitlist/unsubscribe/{$tokens['unsubscribe']}")->assertOk()->assertJsonPath('data.status', EntryStatus::Confirmed->value);
             };
         }],
-        'confirm an issued link' => [[...$store, ConfigKey::UrlGenerator, ConfigKey::Catalog, ConfigKey::RoutesEnabled], false, function ($test): Closure {
+        'confirm an issued link' => [[...$store, ConfirmationUrlGenerator::class, ProjectCatalog::class, ConfigKey::RoutesEnabled], false, function ($test): Closure {
             $tokens = edgeCaseSubscribe(confirm: false);
 
             return function () use ($tokens): void {
@@ -138,7 +156,7 @@ function edgeCaseFlows(): array
                     ->and(edgeCaseEntry()->status)->toBe(EntryStatus::Confirmed);
             };
         }],
-        'confirm an issued link over HTTP' => [[...$store, ...$links, ConfigKey::UrlGenerator, ConfigKey::Catalog], true, function ($test): Closure {
+        'confirm an issued link over HTTP' => [[...$store, ...$links, ConfirmationUrlGenerator::class, ProjectCatalog::class], true, function ($test): Closure {
             $tokens = edgeCaseSubscribe(confirm: false);
 
             return function () use ($test, $tokens): void {
@@ -182,7 +200,7 @@ function edgeCaseFlows(): array
                 Event::assertDispatched(ManageLinkRequested::class);
             };
         }],
-        'manage link requested by address over HTTP' => [[...$store, ...$manageLink, ...$signup, ConfigKey::SpamProtector, ConfigKey::ProjectResolver, ConfigKey::AuthenticationRequired, ConfigKey::AuthenticationGuards], true, function ($test): Closure {
+        'manage link requested by address over HTTP' => [[...$store, ...$manageLink, ...$signup, SpamProtector::class, ProjectResolver::class, ConfigKey::AuthenticationRequired, ConfigKey::AuthenticationGuards], true, function ($test): Closure {
             edgeCaseSubscribe();
             Event::fake([ManageLinkRequested::class]);
 
@@ -192,7 +210,7 @@ function edgeCaseFlows(): array
                 Event::assertDispatched(ManageLinkRequested::class);
             };
         }],
-        'manage link issued for an identified person' => [[ConfigKey::Model, ConfigKey::Connection, ConfigKey::ManageTokenTtl, ConfigKey::RoutesEnabled, ConfigKey::UrlGenerator, ConfigKey::Catalog], false, function ($test): Closure {
+        'manage link issued for an identified person' => [[ConfigKey::Model, ConfigKey::Connection, ConfigKey::ManageTokenTtl, ConfigKey::RoutesEnabled, ConfirmationUrlGenerator::class, ProjectCatalog::class], false, function ($test): Closure {
             edgeCaseSubscribe();
 
             return function (): void {
@@ -209,7 +227,7 @@ function edgeCaseFlows(): array
                 $test->getJson("/waitlist/manage/{$token}")->assertOk()->assertJsonPath('data.status', EntryStatus::Confirmed->value);
             };
         }],
-        'manage page: update purposes' => [[...$store, ...$links, ConfigKey::Catalog], true, function ($test) use ($manage, $newsletterWithdrawn): Closure {
+        'manage page: update purposes' => [[...$store, ...$links, ProjectCatalog::class], true, function ($test) use ($manage, $newsletterWithdrawn): Closure {
             edgeCaseSubscribe();
             $token = $manage();
 
@@ -263,7 +281,7 @@ function edgeCaseFlows(): array
                     ->and(WaitlistEntry::query()->count())->toBe(0);
             };
         }],
-        'waitlist:prune' => [[...$store, ...$retention, ConfigKey::Catalog], false, function ($test): Closure {
+        'waitlist:prune' => [[...$store, ...$retention, ProjectCatalog::class], false, function ($test): Closure {
             subscribeAndCapture('beta', 'pending@example.com');
 
             $left = subscribeAndCapture('beta', 'left@example.com');
@@ -298,7 +316,7 @@ function edgeCaseFlows(): array
             };
         }],
         'waitlist:privacy' => [[
-            ...$retention, ConfigKey::Catalog, ConfigKey::DoubleOptIn, ConfigKey::ResendCooldown, ConfigKey::MaxConfirmations, ConfigKey::MaxPendingPerAddress, ConfigKey::ManageTokenTtl,
+            ...$retention, ProjectCatalog::class, ConfigKey::DoubleOptIn, ConfigKey::ResendCooldown, ConfigKey::MaxConfirmations, ConfigKey::MaxPendingPerAddress, ConfigKey::ManageTokenTtl,
             ConfigKey::StoreIp, ConfigKey::StoreUserAgent, ConfigKey::RoutesEnabled,
         ], false, function ($test): Closure {
             return function (): void {
@@ -306,7 +324,7 @@ function edgeCaseFlows(): array
                     ->and(Artisan::output())->toContain('Waitlist processing record');
             };
         }],
-        'waitlist:show' => [[...$store, ConfigKey::EmailNormalizer], false, function ($test): Closure {
+        'waitlist:show' => [[...$store, EmailNormalizer::class], false, function ($test): Closure {
             edgeCaseSubscribe();
 
             return function (): void {
@@ -322,7 +340,7 @@ function edgeCaseFlows(): array
                     ->and(WaitlistEntry::query()->count())->toBe(0);
             };
         }],
-        'Waitlist::personalData' => [[...$store, ConfigKey::EmailNormalizer], false, function ($test): Closure {
+        'Waitlist::personalData' => [[...$store, EmailNormalizer::class], false, function ($test): Closure {
             edgeCaseSubscribe();
 
             return function (): void {
@@ -333,11 +351,13 @@ function edgeCaseFlows(): array
 }
 
 /**
- * Arranges the flow with a readable config, sets the settings, and runs it.
+ * Arranges the flow with a readable config, sets the settings, breaks the
+ * bindings, and runs it.
  *
  * @param  array<string, mixed>  $settings
+ * @param  list<class-string>  $contracts
  */
-function edgeCaseRun(string $flow, array $settings, mixed $test): void
+function edgeCaseRun(string $flow, array $settings, array $contracts, mixed $test): void
 {
     [, $http, $arrange] = edgeCaseFlows()[$flow];
 
@@ -354,6 +374,10 @@ function edgeCaseRun(string $flow, array $settings, mixed $test): void
         config()->set($path, $value);
     }
 
+    foreach ($contracts as $contract) {
+        bindUnreadable($contract);
+    }
+
     $act();
 }
 
@@ -361,10 +385,11 @@ describe('a flow with every setting it does not read broken at once', function (
     it('still works', function (string $flow) {
         $this->withoutExceptionHandling();
 
-        $unrelated = edgeCaseUnrelated(edgeCaseFlows()[$flow][0]);
+        $needs = edgeCaseFlows()[$flow][0];
+        $unrelated = edgeCaseUnrelated($needs);
 
         expect($unrelated)->not->toBeEmpty();
 
-        edgeCaseRun($flow, array_map(fn (): stdClass => new stdClass, array_flip($unrelated)), $this);
+        edgeCaseRun($flow, array_map(fn (): stdClass => new stdClass, array_flip($unrelated)), edgeCaseUnusedContracts($needs), $this);
     })->with(fn () => array_keys(edgeCaseFlows()));
 });

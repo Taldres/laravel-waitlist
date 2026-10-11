@@ -13,6 +13,7 @@ use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Output\ConsoleSectionOutput;
 use Symfony\Component\Console\Output\OutputInterface;
+use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Events\EntryForgotten;
@@ -296,7 +297,7 @@ it('lists every locale of a version', function () {
 });
 
 it('describes a list without wording yet instead of failing', function () {
-    config()->set(ConfigKey::Catalog->value, StoredWordingCatalog::class);
+    app()->bind(ProjectCatalog::class, StoredWordingCatalog::class);
 
     expect(privacyRecord())->toContain('| default | any other list | — | — | — | The purpose [waitlist] of the waitlist [default/*] has no wording. | — |');
 });

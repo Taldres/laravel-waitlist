@@ -5,11 +5,6 @@ declare(strict_types=1);
 namespace Taldres\Waitlist\Config;
 
 use Illuminate\Support\Carbon;
-use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
-use Taldres\Waitlist\Contracts\EmailNormalizer;
-use Taldres\Waitlist\Contracts\ProjectCatalog;
-use Taldres\Waitlist\Contracts\ProjectResolver;
-use Taldres\Waitlist\Contracts\SpamProtector;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Exports\CsvExporter;
@@ -285,46 +280,6 @@ final class WaitlistConfig
         return ConfigReader::of(config('waitlist'))->stringOrNull(ConfigKey::ClientIpHeader);
     }
 
-    /**
-     * @return class-string<ProjectCatalog>
-     */
-    public static function catalog(): string
-    {
-        return ConfigReader::of(config('waitlist'))->implementation(ConfigKey::Catalog, ProjectCatalog::class);
-    }
-
-    /**
-     * @return class-string<ConfirmationUrlGenerator>
-     */
-    public static function urlGenerator(): string
-    {
-        return ConfigReader::of(config('waitlist'))->implementation(ConfigKey::UrlGenerator, ConfirmationUrlGenerator::class);
-    }
-
-    /**
-     * @return class-string<ProjectResolver>
-     */
-    public static function projectResolver(): string
-    {
-        return ConfigReader::of(config('waitlist'))->implementation(ConfigKey::ProjectResolver, ProjectResolver::class);
-    }
-
-    /**
-     * @return class-string<EmailNormalizer>
-     */
-    public static function emailNormalizer(): string
-    {
-        return ConfigReader::of(config('waitlist'))->implementation(ConfigKey::EmailNormalizer, EmailNormalizer::class);
-    }
-
-    /**
-     * @return class-string<SpamProtector>
-     */
-    public static function spamProtector(): string
-    {
-        return ConfigReader::of(config('waitlist'))->implementation(ConfigKey::SpamProtector, SpamProtector::class);
-    }
-
     public static function export(): ExportConfig
     {
         return new ExportConfig(
@@ -387,11 +342,6 @@ final class WaitlistConfig
             self::guards(...),
             self::authenticationRequired(...),
             self::clientIpHeader(...),
-            self::catalog(...),
-            self::urlGenerator(...),
-            self::projectResolver(...),
-            self::emailNormalizer(...),
-            self::spamProtector(...),
             self::exportSpreadsheetSafe(...),
             self::exportColumns(...),
         ];

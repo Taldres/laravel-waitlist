@@ -4,22 +4,49 @@ Add your own columns, methods and integrations without forking the package.
 
 | You want to | Use |
 | --- | --- |
-| point mail links at a page per list or locale | `ConfirmationUrlGenerator` (`waitlist.url_generator`), see [the SPA example](examples/landing-page-spa.md#2-point-the-mail-links-at-your-pages); one page per project needs only [`urls()`](projects.md#pages) |
-| decide which project an HTTP signup is for | `ProjectResolver` (`waitlist.project_resolver`), see [Projects, lists and fields](projects.md#over-http-tell-the-package-which-project-a-signup-is-for) |
+| point mail links at a page per list or locale | `ConfirmationUrlGenerator`, see [the SPA example](examples/landing-page-spa.md#2-point-the-mail-links-at-your-pages); one page per project needs only [`urls()`](projects.md#pages) |
+| decide which project an HTTP signup is for | `ProjectResolver`, see [Projects, lists and fields](projects.md#over-http-tell-the-package-which-project-a-signup-is-for) |
 | decide who may sign up, read the wording or request a manage link, per project and list | the `useWaitlist` gate, see [Who may call](projects.md#who-may-call-the-usewaitlist-gate) |
-| keep projects, lists, fields, pages and wording in your database | `ProjectCatalog` (`waitlist.catalog`), see [A central waitlist API](examples/central-waitlist-api.md) |
-| check signups for bots | `SpamProtector` (`waitlist.spam_protector`) or `Waitlist::verifySpamUsing()`, see [Securing the endpoints](securing-the-endpoints.md#bot-protection-via-spamprotector) |
-| decide which spellings are the same address | `EmailNormalizer` (`waitlist.email_normalizer`), see [Encryption and keys](encryption-and-keys.md#the-email-normalizer) |
+| keep projects, lists, fields, pages and wording in your database | `ProjectCatalog`, see [A central waitlist API](examples/central-waitlist-api.md) |
+| check signups for bots | `SpamProtector` or `Waitlist::verifySpamUsing()`, see [Securing the endpoints](securing-the-endpoints.md#bot-protection-via-spamprotector) |
+| decide which spellings are the same address | `EmailNormalizer`, see [Encryption and keys](encryption-and-keys.md#the-email-normalizer) |
 | encrypt with a key of your own | `Model::encryptUsing()` for the whole app, `Waitlist::encryptUsing()` for the package only, see [Encryption and keys](encryption-and-keys.md#your-own-encrypter) |
 | put the tables on another database | `waitlist.connection` |
 | send the mails or react to a signup, confirmation or departure | the package's [events](reference/events.md), see [Mail](mail.md) |
 | add columns | [your own models](#your-own-models) |
 | add methods to the API | [macros](#macros) |
 
-Each contract in the table is bound to the class its config key names. A binding
-of your own for the contract, `$this->app->bind(SpamProtector::class, ...)` for
-example, is used instead, whether your provider registers before the package's or
-after it; the config key then names nothing the package resolves.
+Each contract in the table is bound in the container to the package's default
+class. Bind your own in the `register()` method of a service provider, the
+published `WaitlistServiceProvider` for example:
+
+```php
+// app/Providers/WaitlistServiceProvider.php
+use Taldres\Waitlist\Contracts\SpamProtector;
+
+public function register(): void
+{
+    $this->app->bind(SpamProtector::class, \App\Waitlist\TurnstileProtector::class);
+}
+```
+
+Use `bind()`. The package binds its defaults with `bindIf()` when it registers,
+which Laravel does before your providers: your `bind()` then replaces the
+default, while a `bindIf()` of yours would find the contract bound and leave the
+default in place. A binding made before the package registers is kept. On the
+signup and the manage link by address, a closure from `Waitlist::verifySpamUsing()`
+wins over the bound `SpamProtector`, which is then not even built;
+`app(SpamProtector::class)` still resolves the bound class.
+
+`config/waitlist.php` no longer reads `catalog`, `url_generator`,
+`project_resolver`, `email_normalizer` or `spam_protector`. Remove them from a
+config published before. One that still holds anything but the package's
+default, null included, would change what the package does if it were ignored, the project of a
+signup or the lookup hash for example. So until you bind the contract yourself,
+resolving it throws an `InvalidConfigurationException` that names the key, and
+`waitlist:check` fails on the key until you remove it. One that holds the
+default, as `waitlist:install` published it, changes nothing and is only warned
+of.
 
 ## Your own models
 
@@ -123,9 +150,9 @@ invitation and a macro that invites the next people in line.
 
 ## What stays supported
 
-The table above, your own models, the events and the macros are the supported
-extension points. A change to one of them is a breaking change and is called
-out in the changelog. `DefinedProjectCatalog` and `StoredWordingCatalog` count
+The table above, with each contract bound in the container, your own models, the
+events and the macros are the supported extension points. A change to one of
+them is a breaking change and is called out in the changelog. `DefinedProjectCatalog` and `StoredWordingCatalog` count
 among them as base classes for a catalog of your own, as
 [A central waitlist API](examples/central-waitlist-api.md) shows.
 

@@ -106,8 +106,8 @@ class SiteResolver implements ProjectResolver
 ```
 
 ```php
-// config/waitlist.php
-'project_resolver' => App\Waitlist\SiteResolver::class,
+// app/Providers/WaitlistServiceProvider.php, in register()
+$this->app->bind(\Taldres\Waitlist\Contracts\ProjectResolver::class, \App\Waitlist\SiteResolver::class);
 ```
 
 - A signup without `list` goes to `waitlist.default_list` (`default`) of the
@@ -136,7 +136,7 @@ it and are limited as a guest's request then.
   whichever provider boots first. Return a bool or a gate response;
   `Response::denyWithStatus(401)` and `denyAsNotFound()` reach the client.
 - Servers calling with tokens of their own: the token's model implements
-  `HasWaitlistProject`, `project_resolver` is `AuthenticatedProjectResolver`
+  `HasWaitlistProject`, `ProjectResolver` is bound to `AuthenticatedProjectResolver`
   (`401` without a caller, `403` without a project or for an undefined one),
   `authentication.guards` names the token guard, `authentication.required` is on.
   Issuing and revoking the tokens stays with the app (Sanctum, Passport, a JWT
@@ -178,7 +178,7 @@ the default project; `waitlist:export`, `waitlist:wording` and
 ### 6. Projects in a database
 
 For projects that come and go at runtime, or manage their own lists and wording,
-bind a `ProjectCatalog` (`waitlist.catalog`), usually extending
+bind a `ProjectCatalog` in a provider's `register()`, usually extending
 `StoredWordingCatalog`, with `policy()`, `fields()` (field => rules; stored rules
 can only be strings), `urlPattern()`, `manageLinks()`, `origins()` (a list, empty for any), `periods()` (a `ProjectPeriods`, `new ProjectPeriods` for none), `projects()` (must include
 `default`) and `lists()`, plus a resolver that maps a publishable key to a project. A catalog of
@@ -191,9 +191,9 @@ your own replaces the definitions. Projects register wording with
   isolation. Serving other companies' waitlists needs contracts, separation and
   per-customer keys that projects do not provide.
 - A withdrawal never reaches another project.
-- `waitlist.project_resolver` and `waitlist.catalog` name a class that implements
-  the contract, or an interface or abstract class your app binds in the container;
-  the contract itself and a class the container cannot build are refused.
+- Bind `ProjectResolver` and `ProjectCatalog` with `$this->app->bind()` in a
+  provider's `register()`; the package binds its defaults with `bindIf()` first,
+  so a `bindIf()` of yours is ignored.
 - Guides: https://github.com/Taldres/laravel-waitlist/blob/main/docs/projects.md,
   https://github.com/Taldres/laravel-waitlist/blob/main/docs/examples/several-products.md,
   https://github.com/Taldres/laravel-waitlist/blob/main/docs/examples/central-waitlist-api.md

@@ -543,8 +543,8 @@ either. There are two ways to plug in your own check.
 
 ### The quick path: a closure
 
-Register a closure in your `AppServiceProvider::boot()` — no class, no config
-change. This example verifies Cloudflare Turnstile using Laravel's own `Http`
+Register a closure in your `AppServiceProvider::boot()` — no class, no
+binding. This example verifies Cloudflare Turnstile using Laravel's own `Http`
 facade, so it needs no extra dependency:
 
 ```php
@@ -573,8 +573,11 @@ public function boot(): void
 }
 ```
 
-A registered closure always wins over the `waitlist.spam_protector` config
-key; pass `null` to remove it and fall back to the configured class again.
+On these two endpoints a registered closure always wins over the bound
+`SpamProtector`, a class of your own included, which is then not even built, so
+a test can bypass a protector that needs a secret it lacks. Pass `null` to remove
+the closure and fall back to the bound class again. The binding itself stays:
+`app(SpamProtector::class)` resolves the bound class either way.
 
 ### The class path: implement the contract
 
@@ -611,8 +614,8 @@ class TurnstileProtector implements SpamProtector
 ```
 
 ```php
-// config/waitlist.php
-'spam_protector' => App\Waitlist\TurnstileProtector::class,
+// app/Providers/WaitlistServiceProvider.php, in register()
+$this->app->bind(\Taldres\Waitlist\Contracts\SpamProtector::class, \App\Waitlist\TurnstileProtector::class);
 ```
 
 Either way, a failed check returns `422 {"message": "Spam check failed.", "error": "spam_check_failed"}`,
@@ -629,4 +632,6 @@ one that verifies it. Doing both refuses every signup with `Spam check failed.`.
 
 **Scope:** the protector guards only the package's HTTP endpoint. Actions and
 your own controllers are never affected. If you build your own controller
-(architecture B), inject and consult the protector yourself.
+(architecture B), consult the protector yourself with `Waitlist::spamProtector()`,
+which is the closure from `verifySpamUsing()` while one is set and the bound class
+otherwise; an injected `SpamProtector` is always the bound class.

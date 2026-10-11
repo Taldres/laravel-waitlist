@@ -8,10 +8,6 @@ use Illuminate\Support\Facades\Exceptions;
 use Taldres\Waitlist\Actions\PruneEntries;
 use Taldres\Waitlist\Config\PackageConfig;
 use Taldres\Waitlist\Config\WaitlistConfig;
-use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
-use Taldres\Waitlist\Contracts\EmailNormalizer;
-use Taldres\Waitlist\Contracts\ProjectCatalog;
-use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Contracts\SpamProtector;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Enums\ConfigKey;
@@ -22,11 +18,6 @@ use Taldres\Waitlist\Models\WaitlistActivity;
 use Taldres\Waitlist\Models\WaitlistConsent;
 use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Models\WaitlistSubscription;
-use Taldres\Waitlist\Support\DefaultConfirmationUrlGenerator;
-use Taldres\Waitlist\Support\DefaultEmailNormalizer;
-use Taldres\Waitlist\Support\DefaultProjectResolver;
-use Taldres\Waitlist\Support\DefinedProjectCatalog;
-use Taldres\Waitlist\Support\NullSpamProtector;
 use Taldres\Waitlist\WaitlistServiceProvider;
 
 describe('the defaults', function () {
@@ -61,11 +52,6 @@ describe('the defaults', function () {
             ->and(WaitlistConfig::guards())->toBe([null])
             ->and(WaitlistConfig::authenticationRequired())->toBeFalse()
             ->and(WaitlistConfig::clientIpHeader())->toBeNull()
-            ->and(WaitlistConfig::catalog())->toBe(DefinedProjectCatalog::class)
-            ->and(WaitlistConfig::urlGenerator())->toBe(DefaultConfirmationUrlGenerator::class)
-            ->and(WaitlistConfig::projectResolver())->toBe(DefaultProjectResolver::class)
-            ->and(WaitlistConfig::emailNormalizer())->toBe(DefaultEmailNormalizer::class)
-            ->and(WaitlistConfig::spamProtector())->toBe(NullSpamProtector::class)
             ->and(WaitlistConfig::export()->spreadsheetSafe)->toBeTrue()
             ->and(WaitlistConfig::export()->columns)->toBe(['id', 'list', 'email', 'status', 'purposes', 'confirmed_at', 'unsubscribed_at', 'metadata', 'created_at']);
     });
@@ -178,8 +164,6 @@ describe('a value that does not fit', function () {
         'columns that are not names' => [ConfigKey::ExportColumns, ['email', 5], 'The waitlist.export.columns config must be a list of column names, got array.'],
         'columns that may not be exported' => [ConfigKey::ExportColumns, ['email', 'confirm_token_hash'], 'The waitlist.export.columns config lists columns that may not be exported: confirm_token_hash.'],
         'a model that is not a waitlist model' => [ConfigKey::ConsentModel, stdClass::class, 'The waitlist.consent_model config must point to a '.WaitlistConsent::class.' subclass.'],
-        'the contract itself for a class' => [ConfigKey::EmailNormalizer, EmailNormalizer::class, 'The waitlist.email_normalizer config must name a class that implements '.EmailNormalizer::class.', not the contract itself.'],
-        'a class that does not implement its contract' => [ConfigKey::ProjectResolver, stdClass::class, 'The waitlist.project_resolver config must point to a Taldres\Waitlist\Contracts\ProjectResolver implementation.'],
         'a group that is not an array' => ['waitlist.double_opt_in', 'on', 'The waitlist.double_opt_in config must be an array of settings, got string.'],
         'a nested group that is null' => ['waitlist.routes.rate_limits', null, 'The waitlist.routes.rate_limits config must be an array of settings, got null.'],
     ]);
@@ -195,31 +179,6 @@ describe('a value that does not fit', function () {
 
         WaitlistConfig::manageTokenTtl();
     })->throws(InvalidConfigurationException::class, 'The waitlist.manage.token_ttl config is missing. If the config is cached, cache it again with php artisan config:cache.');
-
-    it('is refused before the container hands out the binding', function () {
-        config()->set(ConfigKey::EmailNormalizer->value, stdClass::class);
-
-        app(EmailNormalizer::class);
-    })->throws(InvalidConfigurationException::class, 'The waitlist.email_normalizer config must point to a Taldres\Waitlist\Contracts\EmailNormalizer implementation.');
-
-    it('is refused when the container resolves the class to something without the contract', function () {
-        app()->bind(DefaultEmailNormalizer::class, fn () => new stdClass);
-
-        app(EmailNormalizer::class);
-    })->throws(InvalidConfigurationException::class, 'The container resolves '.DefaultEmailNormalizer::class.' to something that is not a Taldres\Waitlist\Contracts\EmailNormalizer.');
-
-    it('lets the container resolve the class to a decorator that keeps the contract', function () {
-        $decorator = new class implements EmailNormalizer
-        {
-            public function normalize(string $email): string
-            {
-                return strtolower($email);
-            }
-        };
-        app()->bind(DefaultEmailNormalizer::class, fn () => $decorator);
-
-        expect(app(EmailNormalizer::class))->toBe($decorator);
-    });
 });
 
 describe('a name', function () {
@@ -244,35 +203,12 @@ describe('a name', function () {
     });
 });
 
-describe('a binding', function () {
-    it('is refused when it names the contract itself, by its accessor and by the full check', function (ConfigKey $key, string $contract, string $accessor) {
-        config()->set($key->value, $contract);
-
-        expect(fn () => WaitlistConfig::{$accessor}())->toThrow(InvalidConfigurationException::class, "The {$key->value} config must name a class that implements {$contract}, not the contract itself.")
-            ->and(fn () => checkWaitlistConfig())->toThrow(InvalidConfigurationException::class, $key->value);
-    })->with([
-        'the email normalizer' => [ConfigKey::EmailNormalizer, EmailNormalizer::class, 'emailNormalizer'],
-        'the url generator' => [ConfigKey::UrlGenerator, ConfirmationUrlGenerator::class, 'urlGenerator'],
-        'the catalog' => [ConfigKey::Catalog, ProjectCatalog::class, 'catalog'],
-        'the project resolver' => [ConfigKey::ProjectResolver, ProjectResolver::class, 'projectResolver'],
-        'the spam protector' => [ConfigKey::SpamProtector, SpamProtector::class, 'spamProtector'],
-    ]);
-
-    it('may name another interface or an abstract class, which the app can bind in the container', function (string $class) {
-        config()->set(ConfigKey::EmailNormalizer->value, $class);
-
-        expect(WaitlistConfig::emailNormalizer())->toBe($class);
-
-        checkWaitlistConfig();
-    })->with([WaitlistConfigAppNormalizer::class, WaitlistConfigAbstractNormalizer::class]);
-});
-
 describe('a mistake in one setting', function () {
     it('never keeps a person from unsubscribing', function () {
         $tokens = subscribeAndCapture('beta', 'user@example.com');
 
         config()->set(ConfigKey::ExportColumns->value, ['email', 'unsubscribe_token']);
-        config()->set(ConfigKey::SpamProtector->value, stdClass::class);
+        bindUnreadable(SpamProtector::class);
         config()->set(ConfigKey::SignupPerMinute->value, 'many');
         config()->set(ConfigKey::MaxPendingPerAddress->value, 0);
         config()->set(ConfigKey::DefaultList->value, '');
@@ -288,7 +224,7 @@ describe('a mistake in one setting', function () {
         $tokens = subscribeAndCapture('beta', 'user@example.com');
 
         config()->set(ConfigKey::ExportColumns->value, ['email', 'unsubscribe_token']);
-        config()->set(ConfigKey::SpamProtector->value, stdClass::class);
+        bindUnreadable(SpamProtector::class);
         config()->set(ConfigKey::SignupPerMinute->value, 'many');
         config()->set(ConfigKey::CallerSignupPerMinute->value, 0);
 
@@ -566,10 +502,6 @@ abstract class WaitlistConfigAbstractConsent extends WaitlistConsent {}
 abstract class WaitlistConfigAbstractActivity extends WaitlistActivity {}
 
 class WaitlistConfigReplacementEntry extends WaitlistEntry {}
-
-interface WaitlistConfigAppNormalizer extends EmailNormalizer {}
-
-abstract class WaitlistConfigAbstractNormalizer implements EmailNormalizer {}
 
 describe('a model that cannot be instantiated', function () {
     it('is refused for every model setting', function (ConfigKey $key, string $accessor, string $abstract) {

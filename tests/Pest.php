@@ -10,6 +10,7 @@ use Taldres\Waitlist\Enums\ActivityType;
 use Taldres\Waitlist\Enums\ConfirmationOutcome;
 use Taldres\Waitlist\Enums\EntryStatus;
 use Taldres\Waitlist\Events\EntrySubscribed;
+use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Facades\Waitlist;
 use Taldres\Waitlist\Models\WaitlistActivity;
 use Taldres\Waitlist\Models\WaitlistConsent;
@@ -31,6 +32,18 @@ function checkWaitlistConfig(): void
     if ($problems !== []) {
         throw $problems[0];
     }
+}
+
+/**
+ * Binds the contract to an implementation that fails the way the package's
+ * own do when a setting or definition they read is wrong: with a
+ * configuration error, wherever the contract is resolved.
+ *
+ * @param  class-string  $contract
+ */
+function bindUnreadable(string $contract): void
+{
+    app()->bind($contract, fn (): never => throw new InvalidConfigurationException("The {$contract} binding cannot read its configuration."));
 }
 
 /**

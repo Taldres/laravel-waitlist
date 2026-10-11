@@ -86,8 +86,10 @@ class WaitlistManager
     }
 
     /**
-     * Replaces the configured spam protector on the signup and on a manage link
-     * requested by address; null restores waitlist.spam_protector.
+     * Replaces the bound spam protector on the signup and on a manage link
+     * requested by address, the package endpoints; null restores it. The
+     * binding itself stays as it is: app(SpamProtector::class) still resolves
+     * the bound class.
      *
      * @param  (Closure(Request): bool)|null  $callback
      */
@@ -99,11 +101,14 @@ class WaitlistManager
     }
 
     /**
-     * @internal
+     * The protector the package endpoints ask: the closure, while one is
+     * registered, without building the bound class, which may need secrets a
+     * test that bypasses it lacks. Ask it in your own controller to apply the
+     * same check.
      */
-    public function spamProtector(): ?SpamProtector
+    public function spamProtector(): SpamProtector
     {
-        return $this->spamCheck === null ? null : new ClosureSpamProtector($this->spamCheck);
+        return $this->spamCheck === null ? app(SpamProtector::class) : new ClosureSpamProtector($this->spamCheck);
     }
 
     /**

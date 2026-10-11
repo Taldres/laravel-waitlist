@@ -172,9 +172,9 @@ the test, so the guest request would still see the server.
 ```php
 use Taldres\Waitlist\Events\EntryForgotten;
 
-Waitlist::verifySpamUsing(fn () => true);    // bypass Turnstile & co. in tests
+Waitlist::verifySpamUsing(fn () => true);    // bypass Turnstile & co. in tests, without building it
 Waitlist::verifySpamUsing(fn () => false);   // assert the 422 with `error: spam_check_failed`
-Waitlist::verifySpamUsing(null);             // back to the configured protector
+Waitlist::verifySpamUsing(null);             // back to the bound protector
 
 Event::fake([EntryForgotten::class]);
 Waitlist::allProjects()->forget('jane@example.com');

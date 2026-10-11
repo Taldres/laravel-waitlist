@@ -9,6 +9,21 @@ use Taldres\Waitlist\Facades\Waitlist;
 class WaitlistServiceProvider extends ServiceProvider
 {
     /**
+     * Swap a part of the package by binding its contract, see
+     * docs/extending.md. Use bind(): the package registers its defaults
+     * first, so a bindIf() here would leave them in place.
+     */
+    public function register(): void
+    {
+        // Read the wording registered with waitlist:wording, or sent by your
+        // projects' servers, instead of the purpose() texts below; everything
+        // else still comes from the definitions. A catalog of your own, over a
+        // database for example, also decides double opt-in per list
+        // (ListPolicy::$doubleOptIn) instead of double_opt_in.enabled.
+        // $this->app->bind(\Taldres\Waitlist\Contracts\ProjectCatalog::class, \Taldres\Waitlist\Support\StoredWordingCatalog::class);
+    }
+
+    /**
      * Describe your waitlist: what people can agree to, the lists they can
      * join, the fields a signup may carry and the pages your mails link to.
      *

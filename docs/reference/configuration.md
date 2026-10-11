@@ -57,9 +57,9 @@ back instead, and each mistake is reported once per request, job or command:
 - guards or a client IP header that do not resolve treat a token link as a
   guest's request, limited by its address; the signup and the gate still
   refuse them;
-- an email normalizer that does not work ends the entry the token names but
-  cannot find the address's other lists, so it stays on them until it leaves
-  again; the failed sweep is reported;
+- an email normalizer that throws an `InvalidConfigurationException` ends the
+  entry the token names but cannot find the address's other lists, so it stays
+  on them until it leaves again; the failed sweep is reported;
 - a catalog that does not read answers a browser in JSON instead of sending it
   to your page;
 - `rate_limits.link_per_minute` or `links_per_ip_per_minute` that do not read
@@ -87,12 +87,15 @@ are registered when the app boots, so turn them on in `phpunit.xml` or
 
 Projects, their purposes, lists, fields and pages are not configured here: you
 describe them with `Waitlist::define()` in a service provider, see
-[Projects, lists and fields](../projects.md). The config only decides where they
-come from.
+[Projects, lists and fields](../projects.md). They come from the `ProjectCatalog`
+bound in the container, `DefinedProjectCatalog` by default, which reads the
+definitions. Bind `StoredWordingCatalog` to read the wording from
+`waitlist:wording` and the rest from the definitions, or a catalog of your own,
+which replaces the definitions and decides double opt-in per list; see
+[Extending](../extending.md).
 
 | Key | Default | What it is |
 | --- | --- | --- |
-| `catalog` | `DefinedProjectCatalog` | Where projects, lists, wording, fields and pages come from. The default reads `Waitlist::define()`; `StoredWordingCatalog` reads the wording from `waitlist:wording` and the rest from the definitions; your own catalog replaces the definitions and decides double opt-in per list |
 | `default_list` | `default` | The list the HTTP endpoints use when a request names none |
 | `wording.require_hash` | `WAITLIST_REQUIRE_WORDING_HASH`, off | Refuse a purpose choice that is recorded without the hash of the text shown; keeping or withdrawing a purpose needs none |
 
@@ -161,19 +164,29 @@ never need credentials.
 | `required` | `WAITLIST_AUTHENTICATION_REQUIRED` | off | the default `useWaitlist` gate refuses guests (`401`) and callers without a project (`403`); a gate of your own decides for itself |
 | `client_ip_header` | `WAITLIST_CLIENT_IP_HEADER` | `null` | the header in which servers calling for a project forward their visitor's address, e.g. `X-Waitlist-Client-Ip`: limits per visitor and the recorded IP use it; never read from guests; empty is unset |
 
-## Bindings
+## Models
 
-Swap in your own implementation; see [Extending](../extending.md). A binding
-names a class, or an interface or abstract class your app binds in the
-container; the contract itself and a model class that is abstract are refused.
+Swap in your own subclasses; see [Extending](../extending.md#your-own-models). A
+model class that is abstract is refused.
 
 | Key | Default | Decides |
 | --- | --- | --- |
 | `model`, `subscription_model`, `consent_model`, `activity_model` | the package models | the Eloquent models, for extra columns |
-| `url_generator` | `DefaultConfirmationUrlGenerator` | the confirm, unsubscribe and manage URLs in mails |
-| `project_resolver` | `DefaultProjectResolver`, always `default` | which project an HTTP signup is for; `AuthenticatedProjectResolver` takes it from the caller |
-| `email_normalizer` | `DefaultEmailNormalizer`, lowercase and trim | which spellings are the same address; part of the lookup hash |
-| `spam_protector` | `NullSpamProtector`, accepts all | the bot check on the signup and manage links by address |
+
+The contracts are not configured here: the package binds its defaults in the
+container, and a `bind()` in a provider of yours replaces them, see
+[Extending](../extending.md). A `catalog`, `url_generator`, `project_resolver`,
+`email_normalizer` or `spam_protector` key left in a config published before is
+not read; while it holds anything but the default below, null included, the
+package refuses to resolve the default in its place.
+
+| Contract | Default | Decides |
+| --- | --- | --- |
+| `ConfirmationUrlGenerator` | `DefaultConfirmationUrlGenerator` | the confirm, unsubscribe and manage URLs in mails |
+| `ProjectResolver` | `DefaultProjectResolver`, always `default` | which project an HTTP signup is for; `AuthenticatedProjectResolver` takes it from the caller |
+| `EmailNormalizer` | `DefaultEmailNormalizer`, lowercase and trim | which spellings are the same address; part of the lookup hash |
+| `SpamProtector` | `NullSpamProtector`, accepts all | the bot check on the signup and manage links by address; a closure from `Waitlist::verifySpamUsing()` wins there |
+| `ProjectCatalog` | `DefinedProjectCatalog` | where projects, lists, wording, fields and pages come from, see [Projects and wording](#projects-and-wording) |
 
 ## CSV export: `export`
 

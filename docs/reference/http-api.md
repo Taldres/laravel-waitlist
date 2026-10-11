@@ -172,8 +172,8 @@ the `422` names `list`. See [Fields](../projects.md#fields).
 ## Projects and who may call
 
 The signup, the wording and a manage link requested by address act for the
-project a `ProjectResolver` picks (`waitlist.project_resolver`). The default
-always picks `default`; with several projects, bind your own, see
+project the bound `ProjectResolver` picks. The default always picks `default`;
+with several projects, bind your own, see
 [Projects, lists and fields](../projects.md#over-http-tell-the-package-which-project-a-signup-is-for).
 Token links need none, since every token belongs to an entry.
 

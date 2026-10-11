@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Auth\GenericUser;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Facades\Waitlist;
@@ -31,7 +32,7 @@ beforeEach(function () {
     config()->set(ConfigKey::RoutesEnabled->value, true);
     config()->set(ConfigKey::RoutesMiddleware->value, []);
     config()->set(ConfigKey::SignupMiddleware->value, ['auth:bearer']);
-    config()->set(ConfigKey::ProjectResolver->value, AuthenticatedProjectResolver::class);
+    app()->bind(ProjectResolver::class, AuthenticatedProjectResolver::class);
     config()->set(ConfigKey::CallerSignupPerMinute->value, 2);
 
     require __DIR__.'/../../routes/waitlist.php';

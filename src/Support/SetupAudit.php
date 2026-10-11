@@ -9,15 +9,18 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Taldres\Waitlist\Config\WaitlistConfig;
+use Taldres\Waitlist\Contracts\SpamProtector;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Http\RouteRegistration;
 use Taldres\Waitlist\Models\WaitlistWording;
+use Taldres\Waitlist\WaitlistManager;
+use Throwable;
 
 /**
  * What goes wrong without a sound in a setup: a setting the package does not
- * read, such as a typo, and a table or column its migrations create that the
- * database lacks.
+ * read, such as a typo, a binding the container cannot resolve, and a table or
+ * column its migrations create that the database lacks.
  *
  * @internal
  */
@@ -84,6 +87,47 @@ final class SetupAudit
         }
 
         return $problems;
+    }
+
+    /**
+     * Each contract the container cannot resolve, or resolves to something
+     * that does not implement it, as a binding names a class in plain PHP that
+     * no setting checks. The spam protector is the one the endpoints use.
+     *
+     * @return list<string>
+     */
+    public static function bindingProblems(): array
+    {
+        $problems = [];
+        // A refused key is reported with the settings, not once more for each
+        // contract whose default needs it.
+        $refusals = array_filter(array_map(ReplacedBindings::refusal(...), array_keys(ReplacedBindings::KEYS)));
+
+        foreach (ReplacedBindings::KEYS as [$contract]) {
+            try {
+                $resolved = self::resolve($contract);
+            } catch (Throwable $exception) {
+                if (! in_array($exception->getMessage(), $refusals, true)) {
+                    $problems[] = "{$contract} cannot be resolved: ".$exception->getMessage();
+                }
+
+                continue;
+            }
+
+            if (! $resolved instanceof $contract) {
+                $problems[] = "{$contract} resolves to ".get_debug_type($resolved).', which does not implement it.';
+            }
+        }
+
+        return $problems;
+    }
+
+    /**
+     * Whatever the app's binding hands out, which nothing typed has checked yet.
+     */
+    private static function resolve(string $contract): mixed
+    {
+        return $contract === SpamProtector::class ? app(WaitlistManager::class)->spamProtector() : app($contract);
     }
 
     /**
