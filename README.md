@@ -12,6 +12,9 @@
 ![PHP](https://img.shields.io/badge/PHP-8.3%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
+> [!WARNING]
+> This package is under active development. Until a stable release it can change at any time, and breaking changes will happen, without a deprecation period. Pin the exact version you install.
+
 An API-first Laravel package for waitlists and early access: double opt-in,
 consent recorded per purpose, token-based confirm, unsubscribe and preference
 flows, retention periods, events, CSV export and daily reporting. It ships no
