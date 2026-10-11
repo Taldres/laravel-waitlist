@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Support;
 
+use DateTimeInterface;
 use Illuminate\Contracts\Support\Arrayable;
-use Illuminate\Support\Carbon;
 use JsonSerializable;
 use Taldres\Waitlist\Models\WaitlistConsent;
 
@@ -19,8 +19,8 @@ final readonly class ConsentRecord implements Arrayable, JsonSerializable
         public string $version,
         public ?string $locale,
         public string $text,
-        public Carbon $grantedAt,
-        public ?Carbon $withdrawnAt,
+        public DateTimeInterface $grantedAt,
+        public ?DateTimeInterface $withdrawnAt,
     ) {}
 
     public static function fromModel(WaitlistConsent $consent): self

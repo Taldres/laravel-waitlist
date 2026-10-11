@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Taldres\Waitlist\Support;
 
 use Carbon\CarbonImmutable;
+use DateTimeInterface;
 use Illuminate\Contracts\Support\Arrayable;
-use Illuminate\Support\Carbon;
 use JsonSerializable;
 use Taldres\Waitlist\Enums\ActivityType;
 use Taldres\Waitlist\Models\WaitlistActivity;
@@ -23,7 +23,7 @@ final readonly class ActivityRecord implements Arrayable, JsonSerializable
         public ActivityType $type,
         public ?string $purpose,
         public ?string $reference,
-        public ?Carbon $occurredAt,
+        public ?DateTimeInterface $occurredAt,
         public CarbonImmutable $occurredOn,
         public ?string $ip,
         public ?string $userAgent,

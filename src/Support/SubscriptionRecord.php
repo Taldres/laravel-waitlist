@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Support;
 
+use DateTimeInterface;
 use Illuminate\Contracts\Support\Arrayable;
-use Illuminate\Support\Carbon;
 use JsonSerializable;
 use Taldres\Waitlist\Enums\EndReason;
 use Taldres\Waitlist\Models\WaitlistConsent;
@@ -22,10 +22,10 @@ final readonly class SubscriptionRecord implements Arrayable, JsonSerializable
     public function __construct(
         public int $sequence,
         public array $consents,
-        public Carbon $startedAt,
+        public DateTimeInterface $startedAt,
         public int $confirmationCount,
-        public ?Carbon $confirmedAt,
-        public ?Carbon $endedAt,
+        public ?DateTimeInterface $confirmedAt,
+        public ?DateTimeInterface $endedAt,
         public ?EndReason $endReason,
     ) {}
 

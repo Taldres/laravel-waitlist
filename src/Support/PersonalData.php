@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Support;
 
+use DateTimeInterface;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
@@ -35,8 +36,8 @@ final readonly class PersonalData implements Arrayable, JsonSerializable
         public array $subscriptions,
         public array $activity,
         public array $metadata,
-        public Carbon $createdAt,
-        public Carbon $updatedAt,
+        public DateTimeInterface $createdAt,
+        public DateTimeInterface $updatedAt,
     ) {}
 
     public static function fromEntry(WaitlistEntry $entry): self
