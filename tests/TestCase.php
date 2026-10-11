@@ -14,11 +14,40 @@ use Taldres\Waitlist\WaitlistServiceProvider;
 
 abstract class TestCase extends Orchestra
 {
+    /**
+     * Handles onto the test database besides the default one, for concurrency
+     * tests to act through.
+     */
+    private const ACTORS = ['waitlist_a', 'waitlist_b'];
+
+    /**
+     * Children before the tables they reference, as deleting rows needs them.
+     */
+    private const TABLES = [
+        'waitlist_activity',
+        'waitlist_consents',
+        'waitlist_subscriptions',
+        'waitlist_entries',
+        'waitlist_wordings',
+    ];
+
+    /**
+     * A server database keeps its tables, so its schema is built once per
+     * process. The memory database of SQLite starts empty with every test.
+     */
+    private static bool $serverSchemaBuilt = false;
+
+    private bool $alteredSchema = false;
+
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->migrateWaitlist();
+        if (static::usesServerDatabase()) {
+            $this->prepareServerDatabase();
+        } else {
+            $this->migrateWaitlist();
+        }
 
         Waitlist::define(static::defineTestProject(...));
     }
@@ -53,15 +82,73 @@ abstract class TestCase extends Orchestra
      */
     protected function tearDown(): void
     {
-        foreach (array_keys($this->app['db']->getConnections()) as $connection) {
-            $this->app['db']->disconnect($connection);
-        }
+        try {
+            if (static::usesServerDatabase()) {
+                $this->emptyServerDatabase();
+            }
+        } finally {
+            foreach (array_keys($this->app['db']->getConnections()) as $connection) {
+                $this->app['db']->disconnect($connection);
+            }
 
-        parent::tearDown();
+            parent::tearDown();
+        }
     }
 
     /**
-     * Down first: server databases keep tables between tests.
+     * The first test builds the schema, and so does the first one after a test
+     * that changed it.
+     */
+    private function prepareServerDatabase(): void
+    {
+        if (! self::$serverSchemaBuilt) {
+            $this->migrateWaitlist();
+
+            self::$serverSchemaBuilt = true;
+        }
+
+        // A connection calls its own hooks, whatever an Event::fake() did to
+        // the dispatcher; the handles only connect with their first query.
+        foreach (['testing', ...self::ACTORS] as $name) {
+            $this->app['db']->connection($name)->beforeExecuting(function (string $query): void {
+                if (preg_match('/^\s*(create|alter|drop|truncate|rename)\b/i', $query) === 1) {
+                    $this->alteredSchema = true;
+                }
+            });
+        }
+    }
+
+    /**
+     * Rows go and the tables stay: rebuilding the schema takes a dozen DDL
+     * statements, which a server runs far slower than SQLite does.
+     */
+    private function emptyServerDatabase(): void
+    {
+        if ($this->alteredSchema) {
+            self::$serverSchemaBuilt = false;
+
+            return;
+        }
+
+        // What a failed test left open would make the deletes wait for its locks.
+        foreach ($this->app['db']->getConnections() as $connection) {
+            while ($connection->transactionLevel() > 0) {
+                $connection->rollBack();
+            }
+        }
+
+        // Rows a failed delete leaves behind are gone with the next rebuild.
+        self::$serverSchemaBuilt = false;
+
+        foreach (self::TABLES as $table) {
+            $this->app['db']->connection('testing')->table($table)->delete();
+        }
+
+        self::$serverSchemaBuilt = true;
+    }
+
+    /**
+     * Down first: server databases keep tables between runs.
      */
     protected function migrateWaitlist(): void
     {
@@ -97,7 +184,7 @@ abstract class TestCase extends Orchestra
 
         // Two more handles onto the same database, so concurrency tests can act
         // as independent clients with their own snapshots and row locks.
-        foreach (['waitlist_a', 'waitlist_b'] as $actor) {
+        foreach (self::ACTORS as $actor) {
             $app['config']->set("database.connections.{$actor}", static::connectionConfig());
         }
     }
