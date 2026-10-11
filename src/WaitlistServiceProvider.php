@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist;
 
+use Closure;
+use Composer\InstalledVersions;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Foundation\CachesConfiguration;
 use Illuminate\Contracts\Http\Kernel as HttpKernel;
+use Illuminate\Foundation\Console\AboutCommand;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
@@ -20,6 +23,7 @@ use Taldres\Waitlist\Auth\WaitlistGate;
 use Taldres\Waitlist\Config\ConfigFallback;
 use Taldres\Waitlist\Config\PackageConfig;
 use Taldres\Waitlist\Config\WaitlistConfig;
+use Taldres\Waitlist\Console\Commands\CheckCommand;
 use Taldres\Waitlist\Console\Commands\ExportCommand;
 use Taldres\Waitlist\Console\Commands\ForgetCommand;
 use Taldres\Waitlist\Console\Commands\InstallCommand;
@@ -142,7 +146,10 @@ class WaitlistServiceProvider extends ServiceProvider
             }
         });
 
+        AboutCommand::add('Laravel Waitlist', static fn (): array => self::about());
+
         $this->commands([
+            CheckCommand::class,
             ExportCommand::class,
             ForgetCommand::class,
             InstallCommand::class,
@@ -152,6 +159,44 @@ class WaitlistServiceProvider extends ServiceProvider
             ShowCommand::class,
             WordingCommand::class,
         ]);
+    }
+
+    /**
+     * The section of `php artisan about`. A setting that does not read shows as
+     * such instead of failing the command; waitlist:check says which.
+     *
+     * @return array<string, string>
+     */
+    private static function about(): array
+    {
+        $read = self::readable(...);
+        $days = static fn (?int $days): string => $days === null ? 'kept' : "{$days} days";
+
+        return [
+            'Version' => InstalledVersions::getPrettyVersion('taldres/laravel-waitlist') ?? 'unknown',
+            'Settings' => ($problems = count(WaitlistConfig::problems())) === 0 ? 'every setting reads' : "{$problems} do not read, run waitlist:check",
+            'Routes' => $read(fn (): string => WaitlistConfig::routesEnabled() ? '/'.trim(WaitlistConfig::routePrefix(), '/') : 'off'),
+            'Projects' => $read(fn (): string => implode(', ', app(ProjectCatalog::class)->projects())),
+            'Catalog' => $read(fn (): string => WaitlistConfig::catalog()),
+            'Project resolver' => $read(fn (): string => WaitlistConfig::projectResolver()),
+            'Spam protector' => $read(fn (): string => WaitlistConfig::spamProtector()),
+            'Authentication required' => $read(fn (): string => WaitlistConfig::authenticationRequired() ? 'yes' : 'no'),
+            'Double opt-in' => $read(fn (): string => WaitlistConfig::doubleOptIn() ? 'on' : 'off'),
+            'Retention' => $read(fn (): string => sprintf('unconfirmed %s, left %s, request metadata %s', $days(WaitlistConfig::pendingDays()), $days(WaitlistConfig::unsubscribedDays()), $days(WaitlistConfig::requestMetadataDays()))),
+            'Prune schedule' => $read(fn (): string => WaitlistConfig::pruneSchedule() ?? 'not scheduled'),
+        ];
+    }
+
+    /**
+     * @param  Closure(): string  $value
+     */
+    private static function readable(Closure $value): string
+    {
+        try {
+            return $value();
+        } catch (InvalidConfigurationException) {
+            return 'does not read';
+        }
     }
 
     /**
