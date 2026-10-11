@@ -142,6 +142,12 @@ it and are limited as a guest's request then.
   Issuing and revoking the tokens stays with the app (Sanctum, Passport, a JWT
   guard); gate them too, e.g. `Sanctum::authenticateAccessTokensUsing()` with
   `Waitlist::hasProject()`.
+- Only the app's signed-in users (a closed beta): `auth:sanctum` in
+  `routes.group_middleware.signup` (`401` for guests; a session login also needs
+  `web` there), a `useWaitlist` gate that decides which users may join which
+  project and denies `RegisterWording`, `authentication.required` off (users act
+  for no project, so it would answer `403`). Users must not implement
+  `HasWaitlistProject`.
 - Sanctum abilities are read with `tokenCan()`, not `can()`, which asks gates
   and policies.
 - Such servers send for all their visitors from one address: the default limiters

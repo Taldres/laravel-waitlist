@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace Taldres\Waitlist\Support;
 
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
+use Illuminate\Contracts\Http\Kernel as HttpKernel;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Foundation\Http\Kernel;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
 use Taldres\Waitlist\Contracts\EmailNormalizer;
@@ -64,6 +68,37 @@ final class SetupAudit
         }
 
         return null;
+    }
+
+    /**
+     * Whether a guest is kept from the signup: by authentication.required with
+     * the default gate, or by auth middleware (any AuthenticatesRequests) in
+     * the signup group, such as auth:sanctum. A gate of the app's own decides
+     * for itself.
+     *
+     * @throws InvalidConfigurationException
+     */
+    public static function signupRequiresLogin(): bool
+    {
+        if (WaitlistConfig::authenticationRequired()) {
+            return true;
+        }
+
+        // A console run builds no HTTP kernel, which is what hands the aliases to the router.
+        /** @var HttpKernel $kernel */
+        $kernel = app(HttpKernel::class);
+        $aliases = [...$kernel instanceof Kernel ? $kernel->getMiddlewareAliases() : [], ...Route::getMiddleware()];
+
+        foreach (WaitlistConfig::signupMiddleware() as $middleware) {
+            $name = Str::before($middleware, ':');
+            $class = $aliases[$name] ?? $name;
+
+            if (is_string($class) && is_a($class, AuthenticatesRequests::class, true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

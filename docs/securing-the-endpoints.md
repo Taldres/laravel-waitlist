@@ -190,25 +190,51 @@ project is resolved and before the body is validated. Checks that only your
 forms have to pass go into `routes.group_middleware.signup`, see
 [Checks for your forms only](#checks-for-your-forms-only).
 
+A closed beta for your app's signed-in users:
+
 ```php
 // app/Providers/WaitlistServiceProvider.php
-Gate::define('useWaitlist', fn (?User $user) => $user?->can('join-beta') === true);
+Gate::define('useWaitlist', fn (User $user, string $project, WaitlistAction $action) => $action !== WaitlistAction::RegisterWording
+    && $user->can('join-beta', $project));
 ```
 
 ```php
 // config/waitlist.php
-'authentication' => ['guards' => ['sanctum']],
+'routes' => ['group_middleware' => ['signup' => ['auth:sanctum']]],
 ```
+
+Define `join-beta` with the project as its second argument, or every beta user
+may join every project. The signup group also holds the wording for a form and
+the manage link requested by address, so they need the login too; the token
+links in mails do not.
 
 The project a request acts for comes from the `ProjectResolver`; for servers that
 call with credentials of their own, `AuthenticatedProjectResolver` takes it from
 them. See [Who may call](projects.md#who-may-call-the-usewaitlist-gate).
 
-If you put Laravel's `auth:sanctum` into `routes.group_middleware.signup` instead,
-the login runs before the rate limiter, so each server is limited by itself. A
-request that fails it without `Accept: application/json` is redirected to the
-`login` route, and an app without one answers with a `500`; servers that call the
-API should send the header, as the JS client does.
+Pick the setup by who may call; [the table in Projects](projects.md#who-may-call-the-usewaitlist-gate)
+lists the settings of each:
+
+- **A public form**, where servers with credentials may call too:
+  `authentication.guards` recognises them, nothing keeps guests out.
+- **Only your app's signed-in users**, such as a closed beta: Laravel's
+  `auth:sanctum` in `routes.group_middleware.signup` keeps guests out with `401`
+  (a session login also needs `web` there, as `routes.middleware` is `api`), and
+  the `useWaitlist` gate decides which users may join which project and denies
+  `RegisterWording`. Leave `authentication.required` off: your users act for no
+  project, and it would refuse them with `403`.
+- **Only your projects' servers**: `authentication.guards` with
+  `authentication.required`, or `auth:sanctum` in the signup group with
+  `AuthenticatedProjectResolver`. Either way a signed-in caller without a project
+  is refused with `403`, by the default gate or by that resolver; that is the
+  point of this setup. With a resolver and a gate of your own, they must refuse
+  it themselves.
+
+With `auth:sanctum` in the signup group, the login runs before the rate limiter,
+so each server is limited by itself. A request that fails it without
+`Accept: application/json` is redirected to the `login` route, and an app without
+one answers with a `500`; servers that call the API should send the header, as
+the JS client does.
 
 ## Checks for your forms only
 

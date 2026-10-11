@@ -494,18 +494,41 @@ request is for sets them apart, see "Different limits per project" under
 
 ## Who may call: the `useWaitlist` gate
 
-Two setups cover most apps; the settings below each do one job in them, and every
-other combination is possible.
+Three setups cover most apps. Signing in and acting for a project are separate
+requirements: Laravel's `auth` middleware decides the first, the package's
+`authentication.required` and resolver the second. The settings below each do one
+job in them, and every other combination is possible.
 
-| | A public form (architecture A) | Your sites' servers with credentials (architecture C) |
-| --- | --- | --- |
-| Who calls | anyone, as a guest | each site's server, with a token of its own |
-| `ProjectResolver` binding | the default (one project), or your own from a publishable key or the Origin | `AuthenticatedProjectResolver`: the project follows from the caller |
-| `authentication.guards` | not needed | the guard that authenticates the server, such as `sanctum` |
-| `authentication.required` | off | on: guests get `401`, callers without a project `403` |
-| `useWaitlist` gate | the default lets everyone through; define it only to restrict | the default keeps a caller to its own project; define it for abilities per action or list |
-| Wording from the site | never: a guest cannot send text | `RegisterWording`, only for a caller acting for the project |
-| Rate limit | per IP | per server, and per visitor when the server forwards the address (`authentication.client_ip_header`) |
+| | A public form (architecture A) | Only your app's signed-in users | Only your projects' servers (architecture C) |
+| --- | --- | --- | --- |
+| Who calls | anyone, as a guest; a server with credentials may too, and is recognised | your users, signed in with the app's own login | each site's server, with a token of its own |
+| `ProjectResolver` binding | the default (one project), or your own from a publishable key or the Origin | the default (one project), or your own; your users act for no project | `AuthenticatedProjectResolver`: the project follows from the caller |
+| `authentication.guards` | not needed; name a guard to recognise servers that call with credentials | leave it at `[null]`: the guard `auth:` signed the user in with becomes the default | the guard that authenticates the server, such as `sanctum` |
+| `routes.group_middleware.signup` | your form checks only | `auth:sanctum`: guests get `401`; a session login also needs `web` here, which brings CSRF | your form checks only; or `auth:sanctum` instead of `required` |
+| `authentication.required` | off | off: it would refuse your users with `403`, as they act for no project | on: guests get `401`, callers without a project `403` |
+| `useWaitlist` gate | the default lets everyone through; define it only to restrict | define it: which users may join which project, and deny `RegisterWording` | the default keeps a caller to its own project; define it for abilities per action or list |
+| Wording from the site | with `wordingFromCallers()`, from a recognised server for its project, never from a guest | never, as long as your gate denies `RegisterWording` | with `wordingFromCallers()`, `RegisterWording` for a caller acting for the project |
+| Rate limit | per IP; per server for a recognised server | per IP | per server, and per visitor when the server forwards the address (`authentication.client_ip_header`) |
+
+For signed-in users, your users must not implement `HasWaitlistProject`: a caller
+that does counts as a project's server, limited per server, trusted with the
+visitor address it forwards and, by the default gate, allowed to send wording.
+Your gate replaces the default one, so it decides wording too:
+
+```php
+use App\Models\User;
+use Illuminate\Support\Facades\Gate;
+use Taldres\Waitlist\Enums\WaitlistAction;
+
+Gate::define('useWaitlist', fn (User $user, string $project, WaitlistAction $action) => $action !== WaitlistAction::RegisterWording
+    && $user->can('join-beta', $project));
+```
+
+For servers only, refusing a signed-in caller without a project is part of the
+setup, not a side effect: with `authentication.required`, the default gate
+answers it `403`; with `auth:sanctum` in the signup group instead, it is
+`AuthenticatedProjectResolver` that does. A resolver of your own must then refuse
+it itself, or the gate you define must.
 
 Three requests act for a project: the signup, the wording for a form and a manage
 link requested by address. For each, once the resolver has picked the project and
@@ -531,7 +554,8 @@ one exception: a caller acting for a project, one implementing
 `HasWaitlistProject`, keeps to its own project, and another project answers
 `404`. With `waitlist.authentication.required` on, it also refuses guests with
 `401` and callers without a project with `403`: for an API that only your
-projects' servers may call. On a public form, the gate keeps nobody out; bots
+projects' servers may call. For one that only your signed-in users may call, use
+`auth` middleware instead and define the gate, see the table above. On a public form, the gate keeps nobody out; bots
 are the [spam protector's](securing-the-endpoints.md#bot-protection-via-spamprotector)
 job. `RegisterWording` is the exception the other way round: only a caller acting
 for the project gets it, never a guest, even on a public form

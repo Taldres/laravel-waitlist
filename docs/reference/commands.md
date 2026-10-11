@@ -84,5 +84,6 @@ say where they looked.
   what a launch trips over: a mail link that is not https or points at
   localhost (a page's URL, or `APP_URL` for a page left on the package routes),
   `APP_DEBUG` on while the routes are enabled, and `authentication.guards` set
-  without `authentication.required`. Run it on the production host. It does not audit
+  while neither `authentication.required` nor auth middleware in
+  `routes.group_middleware.signup` keeps guests out. Run it on the production host. It does not audit
   your infrastructure or find every recipient; complete it yourself.
