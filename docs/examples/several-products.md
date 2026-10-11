@@ -11,6 +11,9 @@ For projects that come and go at runtime, or manage their own wording, see
 
 ## 1. Define the projects
 
+On a new install, `php artisan waitlist:install --projects` publishes a provider of
+this shape to adapt.
+
 ```php
 // app/Providers/WaitlistServiceProvider.php
 use Taldres\Waitlist\Definitions\ProjectDefinition;

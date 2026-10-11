@@ -69,9 +69,9 @@ replaced. Read the environment through `config()`, never `env()`:
 ```php
 // app/Providers/WaitlistServiceProvider.php, in the definition
 $project->urls(
-    confirm: config('app.frontend_url').'/waitlist/confirm/{token}',
-    unsubscribe: config('app.frontend_url').'/waitlist/leave/{token}',
-    manage: config('app.frontend_url').'/waitlist/preferences/{token}',
+    confirm: 'https://example.com/waitlist/confirm/{token}',
+    unsubscribe: 'https://example.com/waitlist/leave/{token}',
+    manage: 'https://example.com/waitlist/preferences/{token}',
 );
 ```
 

@@ -51,10 +51,27 @@ top via events and macros, see [the invite flow example](docs/examples/invite-fl
 
 ## Installation
 
+Choose the setup before you install, by how many projects the waitlist serves:
+
+- **One project:** `php artisan waitlist:install`; the provider describes the
+  default project.
+- **Several projects in one app:** `php artisan waitlist:install --projects`;
+  the provider starts with a `Waitlist::define()` per project. Bind a
+  `ProjectResolver` before the package routes take signups; until then they
+  answer `422`.
+- **A central API whose projects manage their own lists and wording:**
+  `php artisan waitlist:install`, then a `ProjectCatalog` over your database and
+  a resolver that maps each caller to its project, see
+  [the example](docs/examples/central-waitlist-api.md).
+
+[Projects, lists and fields](docs/projects.md) compares them. The install never
+overwrites a provider that exists, so a second run with another option changes
+nothing.
+
 ```bash
 composer require taldres/laravel-waitlist
 
-php artisan waitlist:install
+php artisan waitlist:install   # or: php artisan waitlist:install --projects
 php artisan migrate
 ```
 
@@ -85,8 +102,8 @@ public function boot(): void
 
         // Pages your mail links point at, which post the token back
         $project->urls(
-            confirm: config('app.frontend_url').'/waitlist/confirm/{token}',
-            unsubscribe: config('app.frontend_url').'/waitlist/leave/{token}',
+            confirm: 'https://example.com/waitlist/confirm/{token}',
+            unsubscribe: 'https://example.com/waitlist/leave/{token}',
         );
     });
 }

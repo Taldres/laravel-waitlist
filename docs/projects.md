@@ -18,8 +18,10 @@ tenant isolation, see [Privacy across projects](#privacy-across-projects).
 
 `php artisan waitlist:install` publishes `app/Providers/WaitlistServiceProvider.php`
 with a default project to start from and registers it in
-`bootstrap/providers.php`. The definition can live in any provider's `boot()`,
-your `AppServiceProvider` included; the published one keeps it in one place.
+`bootstrap/providers.php`; with `--projects` it starts with
+[several projects](#several-products-in-one-app) instead. The definition can live
+in any provider's `boot()`, your `AppServiceProvider` included; the published one
+keeps it in one place.
 
 ```php
 // app/Providers/WaitlistServiceProvider.php
@@ -60,9 +62,8 @@ container instead, see [Extending](extending.md).
 
 **Read the environment through `config()`, never `env()`.** Once the config is
 cached, `env()` returns `null` outside the config files, so a URL built from it
-would silently fall back to the package routes. Laravel's default
-`config/app.php` has `frontend_url` (`FRONTEND_URL`); for anything else, add a
-key to a config file of your own.
+would silently fall back to the package routes. When a page's URL differs per
+environment, add a key to a config file of your own and read it with `config()`.
 
 ## One product: the default project
 
@@ -77,9 +78,9 @@ Waitlist::define(function (ProjectDefinition $project): void {
     $project->list('beta', purpose: 'waitlist')->optional('newsletter');
 
     $project->urls(
-        confirm: config('app.frontend_url').'/waitlist/confirm/{token}',
-        unsubscribe: config('app.frontend_url').'/waitlist/leave/{token}',
-        manage: config('app.frontend_url').'/waitlist/preferences/{token}',
+        confirm: 'https://example.com/waitlist/confirm/{token}',
+        unsubscribe: 'https://example.com/waitlist/leave/{token}',
+        manage: 'https://example.com/waitlist/preferences/{token}',
     );
 });
 ```
@@ -358,6 +359,14 @@ Waitlist::define('anvil', function (ProjectDefinition $project): void {
 List names only need to be unique within a project: `default` above is Anvil's
 own list, apart from the `default` list of the default project. Project names
 follow the rule for list names.
+
+On a new install, `php artisan waitlist:install --projects` publishes a provider
+shaped this way: two named projects to adapt, and the default project with pages
+only, as [below](#the-default-project-when-every-product-has-a-name). That setup
+is incomplete once the package routes are enabled, until you bind a resolver
+([Over HTTP](#over-http-tell-the-package-which-project-a-signup-is-for)): the
+routes act for the default project, so every signup over HTTP answers `422`. A provider that is already published is never overwritten; add the
+projects to it.
 
 ### What changes in your code
 

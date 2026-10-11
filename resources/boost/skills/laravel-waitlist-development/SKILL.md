@@ -33,7 +33,10 @@ php artisan migrate
 
 `waitlist:install` publishes `app/Providers/WaitlistServiceProvider.php`
 (`waitlist-provider`), `config/waitlist.php` (`waitlist-config`) and the migrations
-(`waitlist-migrations`). Schedule `waitlist:prune` yourself,
+(`waitlist-migrations`). For several projects, `waitlist:install --projects` writes
+a provider with named projects instead; bind a `ProjectResolver` before the
+package routes take signups, they answer `422` until then. An existing provider
+is never overwritten. Schedule `waitlist:prune` yourself,
 `Schedule::command('waitlist:prune')->daily()` in `routes/console.php`, and keep
 Laravel's scheduler running.
 
