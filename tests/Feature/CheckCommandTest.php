@@ -32,7 +32,7 @@ it('passes where every setting reads and the tables are there', function () {
         ->and($output)->not->toContain('is not a setting the package reads');
 });
 
-it('warns while no scheduled task runs the retention, and fails on it with --strict', function () {
+it('hints while no scheduled task runs the retention, and does not fail on it even with --strict', function () {
     app()->forgetInstance(Schedule::class);
 
     [$exit, $output] = checkOutput();
@@ -40,9 +40,10 @@ it('warns while no scheduled task runs the retention, and fails on it with --str
     expect($exit)->toBe(0)
         ->and($output)->toContain("No scheduled task runs waitlist:prune, so the retention periods are not applied. Add Schedule::command('waitlist:prune')->daily() to routes/console.php");
 
-    [$strict] = checkOutput(['--strict' => true]);
+    [$strict, $strictOutput] = checkOutput(['--strict' => true]);
 
-    expect($strict)->toBe(1);
+    expect($strict)->toBe(0)
+        ->and($strictOutput)->toContain('No scheduled task runs waitlist:prune');
 
     Artisan::call('about', ['--only' => 'laravel_waitlist', '--json' => true]);
 

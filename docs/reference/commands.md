@@ -55,8 +55,10 @@ say where they looked.
   once, by key and never by value, so a typo in `.env` is found on deploy and not
   by the first request that needs it. It also warns of settings in a published
   `config/waitlist.php` that the package does not read (a typo, say, which stays
-  ignored otherwise), warns while no scheduled task of your application runs
-  `waitlist:prune`, compares the tables and columns with the database, naming
+  ignored otherwise), hints while no scheduled task of your application runs
+  `waitlist:prune` (only Laravel's scheduler is in sight, so `--strict` leaves
+  the hint alone for an app that runs it from cron), compares the tables and
+  columns with the database, naming
   what your migrations lack, and compares the registered package routes with
   `routes.enabled`: a group missing although the routes are on, or routes still
   registered although they are off, as when a route cache was built under other
