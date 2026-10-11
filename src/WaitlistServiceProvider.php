@@ -41,6 +41,7 @@ use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Http\RouteRegistration;
 use Taldres\Waitlist\Support\SetupAudit;
+use Throwable;
 
 class WaitlistServiceProvider extends ServiceProvider
 {
@@ -145,8 +146,8 @@ class WaitlistServiceProvider extends ServiceProvider
     }
 
     /**
-     * The section of `php artisan about`. A setting that does not read shows as
-     * such instead of failing the command; waitlist:check says which.
+     * The section of `php artisan about`. A row that cannot be read shows as
+     * such instead of failing the command; waitlist:check says which setting.
      *
      * @return array<string, string>
      */
@@ -156,17 +157,17 @@ class WaitlistServiceProvider extends ServiceProvider
         $days = static fn (?int $days): string => $days === null ? 'kept' : "{$days} days";
 
         return [
-            'Version' => InstalledVersions::getPrettyVersion('taldres/laravel-waitlist') ?? 'unknown',
-            'Settings' => ($problems = count(WaitlistConfig::problems())) === 0 ? 'every setting reads' : "{$problems} do not read, run waitlist:check",
+            'Version' => $read(fn (): string => InstalledVersions::getPrettyVersion('taldres/laravel-waitlist') ?? 'unknown'),
+            'Settings' => $read(fn (): string => ($problems = count(WaitlistConfig::problems())) === 0 ? 'every setting reads' : "{$problems} do not read, run waitlist:check"),
             'Routes' => $read(fn (): string => WaitlistConfig::routesEnabled() ? '/'.trim(WaitlistConfig::routePrefix(), '/') : 'off'),
             'Projects' => $read(fn (): string => implode(', ', app(ProjectCatalog::class)->projects())),
-            'Catalog' => $read(fn (): string => WaitlistConfig::catalog()),
-            'Project resolver' => $read(fn (): string => WaitlistConfig::projectResolver()),
-            'Spam protector' => $read(fn (): string => WaitlistConfig::spamProtector()),
+            'Catalog' => $read(fn (): string => app(ProjectCatalog::class)::class),
+            'Project resolver' => $read(fn (): string => app(ProjectResolver::class)::class),
+            'Spam protector' => $read(fn (): string => app(SpamProtector::class)::class),
             'Authentication required' => $read(fn (): string => WaitlistConfig::authenticationRequired() ? 'yes' : 'no'),
             'Double opt-in' => $read(fn (): string => WaitlistConfig::doubleOptIn() ? 'on' : 'off'),
             'Retention' => $read(fn (): string => sprintf('unconfirmed %s, left %s, request metadata %s', $days(WaitlistConfig::pendingDays()), $days(WaitlistConfig::unsubscribedDays()), $days(WaitlistConfig::requestMetadataDays()))),
-            'Prune schedule' => SetupAudit::scheduledPrune() ?? 'not scheduled',
+            'Prune schedule' => $read(fn (): string => SetupAudit::scheduledPrune() ?? 'not scheduled'),
         ];
     }
 
@@ -175,11 +176,11 @@ class WaitlistServiceProvider extends ServiceProvider
      */
     private static function readable(Closure $value): string
     {
-        try {
-            return $value();
-        } catch (InvalidConfigurationException) {
-            return 'does not read';
-        }
+        return rescue(
+            $value,
+            static fn (Throwable $exception): string => $exception instanceof InvalidConfigurationException ? 'does not read' : 'unavailable',
+            report: false,
+        );
     }
 
     /**
