@@ -125,8 +125,8 @@ $result = Waitlist::for('default')->add($email, ['waitlist' => '2026-10', 'newsl
 Over HTTP (with `WAITLIST_ROUTES_ENABLED=true`): `GET /waitlist/purposes?list=default`,
 then `POST /waitlist` with `email`, `list`, and `purposes` as `{purpose: version}`.
 Fields beyond the address go under `metadata`, and only those the project or list
-defines are accepted. While the routes are off every route answers `404`, before
-any rate limit or session; an empty `WAITLIST_ROUTES_ENABLED=` is a config error,
+defines are accepted. While the routes are off none is registered, so every
+URL under the prefix is `404`; an empty `WAITLIST_ROUTES_ENABLED=` is a config error,
 `false` turns them off.
 
 ### 4. Mails come from your listeners

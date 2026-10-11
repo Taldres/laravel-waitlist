@@ -208,7 +208,7 @@ them. See [Who may call](projects.md#who-may-call-the-usewaitlist-gate).
 
 `routes.group_middleware` adds middleware to one group, after its rate limit,
 apart from what Laravel always sorts ahead of it, such as the cookies and the
-session of `web`, see [Middleware order](#middleware-order). Checks that only
+session of `web`. Checks that only
 your own forms can pass belong on `signup`: the token links in your mails, and
 the one-click requests mail providers send without cookies or credentials,
 never face them.
@@ -290,44 +290,28 @@ stay in [`config/cors.php`](#cors), which lists the websites of all projects.
   websites and hotlinking out, **not bots**. Bot protection is the
   [`SpamProtector`](#bot-protection-via-spamprotector)'s job.
 
-## Middleware order
+## When the routes are registered
 
-Every package route starts with a check of the `waitlist.routes` settings, ahead
-of the rate limit and the middleware you configure. It answers `404` while
-`routes.enabled` is off, which also covers a route cache that still holds the
-routes, and refuses a request with an `InvalidConfigurationException` naming the
-key when a setting of its group does not read.
+The package registers its routes on boot, and only while `routes.enabled` is on;
+otherwise there are none, and every URL under the prefix is Laravel's plain
+`404`. A setting that does not read leaves routes out rather than registering
+routes that lack what it meant to add, such as a limiter:
 
-The check is not in Laravel's middleware priority list, so Laravel would sort
-the rate limit, route bindings and, with `web`, the cookies and the session ahead
-of it. The package therefore puts the check at the head of that list when it boots.
-A route that is off then neither counts against a limiter nor starts a session,
-and answers `404` even when a rate limit does not read.
-Middleware of your own that the list does not name is not moved: it runs ahead
-of the check only if you list it in `routes.middleware` before everything the
-list does name, the `api` group for one.
+- `enabled`, `prefix`, `name` or `middleware`, which place the routes, leave out
+  all of them;
+- the `limiters` or `group_middleware` of one group leave out that group only,
+  so a broken signup limiter does not take the unsubscribe links with it.
 
-An app that sets the list with `priority()` in `bootstrap/app.php` is covered:
-Laravel applies it when the HTTP kernel resolves, before any provider boots, and
-the package then adds the check in front of it. An app that replaces the list
-afterwards, with `setMiddlewarePriority()` in a provider that boots after the
-package or in a `booted()` callback, takes the check out again. A route that is
-off then counts against its limiter and answers `429` once the limit is used up.
-List the check first in your own list:
+The setting is reported to your logs once per boot, and `php artisan
+waitlist:check` names every setting that does not read.
 
-```php
-use Taldres\Waitlist\Http\Middleware\CheckRouteConfig;
+The package does not touch Laravel's middleware: the rate limit, route bindings
+and, with `web`, the cookies and the session run in the order Laravel sorts them.
+Middleware of your own goes in `routes.middleware` or `routes.group_middleware`.
 
-$kernel->setMiddlewarePriority([
-    CheckRouteConfig::class,
-    // the rest of your list
-]);
-```
-
-A route that is off still answers a method it does not take with `405` and
-`OPTIONS` with the methods it allows, as Laravel answers both before any
-middleware runs, a route cache included. Nothing acts on them: no entry is
-written and no event fires.
+A route cache holds the routes as they were when it was built. Build it again
+(`php artisan route:cache`) after changing a `routes.*` setting, and run
+`php artisan route:clear` when you switch the routes off, as for any route.
 
 ## Rate limits
 

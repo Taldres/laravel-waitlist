@@ -11,10 +11,7 @@ use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\EntryStatus;
 use Taldres\Waitlist\Events\EntrySubscribed;
 use Taldres\Waitlist\Facades\Waitlist;
-use Taldres\Waitlist\Models\WaitlistActivity;
-use Taldres\Waitlist\Models\WaitlistConsent;
 use Taldres\Waitlist\Models\WaitlistEntry;
-use Taldres\Waitlist\Models\WaitlistSubscription;
 use Taldres\Waitlist\Tests\Fixtures\RequireFormCheck;
 
 beforeEach(function () {
@@ -484,86 +481,4 @@ it('answers an invalid one-click request without a redirect too', function () {
 
     $this->post('/waitlist/unsubscribe/unknown', ['List-Unsubscribe' => 'One-Click'])->assertNotFound();
     $this->post('/waitlist/unsubscribe/unknown')->assertRedirect('https://app.test/oops');
-});
-
-/**
- * A request for every method each package route takes, or for every method it
- * does not take and OPTIONS, with tokens that belong to a real entry.
- *
- * @param  array{confirm: string, unsubscribe: string}  $tokens
- * @return list<array{string, string}>
- */
-function packageRouteRequests(array $tokens, string $manage, bool $methodsTaken): array
-{
-    $requests = [];
-
-    foreach (app('router')->getRoutes()->getRoutes() as $route) {
-        if (! str_starts_with((string) $route->getName(), 'waitlist.')) {
-            continue;
-        }
-
-        $uri = '/'.str_replace('{token}', match (true) {
-            str_contains($route->uri(), '/manage/') => $manage,
-            str_contains($route->uri(), '/confirm/') => $tokens['confirm'],
-            default => $tokens['unsubscribe'],
-        }, $route->uri());
-
-        $methods = $methodsTaken
-            ? $route->methods()
-            : [...array_diff(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], $route->methods()), 'OPTIONS'];
-
-        foreach ($methods as $method) {
-            $requests[] = [$method, $uri];
-        }
-    }
-
-    return $requests;
-}
-
-describe('routes that are switched off but still registered, as in a route cache', function () {
-    beforeEach(function () {
-        $this->tokens = ($this->tokens)();
-        $this->manage = manageTokenFor(WaitlistEntry::query()->firstOrFail());
-
-        config()->set(ConfigKey::RoutesEnabled->value, false);
-
-        $this->stored = fn (): array => collect([WaitlistEntry::class, WaitlistSubscription::class, WaitlistConsent::class, WaitlistActivity::class])
-            ->map(fn (string $model): array => $model::query()->get()->map->getRawOriginal()->all())
-            ->all();
-    });
-
-    it('answers 404 for every method a route takes', function () {
-        $before = ($this->stored)();
-        $requests = packageRouteRequests($this->tokens, $this->manage, methodsTaken: true);
-
-        foreach ($requests as [$method, $uri]) {
-            $this->call($method, $uri)->assertNotFound();
-        }
-
-        expect($requests)->not->toBeEmpty()
-            ->and(($this->stored)())->toBe($before);
-    });
-
-    // Laravel answers a method a route does not take, and OPTIONS, before any
-    // middleware runs. That is accepted, as long as nothing acts on them.
-    it('answers 405 or the allowed methods for the others, and acts on nothing', function () {
-        $events = collect(glob(__DIR__.'/../../src/Events/*.php'))
-            ->map(fn (string $file): string => 'Taldres\\Waitlist\\Events\\'.basename($file, '.php'))
-            ->all();
-        $before = ($this->stored)();
-        $requests = packageRouteRequests($this->tokens, $this->manage, methodsTaken: false);
-        Event::fake($events);
-
-        foreach ($requests as [$method, $uri]) {
-            expect($this->call($method, $uri)->getStatusCode())->toBe($method === 'OPTIONS' ? 200 : 405, "{$method} {$uri}");
-        }
-
-        foreach ($events as $event) {
-            Event::assertNotDispatched($event);
-        }
-
-        expect($requests)->not->toBeEmpty()
-            ->and(($this->stored)())->toBe($before)
-            ->and(WaitlistEntry::query()->sole()->status)->toBe(EntryStatus::Pending);
-    });
 });

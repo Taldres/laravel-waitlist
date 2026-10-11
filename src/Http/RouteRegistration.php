@@ -5,30 +5,43 @@ declare(strict_types=1);
 namespace Taldres\Waitlist\Http;
 
 use Closure;
+use Taldres\Waitlist\Config\ConfigFallback;
 use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
-use Taldres\Waitlist\Http\Middleware\CheckRouteConfig;
 
 /**
- * Registers the package routes whatever their config says: this runs on
- * every boot, artisan included, and must never stop it.
+ * Decides which package routes are registered. This runs on every boot,
+ * artisan included, and must never stop it: a setting that does not read is
+ * reported, once, and what it belongs to is not registered, rather than
+ * routes that lack what the setting meant to add. The other group stays, so a
+ * broken signup limiter does not take the unsubscribe links with it.
+ * waitlist:check names every setting that does not read.
  *
- * A setting that does not read registers a fallback that only places the
- * routes. The fallback leaves out what the setting meant to add, such as a
- * limiter, so the group is marked and CheckRouteConfig refuses its requests
- * until the routes are registered again, also from a route cache built then.
+ * A route cache holds the routes as they were when it was built; after a
+ * change of these settings, build it again.
  *
  * @internal
  */
 final class RouteRegistration
 {
     /**
-     * Whether to register the routes. A switch that does not read registers
-     * them as well: CheckRouteConfig then refuses every request.
+     * Whether the routes are on and the settings that place them read.
      */
     public static function wanted(): bool
     {
-        return self::read(WaitlistConfig::routesEnabled(...), fallback: true);
+        try {
+            if (! WaitlistConfig::routesEnabled()) {
+                return false;
+            }
+
+            self::attributes();
+        } catch (InvalidConfigurationException $exception) {
+            app(ConfigFallback::class)->report($exception);
+
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -37,88 +50,49 @@ final class RouteRegistration
     public static function attributes(): array
     {
         return [
-            'prefix' => self::read(WaitlistConfig::routePrefix(...), fallback: 'waitlist'),
-            'as' => self::read(WaitlistConfig::routeName(...), fallback: 'waitlist.'),
-            'middleware' => self::read(WaitlistConfig::routeMiddleware(...), fallback: []),
+            'prefix' => WaitlistConfig::routePrefix(),
+            'as' => WaitlistConfig::routeName(),
+            'middleware' => WaitlistConfig::routeMiddleware(),
         ];
     }
 
     /**
-     * The signup, the wording and manage links by address.
+     * The middleware of the signup, the wording and manage links by address;
+     * null when the group's settings do not read.
      *
-     * @return list<string>
+     * @return list<string>|null
      */
-    public static function signupMiddleware(): array
+    public static function signupMiddleware(): ?array
     {
-        return self::group(CheckRouteConfig::SIGNUP, WaitlistConfig::signupLimiter(...), WaitlistConfig::signupMiddleware(...));
+        return self::group(WaitlistConfig::signupLimiter(...), WaitlistConfig::signupMiddleware(...));
     }
 
     /**
-     * Everything with a token.
+     * The middleware of everything with a token; null when the group's
+     * settings do not read.
      *
-     * @return list<string>
+     * @return list<string>|null
      */
-    public static function linksMiddleware(): array
+    public static function linksMiddleware(): ?array
     {
-        return self::group(CheckRouteConfig::LINKS, WaitlistConfig::linksLimiter(...), WaitlistConfig::linksMiddleware(...));
+        return self::group(WaitlistConfig::linksLimiter(...), WaitlistConfig::linksMiddleware(...));
     }
 
     /**
      * @param  Closure(): ?string  $limiter
      * @param  Closure(): list<string>  $middleware
-     * @return list<string>
+     * @return list<string>|null
      */
-    private static function group(string $group, Closure $limiter, Closure $middleware): array
-    {
-        // The switch and the shared settings count as well: routes registered
-        // on an unreadable switch, or placed with a fallback prefix or without
-        // their shared middleware, must not serve either.
-        $fallback = ! self::reads(
-            WaitlistConfig::routesEnabled(...),
-            WaitlistConfig::routePrefix(...),
-            WaitlistConfig::routeName(...),
-            WaitlistConfig::routeMiddleware(...),
-            $limiter,
-            $middleware,
-        );
-
-        // Without a limiter or middleware when they do not read, which the
-        // mark above keeps from serving any request.
-        $limiterName = self::read($limiter, fallback: null);
-
-        return [
-            CheckRouteConfig::using($group, $fallback),
-            ...($limiterName === null ? [] : ["throttle:{$limiterName}"]),
-            ...self::read($middleware, fallback: []),
-        ];
-    }
-
-    /**
-     * @template T
-     *
-     * @param  Closure(): T  $setting
-     * @param  T  $fallback
-     * @return T
-     */
-    private static function read(Closure $setting, mixed $fallback): mixed
+    private static function group(Closure $limiter, Closure $middleware): ?array
     {
         try {
-            return $setting();
-        } catch (InvalidConfigurationException) {
-            return $fallback;
-        }
-    }
+            $name = $limiter();
 
-    private static function reads(Closure ...$settings): bool
-    {
-        try {
-            foreach ($settings as $setting) {
-                $setting();
-            }
-        } catch (InvalidConfigurationException) {
-            return false;
-        }
+            return [...($name === null ? [] : ["throttle:{$name}"]), ...$middleware()];
+        } catch (InvalidConfigurationException $exception) {
+            app(ConfigFallback::class)->report($exception);
 
-        return true;
+            return null;
+        }
     }
 }

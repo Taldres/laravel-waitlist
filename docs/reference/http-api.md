@@ -84,12 +84,10 @@ personal data.
 
 ## Routes that are off
 
-While `waitlist.routes.enabled` is off, every route answers `404`, also when a
-route cache still holds it. The request counts against no rate limit and starts
-no session, see [Middleware order](../securing-the-endpoints.md#middleware-order).
-Only what Laravel answers before any middleware runs still gets through: a
-method the route does not take (`405`) and `OPTIONS` (the allowed methods).
-Neither acts: no entry is written and no event fires.
+While `waitlist.routes.enabled` is off the package registers no route, so every
+URL under the prefix is Laravel's plain `404`. A route cache built while they
+were on still holds them: run `php artisan route:clear`, see
+[When the routes are registered](../securing-the-endpoints.md#when-the-routes-are-registered).
 
 A setting that does not read refuses the request of its group with an
 `InvalidConfigurationException`, which Laravel renders as a `500`; the message

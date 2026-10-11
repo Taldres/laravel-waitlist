@@ -8,10 +8,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
 use Taldres\Waitlist\Config\PackageConfig;
 use Taldres\Waitlist\Enums\ConfigKey;
-use Taldres\Waitlist\Enums\EntryStatus;
-use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Models\WaitlistActivity;
-use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Tests\Fixtures\ProjectCaller;
 
 beforeEach(function () {
@@ -102,38 +99,7 @@ it('keeps limiting with the default limits when the published config has no limi
     ($this->subscribe)('10.0.0.1', 'three@example.com')->assertStatus(429);
 });
 
-describe('the limiter of a group that no limiter answers to', function () {
-    it('names the config key instead of Laravel\'s message without it', function (ConfigKey $key, string $url) {
-        config()->set($key->value, 'not-defined');
-        ($this->loadRoutes)();
-
-        $this->withoutExceptionHandling();
-
-        expect(fn () => $this->getJson($url))->toThrow(InvalidConfigurationException::class, $key->value);
-    })->with([
-        'signup' => [ConfigKey::SignupLimiter, '/waitlist/purposes?list=beta'],
-        'links' => [ConfigKey::LinksLimiter, '/waitlist/confirm/some-token'],
-    ]);
-
-    it('refuses a one-click unsubscribe, naming the key, without unsubscribing', function () {
-        $token = subscribeAndCapture('beta', 'user@example.com')['unsubscribe'];
-        config()->set(ConfigKey::LinksLimiter->value, 'not-defined');
-        ($this->loadRoutes)();
-
-        $this->withoutExceptionHandling();
-
-        expect(fn () => ($this->oneClick)($token))->toThrow(InvalidConfigurationException::class, ConfigKey::LinksLimiter->value)
-            ->and(WaitlistEntry::query()->sole()->status)->toBe(EntryStatus::Pending);
-    });
-
-    it('does not matter while the routes are off', function () {
-        config()->set(ConfigKey::SignupLimiter->value, 'not-defined');
-        ($this->loadRoutes)();
-        config()->set(ConfigKey::RoutesEnabled->value, false);
-
-        $this->getJson('/waitlist/purposes?list=beta')->assertNotFound();
-    });
-
+describe('the limiter of a group', function () {
     it('finds a limiter that an app defines after the package booted', function () {
         config()->set(ConfigKey::SignupLimiter->value, 'defined-later');
         ($this->loadRoutes)();
