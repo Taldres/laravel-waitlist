@@ -153,20 +153,32 @@ and `privacy.store_user_agent` allow it; retention clears them after
 
 ## CORS
 
-If your SPA runs on a different origin than the API, configure CORS in the
-consuming app, since the package cannot decide this for you. Add the waitlist
-path in `config/cors.php`:
+If your SPA runs on a different origin than the API, the browser needs CORS
+headers, and Laravel's CORS handling gives them. The package does not touch it:
+CORS says which websites a browser may read answers for, across the whole app,
+and belongs to `config/cors.php` (`php artisan config:publish cors` if the file
+does not exist yet).
 
 ```php
+// config/cors.php
 'paths' => ['api/*', 'waitlist', 'waitlist/*'],
-// Only when the browser sends cookies, with credentials: "include".
-'supports_credentials' => true,
+// The websites of your projects together.
+'allowed_origins' => ['https://acme.example', 'https://rocket.example'],
+'allowed_methods' => ['GET', 'POST', 'PUT'],
+// What your clients send, such as the bot check proof and the CSRF token.
+'allowed_headers' => ['Content-Type', 'Accept', 'X-Waitlist-Challenge', 'X-XSRF-TOKEN'],
 // Lets a cross-origin client read how long to wait after a 429.
 'exposed_headers' => ['Retry-After'],
+// Only when the browser sends cookies, with credentials: "include".
+'supports_credentials' => true,
 ```
 
-If you narrow `allowed_headers`, keep the headers your client sends, such as
-`X-Waitlist-Challenge` or `X-XSRF-TOKEN`.
+The paths are the package's `routes.prefix`, here `waitlist`. A preflight request
+does not say which project it is for, so CORS can only list the websites of all
+projects together. Which website may use **which project** is the package's own
+rule, [`origins()`](#websites-that-may-use-a-project), checked on the request that
+follows. A website that CORS does not list cannot read any answer, the `403`
+included: the browser reports a CORS failure instead.
 
 ## Who may sign up (closed betas, central APIs)
 
@@ -223,7 +235,9 @@ CSRF keeps other websites from posting your form in their visitors' browsers.
 It does not stop a script, which fetches the token first; that is what the
 [`SpamProtector`](#bot-protection-via-spamprotector) and the rate limits are for.
 
-**An origin check** keeps browsers on other websites out:
+**An origin check** keeps browsers on other websites out. Name the websites in
+the project, see [Websites that may use a project](#websites-that-may-use-a-project),
+or write the check yourself:
 
 ```php
 // app/Http/Middleware/OwnOrigins.php
@@ -253,6 +267,28 @@ class OwnOrigins
 
 A browser cannot fake its `Origin`; a script outside one can, so this, too,
 keeps out other websites, not bots.
+
+## Websites that may use a project
+
+`$project->origins([...])` lists the websites from which a browser may use the
+project's endpoints as a guest: the signup, the wording and a manage link by
+address. A request that names another origin is refused with `403`
+("This website may not use the waitlist."), before the `useWaitlist` gate, so a
+gate that lets everyone through does not undo it. It sets no CORS headers: those
+stay in [`config/cors.php`](#cors), which lists the websites of all projects.
+
+- A request **without** an `Origin` header is not affected: a server calling the
+  API sends none, and neither does a browser for a same-origin `GET`. The API's own
+  origin is always allowed.
+- A server that calls for its project with credentials is exempt.
+- The links in your mails name no project and are not checked: the token is the
+  proof there.
+- Origins are compared the way a browser sends them: scheme, host and port, in
+  lower case, without a path and without a default port. A wildcard is not
+  accepted.
+- A browser cannot forge `Origin`, a script outside one can, so this keeps other
+  websites and hotlinking out, **not bots**. Bot protection is the
+  [`SpamProtector`](#bot-protection-via-spamprotector)'s job.
 
 ## Middleware order
 

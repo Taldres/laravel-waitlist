@@ -38,6 +38,11 @@ final class ArrayProjectCatalog implements ProjectCatalog
         return true;
     }
 
+    public function origins(string $project): array
+    {
+        return [];
+    }
+
     public function periods(string $project): ProjectPeriods
     {
         return new ProjectPeriods;
