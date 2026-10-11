@@ -320,8 +320,9 @@ than 2038 for a link).
 configured ones to every other, also with `--project`. `waitlist:privacy` lists
 the periods that differ, and a confirm link issued for the project lives as long
 as the project says. A catalog of your own answers with `periods($project)`, a
-`ProjectPeriods`. A catalog that does not read is reported and `waitlist:prune`
-falls back to the configured periods for every project.
+`ProjectPeriods`. A catalog that does not read stops `waitlist:prune` before it
+deletes anything, since the configured periods are not a stand-in for the ones a
+project promised, which may be longer.
 
 ## When the definition runs
 

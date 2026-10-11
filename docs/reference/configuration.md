@@ -44,20 +44,22 @@ the ones that do not, reporting each to your logs and exiting with a failure,
 so a typo in `retention.request_metadata_days` never keeps abandoned signups
 and departed addresses past their period.
 
-Leaving, withdrawing, confirming an issued link and erasing depend on few
-settings: `routes.*` with the links limiter and middleware, and, for
-confirming, what builds the unsubscribe link its event carries. A link that
-cannot be built undoes the confirmation rather than leaving it unannounced.
-Settings these steps only pass by fall back instead, and each mistake is
-reported once per request, job or command:
+Leaving, withdrawing and erasing read only what they need. What they cannot do
+without fails clearly: a valid token, the authorization, a reachable database
+and the state change itself. Confirming an issued link also needs what builds
+the unsubscribe link its event carries, and a link that cannot be built undoes
+the confirmation rather than leaving it unannounced. Settings these steps only
+pass by, which concern what is recorded or where the browser goes next, fall
+back instead, and each mistake is reported once per request, job or command:
 
 - privacy settings that do not read store neither the IP address nor the user
   agent;
 - guards or a client IP header that do not resolve treat a token link as a
   guest's request, limited by its address; the signup and the gate still
   refuse them;
-- an email normalizer that does not work ends the entry the token names, and
-  the address stays on its other lists until it leaves again;
+- an email normalizer that does not work ends the entry the token names but
+  cannot find the address's other lists, so it stays on them until it leaves
+  again; the failed sweep is reported;
 - a catalog that does not read answers a browser in JSON instead of sending it
   to your page;
 - `rate_limits.link_per_minute` or `links_per_ip_per_minute` that do not read

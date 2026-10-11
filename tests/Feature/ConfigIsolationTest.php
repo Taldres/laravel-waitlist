@@ -248,11 +248,26 @@ describe('a URL generator or catalog that does not resolve', function () {
     })->with(function () {
         yield from isolationCases(['unsubscribe by token', 'withdraw one purpose', 'one-click unsubscribe', 'leave from the manage page', 'waitlist:prune an abandoned signup'], [
             'url_generator' => [ConfigKey::UrlGenerator->value, stdClass::class],
+        ]);
+
+        yield from isolationCases(['unsubscribe by token', 'withdraw one purpose', 'one-click unsubscribe', 'leave from the manage page'], [
             'catalog' => [ConfigKey::Catalog->value, stdClass::class],
         ]);
 
         // Saving purposes reads the wording from the catalog, but no link.
         yield 'update purposes on the manage page / url_generator' => ['update purposes on the manage page', ConfigKey::UrlGenerator->value, stdClass::class];
+    });
+});
+
+describe('a catalog that does not resolve', function () {
+    it('stops waitlist:prune before it deletes anything, as the periods a project promised are unknown', function () {
+        isolationSubscribe(confirm: false);
+        $this->travel(31)->days();
+        config()->set(ConfigKey::Catalog->value, stdClass::class);
+        $this->withoutExceptionHandling();
+
+        expect(fn () => Artisan::call('waitlist:prune'))->toThrow(InvalidConfigurationException::class, ConfigKey::Catalog->value)
+            ->and(WaitlistEntry::query()->count())->toBe(1);
     });
 });
 
