@@ -204,6 +204,12 @@ The project a request acts for comes from the `ProjectResolver`; for servers tha
 call with credentials of their own, `AuthenticatedProjectResolver` takes it from
 them. See [Who may call](projects.md#who-may-call-the-usewaitlist-gate).
 
+If you put Laravel's `auth:sanctum` into `routes.group_middleware.signup` instead,
+the login runs before the rate limiter, so each server is limited by itself. A
+request that fails it without `Accept: application/json` is redirected to the
+`login` route, and an app without one answers with a `500`; servers that call the
+API should send the header, as the JS client does.
+
 ## Checks for your forms only
 
 `routes.group_middleware` adds middleware to one group, after its rate limit,
