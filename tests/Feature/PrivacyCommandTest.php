@@ -2,9 +2,13 @@
 
 declare(strict_types=1);
 
+use Illuminate\Cache\RateLimiter as CacheRateLimiter;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Facade;
+use Illuminate\Support\Facades\RateLimiter;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Output\ConsoleSectionOutput;
@@ -17,6 +21,7 @@ use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Facades\Waitlist;
 use Taldres\Waitlist\Support\StoredWordingCatalog;
 use Taldres\Waitlist\Tests\TestCase;
+use Taldres\Waitlist\WaitlistServiceProvider;
 
 beforeEach(function () {
     // The record warns when nothing runs waitlist:prune; an app schedules it.
@@ -92,6 +97,71 @@ it('leaves out the limit of servers where your limiter replaces the package\'s, 
     expect(privacyRecord())
         ->not->toContain('Rate limits for servers calling for a project')
         ->toContain('header of servers calling for a project');
+});
+
+dataset('limiters the app may define', [
+    'signups' => [
+        WaitlistServiceProvider::SIGNUP_LIMITER,
+        '- Rate limits: signups by your [waitlist] limiter, token links 10 per minute and token; GET never changes state',
+        false,
+    ],
+    'links' => [
+        WaitlistServiceProvider::LINKS_LIMITER,
+        '- Rate limits: signups 10 per minute and IP, token links by your [waitlist-links] limiter; GET never changes state',
+        true,
+    ],
+]);
+
+describe('a limiter named like one of the package\'s', function () {
+    beforeEach(function () {
+        config()->set(ConfigKey::RoutesEnabled->value, true);
+        config()->set(ConfigKey::AuthenticationRequired->value, true);
+    });
+
+    it('states the limits of the package while its own limiters are in place', function () {
+        $stated = fn () => expect(privacyRecord())
+            ->toContain('- Rate limits: signups 10 per minute and IP, token links 10 per minute and token; GET never changes state')
+            ->toContain('- Rate limits for servers calling for a project: signups 120 per minute and server'.PHP_EOL);
+
+        $stated();
+
+        (new WaitlistServiceProvider(app()))->boot();
+
+        $stated();
+    });
+
+    it('names your limiter where the app defined it before the package booted', function (string $name, string $rateLimits, bool $servers) {
+        // The skeleton's .env may name the database cache; a limiter needs a store.
+        config()->set('cache.default', 'array');
+        app()->forgetInstance(CacheRateLimiter::class);
+        Facade::clearResolvedInstance(CacheRateLimiter::class);
+        RateLimiter::for($name, fn () => Limit::perMinute(1)->by('mine'));
+
+        (new WaitlistServiceProvider(app()))->boot();
+
+        $record = privacyRecord();
+
+        expect($record)->toContain($rateLimits)
+            ->and(str_contains($record, 'Rate limits for servers calling for a project'))->toBe($servers);
+    })->with('limiters the app may define');
+
+    it('names your limiter where the app replaced the package\'s after it booted', function (string $name, string $rateLimits, bool $servers) {
+        RateLimiter::for($name, fn () => Limit::perMinute(1)->by('mine'));
+
+        $record = privacyRecord();
+
+        expect($record)->toContain($rateLimits)
+            ->and(str_contains($record, 'Rate limits for servers calling for a project'))->toBe($servers);
+    })->with('limiters the app may define');
+
+    it('names the limiter that the config points at, whatever the package registered', function () {
+        RateLimiter::for('signup-strict', fn () => Limit::perMinute(1)->by('mine'));
+        config()->set(ConfigKey::SignupLimiter->value, 'signup-strict');
+
+        expect(privacyRecord())
+            ->toContain('- Rate limits: signups by your [signup-strict] limiter, token links 10 per minute and token;')
+            ->not->toContain('Rate limits for servers calling for a project');
+    });
 });
 
 it('needs the limit of servers only where it describes it', function () {
