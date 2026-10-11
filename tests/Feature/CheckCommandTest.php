@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schema;
+use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Support\SetupAudit;
 
@@ -36,6 +37,44 @@ it('names every setting that does not read at once, never its value', function (
         ->and($output)->toContain(ConfigKey::DoubleOptIn->value)
         ->and($output)->not->toContain('secret-value-that-must-not-leak-4242')
         ->and($output)->not->toContain('Every setting reads.');
+});
+
+it('checks each setting on its own, also those that are read together', function (array $settings) {
+    foreach ($settings as $key) {
+        config()->set($key->value, 'soon');
+    }
+
+    [$exit, $output] = checkOutput();
+
+    expect($exit)->toBe(1);
+
+    foreach ($settings as $key) {
+        expect($output)->toContain($key->value);
+    }
+
+    expect(count(WaitlistConfig::problems()))->toBe(count($settings));
+})->with([
+    'the confirm link and the resend cooldown' => [[ConfigKey::ConfirmTokenTtl, ConfigKey::ResendCooldown]],
+    'the caps on confirmation requests' => [[ConfigKey::MaxConfirmations, ConfigKey::MaxPendingPerAddress]],
+    'the manage link and its cooldown' => [[ConfigKey::ManageTokenTtl, ConfigKey::ManageRequestCooldown]],
+    'the IP and the user agent' => [[ConfigKey::StoreIp, ConfigKey::StoreUserAgent]],
+    'the three retention periods' => [[ConfigKey::RetentionPendingDays, ConfigKey::RetentionUnsubscribedDays, ConfigKey::RetentionRequestMetadataDays]],
+    'the export' => [[ConfigKey::ExportSpreadsheetSafe, ConfigKey::ExportColumns]],
+]);
+
+it('warns when the database cannot be read, and fails on it with --strict', function () {
+    config()->set(ConfigKey::Connection->value, 'not-configured');
+
+    [$exit, $output] = checkOutput();
+
+    expect($exit)->toBe(0)
+        ->and($output)->toContain('The database could not be read')
+        ->and($output)->not->toContain('The tables and columns of this version exist.');
+
+    [$strict, $strictOutput] = checkOutput(['--strict' => true]);
+
+    expect($strict)->toBe(1)
+        ->and($strictOutput)->toContain('The database could not be read');
 });
 
 it('reports a config that is no array once', function () {

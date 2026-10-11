@@ -42,7 +42,8 @@ class CheckCommand extends Command
         } catch (Throwable $exception) {
             $this->components->warn('The database could not be read ('.$exception::class.'), so the tables were not checked.');
 
-            return $failed || ($warned && $this->option('strict')) ? self::FAILURE : self::SUCCESS;
+            // A check that could not run is a warning, which --strict fails on.
+            return $failed || $this->option('strict') ? self::FAILURE : self::SUCCESS;
         }
 
         if ($missing === []) {

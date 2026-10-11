@@ -184,12 +184,20 @@ final class WaitlistConfig
 
     public static function privacy(): PrivacyConfig
     {
-        $config = ConfigReader::of(config('waitlist'));
-
         return new PrivacyConfig(
-            storeIp: $config->boolean(ConfigKey::StoreIp),
-            storeUserAgent: $config->boolean(ConfigKey::StoreUserAgent),
+            storeIp: self::storeIp(),
+            storeUserAgent: self::storeUserAgent(),
         );
+    }
+
+    public static function storeIp(): bool
+    {
+        return ConfigReader::of(config('waitlist'))->boolean(ConfigKey::StoreIp);
+    }
+
+    public static function storeUserAgent(): bool
+    {
+        return ConfigReader::of(config('waitlist'))->boolean(ConfigKey::StoreUserAgent);
     }
 
     /**
@@ -372,12 +380,23 @@ final class WaitlistConfig
 
     public static function export(): ExportConfig
     {
-        $config = ConfigReader::of(config('waitlist'));
-
         return new ExportConfig(
-            spreadsheetSafe: $config->boolean(ConfigKey::ExportSpreadsheetSafe),
-            columns: $config->columns(ConfigKey::ExportColumns, CsvExporter::EXPORTABLE),
+            spreadsheetSafe: self::exportSpreadsheetSafe(),
+            columns: self::exportColumns(),
         );
+    }
+
+    public static function exportSpreadsheetSafe(): bool
+    {
+        return ConfigReader::of(config('waitlist'))->boolean(ConfigKey::ExportSpreadsheetSafe);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function exportColumns(): array
+    {
+        return ConfigReader::of(config('waitlist'))->columns(ConfigKey::ExportColumns, CsvExporter::EXPORTABLE);
     }
 
     /**
@@ -412,10 +431,17 @@ final class WaitlistConfig
             self::defaultList(...),
             self::requireWordingHash(...),
             self::doubleOptIn(...),
-            self::confirmation(...),
-            self::manage(...),
-            self::privacy(...),
-            self::retention(...),
+            self::confirmTokenTtl(...),
+            self::resendCooldown(...),
+            self::maxConfirmations(...),
+            self::maxPendingPerAddress(...),
+            self::manageTokenTtl(...),
+            self::manageRequestCooldown(...),
+            self::storeIp(...),
+            self::storeUserAgent(...),
+            self::pendingDays(...),
+            self::unsubscribedDays(...),
+            self::requestMetadataDays(...),
             self::pruneSchedule(...),
             self::routesEnabled(...),
             self::routePrefix(...),
@@ -437,7 +463,8 @@ final class WaitlistConfig
             self::projectResolver(...),
             self::emailNormalizer(...),
             self::spamProtector(...),
-            self::export(...),
+            self::exportSpreadsheetSafe(...),
+            self::exportColumns(...),
         ];
 
         $problems = [];
