@@ -1,6 +1,6 @@
 # Release Notes
 
-## [Unreleased](https://github.com/taldres/laravel-waitlist/commits/main)
+## [Unreleased](https://github.com/taldres/laravel-waitlist/commits/main/compare/v0.1.0...HEAD)
 
 - Requires PHP 8.3+ and Laravel 13
 - Subscription cycles with exactly-once state changes
@@ -42,3 +42,67 @@
 - Servers calling for a project are limited as one source, since all their visitors share an address: capped per server at `caller_signup_per_minute`, with the limit per visitor left to them, unless they forward the visitor's address in the header named by `authentication.client_ip_header`, which then also counts per visitor and is the IP recorded
 - Signups capped per address across lists (`max_pending_per_address`), so made-up list names cannot flood a mailbox; errors name the field in a JSON 422
 - Bundled Laravel Boost skills: the integration as a whole, plus focused skills for the frontend, mail, provider sync, projects, reporting, the launch, privacy operations and testing
+
+## [v0.1.0](https://github.com/taldres/laravel-waitlist/commits/main/compare/main...v0.1.0) - 2026-10-11
+
+<!-- Release notes generated using configuration in .github/release.yml at main -->
+### What's Changed
+
+#### Enhancements
+
+* Make the HTTP API safe to tell apart from Laravel's own answers by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/1
+* feat: add middleware to one route group by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/2
+
+#### Other Changes
+
+* Require Laravel 13 by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/3
+* Read the config typed and checked where it is used by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/4
+* Read the bot check proof from a header by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/5
+* Skip the database lanes when only docs or agent files change by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/6
+* feat: let a project turn manage links off by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/7
+* fix: leave projects without lists out of the manage link summary by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/8
+* ci: keep ParaTest below 7.26.1 until Pest supports it by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/16
+* fix: name the limits of servers in waitlist:privacy by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/9
+* feat: warn about launch mistakes in waitlist:privacy by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/10
+* fix: take a null or empty list for the default list by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/11
+* fix: make config error texts easier to act on by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/12
+* docs: add the notes that integrating a central API turned up by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/13
+* docs: say per key whether an empty variable means unset by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/14
+* test: keep the test cache store out of .env, and note two testing pitfalls by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/15
+* ci: run type coverage only where Pest 5 resolves by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/18
+* refactor: drop the single-use confirm link switch by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/19
+* feat: request a manage link by token on its own route in the links group by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/20
+* feat: let a listener report a confirmation mail it could not send by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/21
+* feat: let a project promise its own retention periods and confirm link lifetime by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/22
+* feat: name a failed spam check with an error code by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/23
+* docs: add decision tables for where wording lives and for who may call by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/24
+* fix: bind confirmation reports to their request and make them idempotent by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/25
+* docs: add the Laravel-first rules to AGENTS.md by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/31
+* feat: let a project list the websites that may use it from a browser by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/26
+* feat: check the settings and the tables on deploy by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/27
+* docs: say in the skills how schema changes ship after the first release by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/28
+* docs: state the bounds of the periods and the rate limits in the config comments by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/30
+* fix: refuse to build package links without an absolute APP_URL by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/32
+* fix: keep the limiters and contract bindings the app defined first by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/33
+* test: keep the documentation and the bundled skills in step with the settings by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/29
+* refactor: leave the scheduling of waitlist:prune to the application by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/34
+* ci: run PHPStan in one process by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/37
+* refactor: register the routes without fallbacks and leave the middleware priority alone by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/35
+* fix: stop waitlist:prune before deleting when the project catalog does not read by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/36
+* fix: accept the date class an app chose with Date::use() by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/38
+* refactor: remove code nothing in the package calls by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/39
+* test: cover auth middleware with the project resolver by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/40
+* ci: cover Laravel's database versions and build the test schema once by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/41
+* fix: do not fail waitlist:check --strict for a prune nobody schedules by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/42
+* fix: keep php artisan about from failing and name the classes in use by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/43
+* fix: state the rate limits waitlist:privacy names only while they are the package's by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/44
+* refactor: lean on Laravel for limiters and contracts by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/45
+* feat: add waitlist:install --projects by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/46
+* fix: reach the address's other lists by the entry's hash when the normalizer does not read by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/47
+* refactor!: report a confirmation mail with the EntrySubscribed event by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/48
+* refactor: use Command::fail() and keep the prune hint in one place by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/49
+* ci: run the tests weekly and let every lane finish by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/50
+* fix: tell the three authentication setups apart in the docs and waitlist:privacy by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/51
+* docs: note that the package is in development by @Taldres in https://github.com/Taldres/laravel-waitlist/pull/52
+
+**Full Changelog**: https://github.com/Taldres/laravel-waitlist/commits/v0.1.0
