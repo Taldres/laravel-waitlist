@@ -154,39 +154,31 @@ and `privacy.store_user_agent` allow it; retention clears them after
 ## CORS
 
 If your SPA runs on a different origin than the API, the browser needs CORS
-headers. Name the websites in the project and the package does it:
+headers, and Laravel's CORS handling gives them. The package does not touch it:
+CORS says which websites a browser may read answers for, across the whole app,
+and belongs to `config/cors.php` (`php artisan config:publish cors` if the file
+does not exist yet).
 
 ```php
-Waitlist::define('acme', function (ProjectDefinition $project) {
-    $project->origins(['https://acme.example', 'https://www.acme.example']);
-    // ...
-});
-```
-
-For a browser request to the package routes, the package gives Laravel's CORS
-handling the paths, the origins of the projects and `Retry-After`, which a client
-reads after a `429`, and puts the settings back afterwards. A request from a
-website that no project lists gets no CORS headers. The list also **limits** the
-project: see [Websites that may use a project](#websites-that-may-use-a-project).
-A project without origins is not limited and gets no CORS headers from the
-package; configure those by hand as below.
-
-A preflight request does not say which project it is for, so it is answered for
-the origins of every project; the request itself is checked against its project.
-Where your own `config/cors.php` already covers the waitlist paths, its origins
-stay and the projects' are added. Without origins in a project, configure CORS in
-the consuming app. Add the waitlist path in `config/cors.php`:
-
-```php
+// config/cors.php
 'paths' => ['api/*', 'waitlist', 'waitlist/*'],
-// Only when the browser sends cookies, with credentials: "include".
-'supports_credentials' => true,
+// The websites of your projects together.
+'allowed_origins' => ['https://acme.example', 'https://rocket.example'],
+'allowed_methods' => ['GET', 'POST', 'PUT'],
+// What your clients send, such as the bot check proof and the CSRF token.
+'allowed_headers' => ['Content-Type', 'Accept', 'X-Waitlist-Challenge', 'X-XSRF-TOKEN'],
 // Lets a cross-origin client read how long to wait after a 429.
 'exposed_headers' => ['Retry-After'],
+// Only when the browser sends cookies, with credentials: "include".
+'supports_credentials' => true,
 ```
 
-If you narrow `allowed_headers`, keep the headers your client sends, such as
-`X-Waitlist-Challenge` or `X-XSRF-TOKEN`.
+The paths are the package's `routes.prefix`, here `waitlist`. A preflight request
+does not say which project it is for, so CORS can only list the websites of all
+projects together. Which website may use **which project** is the package's own
+rule, [`origins()`](#websites-that-may-use-a-project), checked on the request that
+follows. A website that CORS does not list cannot read any answer, the `403`
+included: the browser reports a CORS failure instead.
 
 ## Who may sign up (closed betas, central APIs)
 
@@ -282,8 +274,8 @@ keeps out other websites, not bots.
 project's endpoints as a guest: the signup, the wording and a manage link by
 address. A request that names another origin is refused with `403`
 ("This website may not use the waitlist."), before the `useWaitlist` gate, so a
-gate that lets everyone through does not undo it. The same list drives
-[CORS](#cors).
+gate that lets everyone through does not undo it. It sets no CORS headers: those
+stay in [`config/cors.php`](#cors), which lists the websites of all projects.
 
 - A request **without** an `Origin` header is not affected: a server calling the
   API sends none, and neither does a browser for a same-origin `GET`. The API's own

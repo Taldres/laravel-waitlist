@@ -67,22 +67,4 @@ final class OriginPolicy
 
         return $origin === self::normalize($request->getSchemeAndHttpHost()) || in_array($origin, $allowed, true);
     }
-
-    /**
-     * The origins of every project, for the answer to a preflight request,
-     * which does not say which project it is for.
-     *
-     * @return list<string>
-     */
-    public static function all(): array
-    {
-        $catalog = app(ProjectCatalog::class);
-        $origins = [];
-
-        foreach ($catalog->projects() as $project) {
-            array_push($origins, ...$catalog->origins($project));
-        }
-
-        return array_values(array_unique($origins));
-    }
 }

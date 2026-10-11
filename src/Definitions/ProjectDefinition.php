@@ -204,11 +204,11 @@ final class ProjectDefinition
     /**
      * The websites that may use this project's endpoints from a browser as a
      * guest, such as https://acme.example: a request that names another origin
-     * is refused with 403, whatever the useWaitlist gate says. The same list
-     * lets a browser read the answers (CORS), so the paths and origins need no
-     * entry in config/cors.php. Calls add to each other. A request without an
-     * Origin header, as from a server, is not affected, and a script outside a
-     * browser can set any: this keeps other websites out, not bots.
+     * is refused with 403, whatever the useWaitlist gate says. CORS, which
+     * websites a browser may read answers for, stays in config/cors.php. Calls
+     * add to each other. A request without an Origin header, as from a server,
+     * is not affected, and a script outside a browser can set any: this keeps
+     * other websites out, not bots.
      *
      * @param  array<array-key, mixed>  $origins
      *

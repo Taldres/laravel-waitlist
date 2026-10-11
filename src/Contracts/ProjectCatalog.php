@@ -68,7 +68,7 @@ interface ProjectCatalog
     /**
      * The origins, such as https://example.com, from which a browser may use the
      * project's endpoints as a guest; empty for any. A request without an Origin
-     * header, as from a server, is not affected. The same list drives CORS.
+     * header, as from a server, is not affected. CORS stays in config/cors.php.
      *
      * @return list<string>
      */

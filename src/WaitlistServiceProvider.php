@@ -37,7 +37,6 @@ use Taldres\Waitlist\Contracts\SpamProtector;
 use Taldres\Waitlist\Definitions\ProjectDefinitions;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
-use Taldres\Waitlist\Http\Middleware\AllowProjectOrigins;
 use Taldres\Waitlist\Http\Middleware\CheckRouteConfig;
 use Taldres\Waitlist\Http\RouteRegistration;
 
@@ -108,11 +107,6 @@ class WaitlistServiceProvider extends ServiceProvider
         $this->callAfterResolving(HttpKernel::class, function (HttpKernel $kernel): void {
             if (method_exists($kernel, 'prependToMiddlewarePriority')) {
                 $kernel->prependToMiddlewarePriority(CheckRouteConfig::class);
-            }
-
-            // Ahead of HandleCors, which reads the CORS settings when it runs.
-            if (method_exists($kernel, 'prependMiddleware')) {
-                $kernel->prependMiddleware(AllowProjectOrigins::class);
             }
         });
 

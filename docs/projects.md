@@ -291,9 +291,10 @@ A project used from a browser on another site lists that site:
 $project->origins(['https://acme.example']);
 ```
 
-A guest request from any other website is refused with `403`, and the list drives
-CORS, so `config/cors.php` needs no entry for the waitlist. A server calling for
-the project and a request without an `Origin` header are not affected. Details in
+A guest request from any other website is refused with `403`. CORS stays in
+`config/cors.php`, which lists the websites of all projects together. A server
+calling for the project and a request without an `Origin` header are not
+affected. Details in
 [Securing the endpoints](securing-the-endpoints.md#websites-that-may-use-a-project).
 
 ### Periods a project promises itself

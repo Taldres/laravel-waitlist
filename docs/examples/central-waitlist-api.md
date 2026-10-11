@@ -205,9 +205,9 @@ and where browsers land afterwards, come from its `urlPattern()`; the
 since the one-click request has to reach the package.
 
 Keep the key check out of `routes.middleware`: it applies to the token links
-too. Return each site's origins from `origins($project)` of your catalog: they
-drive CORS and refuse other websites' browsers. Configure trusted proxies so the
-rate limiter sees real client IPs.
+too. List the sites together in `config/cors.php`, and return each site's origins
+from `origins($project)` of your catalog: they refuse other sites' browsers for
+that project. Configure trusted proxies so the rate limiter sees real client IPs.
 
 ## 4. Mails per project
 
