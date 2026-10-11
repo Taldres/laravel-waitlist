@@ -113,26 +113,37 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The oldest version Laravel's own CI covers and a current one of each.
+        # The versions of these engines that Laravel's own databases workflow
+        # covers. The Postgres image keeps its data elsewhere from 18 on, and
+        # refuses to start with a mount at the old path.
         include:
           - db: mysql
             image: mysql:5.7
           - db: mysql
             image: mysql:8.4
+          - db: mysql
+            image: mysql:9.7
           - db: mariadb
             image: mariadb:10.11
           - db: mariadb
             image: mariadb:11.8
+          - db: mariadb
+            image: mariadb:12.3
           - db: pgsql
             image: postgres:10
+            pgdata: /var/lib/postgresql/data
           - db: pgsql
-            image: postgres:17
+            image: postgres:14
+            pgdata: /var/lib/postgresql/data
+          - db: pgsql
+            image: postgres:18
+            pgdata: /var/lib/postgresql
 
     name: ${{ matrix.image }}
 
     # An empty image skips a service, so each lane starts only its database.
-    # Data lives on tmpfs: the suite rebuilds the schema before every test,
-    # and each DDL statement would otherwise wait for the runner's disk.
+    # Data lives on tmpfs: every test commits rows and the suite deletes them
+    # again, and each commit would otherwise wait for the runner's disk.
     services:
       mysql:
         image: ${{ matrix.db == 'mysql' && matrix.image || '' }}
@@ -155,7 +166,7 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
         ports: ['5432:5432']
-        options: --tmpfs /var/lib/postgresql/data --health-cmd="pg_isready" --health-interval=10s --health-timeout=5s --health-retries=5
+        options: --tmpfs ${{ matrix.pgdata }} --health-cmd="pg_isready" --health-interval=10s --health-timeout=5s --health-retries=5
 
     steps:
       - name: Checkout code
