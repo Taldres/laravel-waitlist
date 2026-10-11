@@ -64,7 +64,7 @@ class SendWaitlistConfirmationMail implements ShouldQueue, ShouldBeEncrypted
             $event->subscription->consents->pluck('text')->all(), // what is being confirmed
         ));
 
-        Waitlist::confirmationMailed($event->subscription, 'confirm-mail@2026-10');
+        Waitlist::confirmationMailed($event, 'confirm-mail@2026-10');
     }
 }
 ```
@@ -74,10 +74,10 @@ class SendWaitlistConfirmationMail implements ShouldQueue, ShouldBeEncrypted
 - `confirmationMailed()` records the reference of the mail next to the consent;
   use a template name and version, and keep each version's text.
 - A request counts against the cooldown and the caps when it is issued. If the
-  queued listener gives up, call `Waitlist::confirmationFailed($event->subscription,
+  queued listener gives up, call `Waitlist::confirmationFailed($event,
   'http-429')` from its `failed()` method (an error code, never the address): the
-  person's own retry then gets a mail. Report with `$event->subscription`: each
-  request takes one report, and a repeat, a report about an earlier request or a
+  person's own retry then gets a mail. Report with the event, never a model
+  loaded afresh: each request takes one report, and a repeat, a report about an earlier request or a
   failure after `confirmationMailed()` answers `false`. A mail that went out after
   its failure was reported is accepted once.
 - `$event->confirmUrl` is `null` while the project's `urls()` sets no `confirm` page

@@ -134,22 +134,24 @@ class SubscriptionLifecycle
     /**
      * The listener's report that no mail left. It takes back what the request
      * held, the cooldown and one in the count, and only for the request the
-     * snapshot is about, whose confirm link hash is its identity: the count
-     * cannot be, as it goes down again. The condition is part of one UPDATE, so
+     * event is about, whose confirm link is its identity: the count cannot be,
+     * as it goes down again, and neither can the subscription model, which a
+     * refresh or a queued job's SerializesModels reloads with the latest
+     * request. The condition is part of one UPDATE, so
      * of two reports of the same request exactly one counts, and a report that
      * contradicts an earlier one (the mail went out) or is about an earlier
      * request changes nothing. False then, and when the cycle was confirmed or
      * has ended.
      */
-    public function confirmationFailed(WaitlistSubscription $snapshot, RequestContext $context, ?string $reference = null): bool
+    public function confirmationFailed(EntrySubscribed $event, RequestContext $context, ?string $reference = null): bool
     {
-        $request = $snapshot->confirm_token_hash;
+        $request = $this->requestOf($event);
 
         if ($request === null) {
             return false;
         }
 
-        return $this->transition($snapshot, [
+        return $this->transition($event->subscription, [
             'confirmation_sent_at' => null,
             'confirmation_count' => new Expression('confirmation_count - 1'),
             'confirmation_outcome' => ConfirmationOutcome::Failed,
@@ -163,21 +165,21 @@ class SubscriptionLifecycle
 
     /**
      * The listener's report that the mail went out, once per request and bound
-     * to it by its confirm link hash like a failure. A mail that went out after
+     * to it by its confirm link like a failure. A mail that went out after
      * its failure was reported, as when a failed job is retried, is accepted
      * once more and takes the cooldown and the count back. A repeat, or a report
      * about an earlier request, changes nothing and answers false. The
      * request of a cycle that has ended has no link left to name it.
      */
-    public function confirmationMailed(WaitlistSubscription $snapshot, RequestContext $context, string $reference): bool
+    public function confirmationMailed(EntrySubscribed $event, RequestContext $context, string $reference): bool
     {
-        $request = $snapshot->confirm_token_hash;
+        $request = $this->requestOf($event);
 
         if ($request === null) {
             return false;
         }
 
-        if ($this->transition($snapshot, [
+        if ($this->transition($event->subscription, [
             'confirmation_outcome' => ConfirmationOutcome::Mailed,
         ], fn (Builder $query): Builder => $query
             ->where('confirm_token_hash', $request)
@@ -185,13 +187,22 @@ class SubscriptionLifecycle
             return true;
         }
 
-        return $this->transition($snapshot, [
+        return $this->transition($event->subscription, [
             'confirmation_sent_at' => Carbon::now(),
             'confirmation_count' => new Expression('confirmation_count + 1'),
             'confirmation_outcome' => ConfirmationOutcome::Mailed,
         ], fn (Builder $query): Builder => $query
             ->where('confirm_token_hash', $request)
             ->where('confirmation_outcome', ConfirmationOutcome::Failed), ActivityType::ConfirmationMailed, $context, reference: $reference);
+    }
+
+    /**
+     * The confirm link hash of the request the event announced, null without
+     * double opt-in.
+     */
+    protected function requestOf(EntrySubscribed $event): ?string
+    {
+        return $event->confirmToken === null ? null : static::modelClass()::hashToken($event->confirmToken);
     }
 
     /**
@@ -251,7 +262,7 @@ class SubscriptionLifecycle
         $expiresAt = $this->confirmTokenExpiresAt($subscription->entry()->firstOrFail()->project, $now);
 
         return $this->transition($subscription, [
-            'confirm_token_hash' => WaitlistEntry::hashToken($confirmToken),
+            'confirm_token_hash' => static::modelClass()::hashToken($confirmToken),
             'confirm_token_expires_at' => $expiresAt,
             'confirmation_sent_at' => $now,
             'confirmation_count' => $expected + 1,

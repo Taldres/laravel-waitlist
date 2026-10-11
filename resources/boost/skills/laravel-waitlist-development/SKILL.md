@@ -154,7 +154,7 @@ public function handle(EntrySubscribed $event): void
     ));
 
     // Record the mail reference alongside the consent wording.
-    Waitlist::confirmationMailed($event->subscription, 'confirm-mail@2026-10');
+    Waitlist::confirmationMailed($event, 'confirm-mail@2026-10');
 }
 ```
 

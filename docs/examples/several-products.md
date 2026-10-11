@@ -192,7 +192,7 @@ public function handle(EntrySubscribed $event): void
 
     Mail::mailer($product['mailer'])->to($event->entry->email)->send($mail);
 
-    Waitlist::confirmationMailed($event->subscription, "confirm-mail@{$event->entry->project}-2026-10");
+    Waitlist::confirmationMailed($event, "confirm-mail@{$event->entry->project}-2026-10");
 }
 ```
 

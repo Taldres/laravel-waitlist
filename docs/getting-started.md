@@ -190,7 +190,7 @@ class SendWaitlistConfirmationMail implements ShouldQueue, ShouldBeEncrypted
             $event->unsubscribeUrl,
             $event->subscription->consents->pluck('text')->all(),   // what is being confirmed
         ));
-        Waitlist::confirmationMailed($event->subscription, 'confirm-mail@2026-10');
+        Waitlist::confirmationMailed($event, 'confirm-mail@2026-10');
     }
 }
 ```

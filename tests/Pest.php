@@ -94,17 +94,18 @@ function subscribeAndCapture(string $list, string $email, ?array $purposes = nul
 }
 
 /**
- * What a listener holds when it reports: the subscription as the event carried
- * it, copied because the package refreshes the model it works on.
+ * What a listener holds when it reports: the event. Its subscription is the
+ * model the package refreshes, so it carries the latest request, as a queued
+ * job's SerializesModels would load it.
  *
- * @return ArrayObject<int, WaitlistSubscription>
+ * @return ArrayObject<int, EntrySubscribed>
  */
 function captureRequests(): ArrayObject
 {
     $requests = new ArrayObject;
 
     Event::listen(EntrySubscribed::class, function (EntrySubscribed $event) use ($requests): void {
-        $requests->append((new WaitlistSubscription)->newFromBuilder($event->subscription->getAttributes()));
+        $requests->append($event);
     });
 
     return $requests;

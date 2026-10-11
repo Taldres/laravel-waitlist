@@ -250,14 +250,25 @@ it('keeps a confirmation that crossed an expiry', function () {
     assertWaitlistInvariants();
 });
 
+/**
+ * The event as a listener on the given connection holds it.
+ */
+function requestOnConnection(EntrySubscribed $event): EntrySubscribed
+{
+    $copy = clone $event;
+    $copy->subscription = (new WaitlistSubscription)->newFromBuilder($event->subscription->getAttributes());
+
+    return $copy;
+}
+
 it('counts one of two crossing failure reports of a request, whichever client sends it first', function () {
     $requests = captureRequests();
     subscribeAndCapture('beta', 'user@example.com');
     $this->travel(10)->minutes();
     Waitlist::resendConfirmation('beta', 'user@example.com');
 
-    $onA = $this->as('a', fn () => (new WaitlistSubscription)->newFromBuilder($requests[1]->getAttributes()));
-    $onB = $this->as('b', fn () => (new WaitlistSubscription)->newFromBuilder($requests[1]->getAttributes()));
+    $onA = $this->as('a', fn () => requestOnConnection($requests[1]));
+    $onB = $this->as('b', fn () => requestOnConnection($requests[1]));
 
     $wonA = $this->as('a', fn () => Waitlist::confirmationFailed($onA, 'from a'));
     $wonB = $this->as('b', fn () => Waitlist::confirmationFailed($onB, 'from b'));
@@ -273,8 +284,8 @@ it('settles a mail report and a failure report that cross on the first of them',
     $requests = captureRequests();
     subscribeAndCapture('beta', 'user@example.com');
 
-    $onA = $this->as('a', fn () => (new WaitlistSubscription)->newFromBuilder($requests[0]->getAttributes()));
-    $onB = $this->as('b', fn () => (new WaitlistSubscription)->newFromBuilder($requests[0]->getAttributes()));
+    $onA = $this->as('a', fn () => requestOnConnection($requests[0]));
+    $onB = $this->as('b', fn () => requestOnConnection($requests[0]));
 
     $mailed = fn () => $this->as('a', fn () => Waitlist::confirmationMailed($onA, 'mail-1'));
     $failed = fn () => $this->as('b', fn () => Waitlist::confirmationFailed($onB, 'http-500'));

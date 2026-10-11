@@ -64,7 +64,7 @@ request and the confirmation itself. The mail is yours, so record it from your
 listener once it went out:
 
 ```php
-Waitlist::confirmationMailed($event->subscription, 'confirm-mail@2026-10');
+Waitlist::confirmationMailed($event, 'confirm-mail@2026-10');
 ```
 
 The reference names what you sent, typically your template and its version;

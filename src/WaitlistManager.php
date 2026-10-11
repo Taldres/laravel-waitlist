@@ -26,6 +26,7 @@ use Taldres\Waitlist\Contracts\SpamProtector;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Definitions\ProjectDefinitions;
 use Taldres\Waitlist\Enums\Page;
+use Taldres\Waitlist\Events\EntrySubscribed;
 use Taldres\Waitlist\Exceptions\ExpiredTokenException;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Exceptions\InvalidEmailException;
@@ -280,15 +281,16 @@ class WaitlistManager
      * provider's message id. The package verifies neither delivery nor the
      * legal validity of the consent.
      *
-     * Pass $event->subscription: it names the request. The first report of a
+     * Pass the EntrySubscribed event: its confirm token names the request,
+     * also after a queue or a refresh. The first report of a
      * request counts, a repeat or a report about an earlier request answers
      * false and records nothing, and so does one for an entry that was erased.
      * A mail that went out after confirmationFailed() was reported for it is
      * accepted once, and takes the cooldown and the count back.
      */
-    public function confirmationMailed(WaitlistSubscription $subscription, string $reference, ?RequestContext $context = null): bool
+    public function confirmationMailed(EntrySubscribed $event, string $reference, ?RequestContext $context = null): bool
     {
-        return app(SubscriptionLifecycle::class)->confirmationMailed($subscription, $context ?? RequestContext::none(), $reference);
+        return app(SubscriptionLifecycle::class)->confirmationMailed($event, $context ?? RequestContext::none(), $reference);
     }
 
     /**
@@ -297,16 +299,17 @@ class WaitlistManager
      * The request stops counting against the resend cooldown and the caps, so
      * the person's own retry gets a mail.
      *
-     * Pass $event->subscription: it names the request. Only the first report
+     * Pass the EntrySubscribed event: its confirm token names the request.
+     * Only the first report
      * of a request counts, one time. A repeat, a report about an earlier
      * request, one for a request that was reported as mailed, a cycle that was
      * confirmed or has ended, and an erased entry answer false and change
      * nothing. $reference is what you want in the log, such as the provider's
      * error code; never the address or the provider's message.
      */
-    public function confirmationFailed(WaitlistSubscription $subscription, ?string $reference = null, ?RequestContext $context = null): bool
+    public function confirmationFailed(EntrySubscribed $event, ?string $reference = null, ?RequestContext $context = null): bool
     {
-        return app(SubscriptionLifecycle::class)->confirmationFailed($subscription, $context ?? RequestContext::none(), $reference);
+        return app(SubscriptionLifecycle::class)->confirmationFailed($event, $context ?? RequestContext::none(), $reference);
     }
 
     public function findByConfirmToken(string $plainToken): ?WaitlistSubscription
