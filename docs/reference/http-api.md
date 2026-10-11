@@ -142,7 +142,9 @@ Waitlist::define(function (ProjectDefinition $project): void {
 
 Links to the package routes themselves are built from `APP_URL`, never from the
 Host header of the request that triggered the mail, so a forged signup cannot
-send a token to another host.
+send a token to another host. Without an absolute `http` or `https` `APP_URL`
+there is no such link: building one throws `InvalidConfigurationException`, and
+the signup is undone, rather than falling back to the request's host.
 
 Need more logic than a pattern, a landing page per list or locale for example?
 Bind your own `ConfirmationUrlGenerator`, see

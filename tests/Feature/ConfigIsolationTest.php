@@ -369,6 +369,37 @@ describe('package routes that are on but not registered under their name', funct
     });
 });
 
+describe('package links without an absolute app.url', function () {
+    it('are never rooted at the request, which the sender chooses', function (mixed $root) {
+        config()->set('app.url', $root);
+
+        $this->postJson('http://evil.example/waitlist', ['email' => 'user@example.com', 'purposes' => waitlistConsent()]);
+
+        expect(WaitlistEntry::query()->count())->toBe(0);
+        expect(fn () => Waitlist::for('beta')->add('user@example.com', waitlistConsent()))
+            ->toThrow(InvalidConfigurationException::class, 'built from app.url, which must be an absolute http or https URL');
+        expect(WaitlistEntry::query()->count())->toBe(0);
+    })->with([
+        'empty' => '',
+        'null' => null,
+        'no scheme' => 'waitlist.example.com',
+        'a path' => '/waitlist',
+        'another scheme' => 'ftp://waitlist.example.com',
+    ]);
+
+    it('are not needed by pages with their own URLs', function () {
+        config()->set('app.url', '');
+        defineDefaultProject(fn ($project) => $project->urls(
+            confirm: 'https://app.test/confirm/{token}',
+            unsubscribe: 'https://app.test/leave/{token}',
+        ));
+
+        Waitlist::for('beta')->add('user@example.com', waitlistConsent());
+
+        expect(WaitlistEntry::query()->count())->toBe(1);
+    });
+});
+
 describe('link limits that do not read', function () {
     $settings = [
         'link_per_minute is not a number' => [ConfigKey::LinkPerMinute->value, 'many'],
