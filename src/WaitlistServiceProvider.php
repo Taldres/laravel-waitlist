@@ -6,7 +6,6 @@ namespace Taldres\Waitlist;
 
 use Closure;
 use Composer\InstalledVersions;
-use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Foundation\CachesConfiguration;
 use Illuminate\Foundation\Console\AboutCommand;
 use Illuminate\Support\Facades\Gate;
@@ -24,13 +23,20 @@ use Taldres\Waitlist\Console\Commands\PruneCommand;
 use Taldres\Waitlist\Console\Commands\RekeyCommand;
 use Taldres\Waitlist\Console\Commands\ShowCommand;
 use Taldres\Waitlist\Console\Commands\WordingCommand;
+use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
+use Taldres\Waitlist\Contracts\EmailNormalizer;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
+use Taldres\Waitlist\Contracts\SpamProtector;
 use Taldres\Waitlist\Definitions\ProjectDefinitions;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Http\Limiters;
 use Taldres\Waitlist\Http\RouteRegistration;
-use Taldres\Waitlist\Support\ReplacedBindings;
+use Taldres\Waitlist\Support\DefaultConfirmationUrlGenerator;
+use Taldres\Waitlist\Support\DefaultEmailNormalizer;
+use Taldres\Waitlist\Support\DefaultProjectResolver;
+use Taldres\Waitlist\Support\DefinedProjectCatalog;
+use Taldres\Waitlist\Support\NullSpamProtector;
 use Taldres\Waitlist\Support\SetupAudit;
 use Throwable;
 
@@ -48,16 +54,12 @@ class WaitlistServiceProvider extends ServiceProvider
         $this->app->scoped(ConfigFallback::class);
 
         // bindIf(): a contract the app or another package has bound already is
-        // theirs, and an app's bind() after this one replaces it. A key of an
-        // earlier config that still holds more than the default is refused on
-        // resolution, never on boot, so artisan keeps working to fix it.
-        foreach (ReplacedBindings::KEYS as $key => [$contract, $default]) {
-            $this->app->bindIf($contract, static function (Application $app) use ($key, $default): object {
-                $refusal = ReplacedBindings::refusal($key);
-
-                return $refusal === null ? $app->make($default) : throw new InvalidConfigurationException($refusal);
-            });
-        }
+        // theirs, and an app's bind() after this one replaces it.
+        $this->app->bindIf(EmailNormalizer::class, DefaultEmailNormalizer::class);
+        $this->app->bindIf(ConfirmationUrlGenerator::class, DefaultConfirmationUrlGenerator::class);
+        $this->app->bindIf(ProjectCatalog::class, DefinedProjectCatalog::class);
+        $this->app->bindIf(ProjectResolver::class, DefaultProjectResolver::class);
+        $this->app->bindIf(SpamProtector::class, NullSpamProtector::class);
     }
 
     public function boot(): void

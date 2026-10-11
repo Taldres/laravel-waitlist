@@ -175,10 +175,7 @@ model class that is abstract is refused.
 
 The contracts are not configured here: the package binds its defaults in the
 container, and a `bind()` in a provider of yours replaces them, see
-[Extending](../extending.md). A `catalog`, `url_generator`, `project_resolver`,
-`email_normalizer` or `spam_protector` key left in a config published before is
-not read; while it holds anything but the default below, null included, the
-package refuses to resolve the default in its place.
+[Extending](../extending.md).
 
 | Contract | Default | Decides |
 | --- | --- | --- |

@@ -9,6 +9,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Taldres\Waitlist\Config\WaitlistConfig;
+use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
+use Taldres\Waitlist\Contracts\EmailNormalizer;
+use Taldres\Waitlist\Contracts\ProjectCatalog;
+use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Contracts\SpamProtector;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
@@ -26,6 +30,14 @@ use Throwable;
  */
 final class SetupAudit
 {
+    private const array CONTRACTS = [
+        ProjectCatalog::class,
+        ConfirmationUrlGenerator::class,
+        ProjectResolver::class,
+        EmailNormalizer::class,
+        SpamProtector::class,
+    ];
+
     /**
      * The columns the migrations of this version create, by model. A test keeps
      * the lists in step with the migrations.
@@ -99,17 +111,12 @@ final class SetupAudit
     public static function bindingProblems(): array
     {
         $problems = [];
-        // A refused key is reported with the settings, not once more for each
-        // contract whose default needs it.
-        $refusals = array_filter(array_map(ReplacedBindings::refusal(...), array_keys(ReplacedBindings::KEYS)));
 
-        foreach (ReplacedBindings::KEYS as [$contract]) {
+        foreach (self::CONTRACTS as $contract) {
             try {
                 $resolved = self::resolve($contract);
             } catch (Throwable $exception) {
-                if (! in_array($exception->getMessage(), $refusals, true)) {
-                    $problems[] = "{$contract} cannot be resolved: ".$exception->getMessage();
-                }
+                $problems[] = "{$contract} cannot be resolved: ".$exception->getMessage();
 
                 continue;
             }

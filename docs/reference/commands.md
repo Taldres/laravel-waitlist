@@ -55,11 +55,7 @@ say where they looked.
   once, by key and never by value, so a typo in `.env` is found on deploy and not
   by the first request that needs it. It also warns of settings in a published
   `config/waitlist.php` that the package does not read (a typo, say, which stays
-  ignored otherwise). A `catalog`, `url_generator`, `project_resolver`,
-  `email_normalizer` or `spam_protector` key that a container binding replaced
-  fails the check while it holds anything but the package default, null included, as
-  ignoring it would change what the package does; one that holds the default,
-  as `waitlist:install` published it, is only warned of. It resolves the five
+  ignored otherwise). It resolves the five
   contracts as well and fails on one the container cannot build, or builds as
   something that does not implement it, naming the contract and the error,
   such as a binding to a class that does not exist; the spam protector checked

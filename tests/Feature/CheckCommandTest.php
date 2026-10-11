@@ -21,8 +21,6 @@ use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Facades\Waitlist;
 use Taldres\Waitlist\Http\RouteRegistration;
 use Taldres\Waitlist\Support\ClosureSpamProtector;
-use Taldres\Waitlist\Support\DefaultConfirmationUrlGenerator;
-use Taldres\Waitlist\Support\DefaultEmailNormalizer;
 use Taldres\Waitlist\Support\DefaultProjectResolver;
 use Taldres\Waitlist\Support\DefinedProjectCatalog;
 use Taldres\Waitlist\Support\NullSpamProtector;
@@ -211,71 +209,18 @@ it('names the limiters of a config published before, which the routes no longer 
 });
 
 /**
- * Each key a container binding replaced, with its contract and the class a
- * published config held under it.
- *
- * @return array<string, array{0: string, 1: class-string, 2: class-string}>
+ * @return array<string, class-string>
  */
-function checkReplacedKeys(): array
+function checkContracts(): array
 {
     return [
-        'catalog' => ['catalog', ProjectCatalog::class, DefinedProjectCatalog::class],
-        'url_generator' => ['url_generator', ConfirmationUrlGenerator::class, DefaultConfirmationUrlGenerator::class],
-        'project_resolver' => ['project_resolver', ProjectResolver::class, DefaultProjectResolver::class],
-        'email_normalizer' => ['email_normalizer', EmailNormalizer::class, DefaultEmailNormalizer::class],
-        'spam_protector' => ['spam_protector', SpamProtector::class, NullSpamProtector::class],
+        'the catalog' => ProjectCatalog::class,
+        'the URL generator' => ConfirmationUrlGenerator::class,
+        'the project resolver' => ProjectResolver::class,
+        'the email normalizer' => EmailNormalizer::class,
+        'the spam protector' => SpamProtector::class,
     ];
 }
-
-it('fails on a binding a config published before named, as the container binding replaced it', function (string $key, string $contract) {
-    config()->set("waitlist.{$key}", 'App\Waitlist\Mine');
-
-    [$exit, $output] = checkOutput();
-
-    expect($exit)->toBe(1)
-        ->and($output)->toContain("The waitlist.{$key} config is no longer read: bind {$contract} in a service provider instead")
-        ->and(substr_count($output, "The waitlist.{$key} config is no longer read"))->toBe(1)
-        ->and(SetupAudit::unknownSettings())->toBe(["waitlist.{$key}"]);
-})->with(checkReplacedKeys());
-
-it('still fails on such a binding when the app binds the contract itself, as the key misleads whoever reads the config', function (string $key, string $contract, string $default) {
-    config()->set("waitlist.{$key}", 'App\Waitlist\Mine');
-    app()->bind($contract, $default);
-
-    [$exit, $output] = checkOutput();
-
-    expect($exit)->toBe(1)
-        ->and($output)->toContain("The waitlist.{$key} config is no longer read");
-})->with(checkReplacedKeys());
-
-it('only warns of a key that still holds the default, as waitlist:install published it', function (string $key, string $contract, string $default) {
-    config()->set("waitlist.{$key}", $default);
-
-    [$exit, $output] = checkOutput();
-
-    expect($exit)->toBe(0)
-        ->and($output)->toContain("waitlist.{$key} is not a setting the package reads")
-        ->and($output)->not->toContain('no longer read');
-
-    [$strict] = checkOutput(['--strict' => true]);
-
-    expect($strict)->toBe(1);
-})->with(checkReplacedKeys());
-
-it('passes the config waitlist:install published before the bindings replaced its keys, with a warning for each', function () {
-    $published = require __DIR__.'/../../config/waitlist.php';
-
-    foreach (checkReplacedKeys() as [$key, , $default]) {
-        $published[$key] = $default;
-    }
-
-    config()->set('waitlist', PackageConfig::merge($published));
-
-    [$exit, $output] = checkOutput();
-
-    expect($exit)->toBe(0)
-        ->and(substr_count($output, 'is not a setting the package reads'))->toBe(5);
-});
 
 describe('the bindings', function () {
     it('pass the check as the package binds them', function () {
@@ -295,13 +240,13 @@ describe('the bindings', function () {
             ->and($output)->toContain("{$contract} cannot be resolved: ")
             ->and($output)->toContain($reason);
     })->with(function () {
-        foreach (checkReplacedKeys() as $label => [, $contract]) {
+        foreach (checkContracts() as $label => $contract) {
             yield "{$label} / a binding that throws" => [$contract, fn (string $contract) => app()->bind($contract, fn () => throw new RuntimeException('The service is down.')), 'The service is down.'];
             yield "{$label} / a class that does not exist" => [$contract, fn (string $contract) => app()->bind($contract, 'App\Waitlist\Typo'), 'Target class [App\Waitlist\Typo] does not exist.'];
         }
     });
 
-    it('fail the check when one resolves to something that does not implement its contract', function (string $key, string $contract) {
+    it('fail the check when one resolves to something that does not implement its contract', function (string $contract) {
         app()->bind($contract, fn () => new stdClass);
 
         [$exit, $output] = checkOutput();
@@ -312,7 +257,7 @@ describe('the bindings', function () {
         expect($exit)->toBe(1)
             ->and($output)->toContain($contract)
             ->and($output)->toContain($expected);
-    })->with(checkReplacedKeys());
+    })->with(checkContracts());
 
     it('check the spam protector the endpoints use, and never ask it', function () {
         app()->bind(SpamProtector::class, fn () => throw new RuntimeException('The protector is down.'));

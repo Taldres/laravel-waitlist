@@ -38,16 +38,6 @@ signup and the manage link by address, a closure from `Waitlist::verifySpamUsing
 wins over the bound `SpamProtector`, which is then not even built;
 `app(SpamProtector::class)` still resolves the bound class.
 
-`config/waitlist.php` no longer reads `catalog`, `url_generator`,
-`project_resolver`, `email_normalizer` or `spam_protector`. Remove them from a
-config published before. One that still holds anything but the package's
-default, null included, would change what the package does if it were ignored, the project of a
-signup or the lookup hash for example. So until you bind the contract yourself,
-resolving it throws an `InvalidConfigurationException` that names the key, and
-`waitlist:check` fails on the key until you remove it. One that holds the
-default, as `waitlist:install` published it, changes nothing and is only warned
-of.
-
 ## Your own models
 
 Extend the package model and point the config at it:
