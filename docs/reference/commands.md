@@ -1,7 +1,7 @@
 # Commands
 
 ```bash
-php artisan waitlist:install                               # publish the provider, config and migrations; register the provider
+php artisan waitlist:install [--projects]                  # publish the provider, config and migrations; register the provider
 php artisan waitlist:privacy [--project=]                  # input for your record of processing
 php artisan waitlist:check [--strict]                       # settings and tables, for a deploy
 php artisan waitlist:show {email} [--list=] [--project=] [--json|--pretty]  # right of access
@@ -31,7 +31,12 @@ say where they looked.
   migrations (`waitlist-migrations`), and adds the provider to
   `bootstrap/providers.php`. It never overwrites a published file and registers
   the provider only once, so it can run again. An app namespace other than `App`
-  is kept.
+  is kept. With `--projects`, the provider starts with two named projects and the
+  default project with pages only, see
+  [Several products in one app](../projects.md#several-products-in-one-app); the
+  command warns that the package routes, once enabled, answer every signup with
+  `422` until you bind a `ProjectResolver`. This provider is copied, not published under a tag,
+  and an existing provider is left as it is, which the command says.
 - **`waitlist:prune`** applies the retention periods. Schedule it yourself, for
   example `Schedule::command('waitlist:prune')->daily()`, and keep Laravel's
   scheduler running; `waitlist:privacy` warns while no scheduled task runs it. See

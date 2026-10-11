@@ -30,7 +30,7 @@ final class WaitlistConfig
      */
     public static function entryModel(): string
     {
-        return ConfigReader::of(config('waitlist'))->subclass(ConfigKey::Model, WaitlistEntry::class);
+        return self::reader()->subclass(ConfigKey::Model, WaitlistEntry::class);
     }
 
     /**
@@ -38,7 +38,7 @@ final class WaitlistConfig
      */
     public static function subscriptionModel(): string
     {
-        return ConfigReader::of(config('waitlist'))->subclass(ConfigKey::SubscriptionModel, WaitlistSubscription::class);
+        return self::reader()->subclass(ConfigKey::SubscriptionModel, WaitlistSubscription::class);
     }
 
     /**
@@ -46,7 +46,7 @@ final class WaitlistConfig
      */
     public static function consentModel(): string
     {
-        return ConfigReader::of(config('waitlist'))->subclass(ConfigKey::ConsentModel, WaitlistConsent::class);
+        return self::reader()->subclass(ConfigKey::ConsentModel, WaitlistConsent::class);
     }
 
     /**
@@ -54,22 +54,22 @@ final class WaitlistConfig
      */
     public static function activityModel(): string
     {
-        return ConfigReader::of(config('waitlist'))->subclass(ConfigKey::ActivityModel, WaitlistActivity::class);
+        return self::reader()->subclass(ConfigKey::ActivityModel, WaitlistActivity::class);
     }
 
     public static function connection(): ?string
     {
-        return ConfigReader::of(config('waitlist'))->stringOrNull(ConfigKey::Connection);
+        return self::reader()->stringOrNull(ConfigKey::Connection);
     }
 
     public static function defaultList(): string
     {
-        return ConfigReader::of(config('waitlist'))->string(ConfigKey::DefaultList);
+        return self::reader()->string(ConfigKey::DefaultList);
     }
 
     public static function requireWordingHash(): bool
     {
-        return ConfigReader::of(config('waitlist'))->boolean(ConfigKey::WordingRequireHash);
+        return self::reader()->boolean(ConfigKey::WordingRequireHash);
     }
 
     /**
@@ -77,7 +77,7 @@ final class WaitlistConfig
      */
     public static function doubleOptIn(): bool
     {
-        return ConfigReader::of(config('waitlist'))->boolean(ConfigKey::DoubleOptIn);
+        return self::reader()->boolean(ConfigKey::DoubleOptIn);
     }
 
     /**
@@ -85,7 +85,7 @@ final class WaitlistConfig
      */
     public static function confirmTokenTtl(): ?int
     {
-        return ConfigReader::of(config('waitlist'))->lifetimeMinutesOrNull(ConfigKey::ConfirmTokenTtl, min: 1);
+        return self::reader()->lifetimeMinutesOrNull(ConfigKey::ConfirmTokenTtl, min: 1);
     }
 
     /**
@@ -103,7 +103,7 @@ final class WaitlistConfig
      */
     public static function resendCooldown(): ?int
     {
-        return ConfigReader::of(config('waitlist'))->lookbackMinutesOrNull(ConfigKey::ResendCooldown, min: 0);
+        return self::reader()->lookbackMinutesOrNull(ConfigKey::ResendCooldown, min: 0);
     }
 
     /**
@@ -111,7 +111,7 @@ final class WaitlistConfig
      */
     public static function maxConfirmations(): ?int
     {
-        return ConfigReader::of(config('waitlist'))->integerOrNull(ConfigKey::MaxConfirmations, min: 1);
+        return self::reader()->integerOrNull(ConfigKey::MaxConfirmations, min: 1);
     }
 
     /**
@@ -119,7 +119,7 @@ final class WaitlistConfig
      */
     public static function maxPendingPerAddress(): ?int
     {
-        return ConfigReader::of(config('waitlist'))->integerOrNull(ConfigKey::MaxPendingPerAddress, min: 1);
+        return self::reader()->integerOrNull(ConfigKey::MaxPendingPerAddress, min: 1);
     }
 
     /**
@@ -127,7 +127,7 @@ final class WaitlistConfig
      */
     public static function manageTokenTtl(): int
     {
-        return ConfigReader::of(config('waitlist'))->lifetimeMinutes(ConfigKey::ManageTokenTtl, min: 1);
+        return self::reader()->lifetimeMinutes(ConfigKey::ManageTokenTtl, min: 1);
     }
 
     /**
@@ -145,7 +145,7 @@ final class WaitlistConfig
      */
     public static function manageRequestCooldown(): ?int
     {
-        return ConfigReader::of(config('waitlist'))->lookbackMinutesOrNull(ConfigKey::ManageRequestCooldown, min: 0);
+        return self::reader()->lookbackMinutesOrNull(ConfigKey::ManageRequestCooldown, min: 0);
     }
 
     public static function privacy(): PrivacyConfig
@@ -158,12 +158,12 @@ final class WaitlistConfig
 
     public static function storeIp(): bool
     {
-        return ConfigReader::of(config('waitlist'))->boolean(ConfigKey::StoreIp);
+        return self::reader()->boolean(ConfigKey::StoreIp);
     }
 
     public static function storeUserAgent(): bool
     {
-        return ConfigReader::of(config('waitlist'))->boolean(ConfigKey::StoreUserAgent);
+        return self::reader()->boolean(ConfigKey::StoreUserAgent);
     }
 
     /**
@@ -184,7 +184,7 @@ final class WaitlistConfig
      */
     public static function pendingDays(): ?int
     {
-        return ConfigReader::of(config('waitlist'))->lookbackDaysOrNull(ConfigKey::RetentionPendingDays, min: 0);
+        return self::reader()->lookbackDaysOrNull(ConfigKey::RetentionPendingDays, min: 0);
     }
 
     /**
@@ -192,7 +192,7 @@ final class WaitlistConfig
      */
     public static function unsubscribedDays(): ?int
     {
-        return ConfigReader::of(config('waitlist'))->lookbackDaysOrNull(ConfigKey::RetentionUnsubscribedDays, min: 0);
+        return self::reader()->lookbackDaysOrNull(ConfigKey::RetentionUnsubscribedDays, min: 0);
     }
 
     /**
@@ -200,22 +200,22 @@ final class WaitlistConfig
      */
     public static function requestMetadataDays(): ?int
     {
-        return ConfigReader::of(config('waitlist'))->lookbackDaysOrNull(ConfigKey::RetentionRequestMetadataDays, min: 0);
+        return self::reader()->lookbackDaysOrNull(ConfigKey::RetentionRequestMetadataDays, min: 0);
     }
 
     public static function routesEnabled(): bool
     {
-        return ConfigReader::of(config('waitlist'))->boolean(ConfigKey::RoutesEnabled);
+        return self::reader()->boolean(ConfigKey::RoutesEnabled);
     }
 
     public static function routePrefix(): string
     {
-        return ConfigReader::of(config('waitlist'))->routePrefix(ConfigKey::RoutesPrefix);
+        return self::reader()->routePrefix(ConfigKey::RoutesPrefix);
     }
 
     public static function routeName(): string
     {
-        return ConfigReader::of(config('waitlist'))->string(ConfigKey::RoutesName, allowEmpty: true);
+        return self::reader()->string(ConfigKey::RoutesName, allowEmpty: true);
     }
 
     /**
@@ -223,7 +223,7 @@ final class WaitlistConfig
      */
     public static function routeMiddleware(): array
     {
-        return ConfigReader::of(config('waitlist'))->middleware(ConfigKey::RoutesMiddleware);
+        return self::reader()->middleware(ConfigKey::RoutesMiddleware);
     }
 
     /**
@@ -231,7 +231,7 @@ final class WaitlistConfig
      */
     public static function signupMiddleware(): array
     {
-        return ConfigReader::of(config('waitlist'))->middleware(ConfigKey::SignupMiddleware);
+        return self::reader()->middleware(ConfigKey::SignupMiddleware);
     }
 
     /**
@@ -239,27 +239,27 @@ final class WaitlistConfig
      */
     public static function linksMiddleware(): array
     {
-        return ConfigReader::of(config('waitlist'))->middleware(ConfigKey::LinksMiddleware);
+        return self::reader()->middleware(ConfigKey::LinksMiddleware);
     }
 
     public static function signupPerMinute(): int
     {
-        return ConfigReader::of(config('waitlist'))->integer(ConfigKey::SignupPerMinute, min: 1);
+        return self::reader()->integer(ConfigKey::SignupPerMinute, min: 1);
     }
 
     public static function linkPerMinute(): int
     {
-        return ConfigReader::of(config('waitlist'))->integer(ConfigKey::LinkPerMinute, min: 1);
+        return self::reader()->integer(ConfigKey::LinkPerMinute, min: 1);
     }
 
     public static function linksPerIpPerMinute(): int
     {
-        return ConfigReader::of(config('waitlist'))->integer(ConfigKey::LinksPerIpPerMinute, min: 1);
+        return self::reader()->integer(ConfigKey::LinksPerIpPerMinute, min: 1);
     }
 
     public static function callerSignupPerMinute(): int
     {
-        return ConfigReader::of(config('waitlist'))->integer(ConfigKey::CallerSignupPerMinute, min: 1);
+        return self::reader()->integer(ConfigKey::CallerSignupPerMinute, min: 1);
     }
 
     /**
@@ -267,17 +267,17 @@ final class WaitlistConfig
      */
     public static function guards(): array
     {
-        return ConfigReader::of(config('waitlist'))->guards(ConfigKey::AuthenticationGuards);
+        return self::reader()->guards(ConfigKey::AuthenticationGuards);
     }
 
     public static function authenticationRequired(): bool
     {
-        return ConfigReader::of(config('waitlist'))->boolean(ConfigKey::AuthenticationRequired);
+        return self::reader()->boolean(ConfigKey::AuthenticationRequired);
     }
 
     public static function clientIpHeader(): ?string
     {
-        return ConfigReader::of(config('waitlist'))->stringOrNull(ConfigKey::ClientIpHeader);
+        return self::reader()->stringOrNull(ConfigKey::ClientIpHeader);
     }
 
     public static function export(): ExportConfig
@@ -290,7 +290,7 @@ final class WaitlistConfig
 
     public static function exportSpreadsheetSafe(): bool
     {
-        return ConfigReader::of(config('waitlist'))->boolean(ConfigKey::ExportSpreadsheetSafe);
+        return self::reader()->boolean(ConfigKey::ExportSpreadsheetSafe);
     }
 
     /**
@@ -298,7 +298,7 @@ final class WaitlistConfig
      */
     public static function exportColumns(): array
     {
-        return ConfigReader::of(config('waitlist'))->columns(ConfigKey::ExportColumns, CsvExporter::EXPORTABLE);
+        return self::reader()->columns(ConfigKey::ExportColumns, CsvExporter::EXPORTABLE);
     }
 
     /**
@@ -358,5 +358,13 @@ final class WaitlistConfig
         }
 
         return array_values($problems);
+    }
+
+    /**
+     * A new on every call, so each accessor sees the current config.
+     */
+    private static function reader(): ConfigReader
+    {
+        return ConfigReader::of(config('waitlist'));
     }
 }

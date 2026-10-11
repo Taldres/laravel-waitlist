@@ -2,7 +2,12 @@
 
 declare(strict_types=1);
 
+use App\Providers\SeveralProjectsWaitlistServiceProvider;
 use Illuminate\Support\Facades\File;
+use Taldres\Waitlist\Contracts\ProjectCatalog;
+use Taldres\Waitlist\Enums\ConfigKey;
+use Taldres\Waitlist\Enums\Page;
+use Taldres\Waitlist\Exceptions\UnknownWaitlistException;
 use Taldres\Waitlist\Facades\Waitlist;
 use Taldres\Waitlist\WaitlistServiceProvider;
 
@@ -72,10 +77,41 @@ it('publishes a provider that defines a working default project as it is', funct
         ->and(Waitlist::for('default')->fields())->toBe([]);
 });
 
+it('publishes a provider for several projects that works as it is, apart from the routes', function () {
+    $this->artisan('waitlist:install', ['--projects' => true])->assertSuccessful();
+
+    // Renamed: the test above declares App\Providers\WaitlistServiceProvider
+    // in the same process.
+    $provider = $this->sandbox.'/app/Providers/WaitlistServiceProvider.php';
+    File::put($provider, str_replace('class WaitlistServiceProvider', 'class SeveralProjectsWaitlistServiceProvider', File::get($provider)));
+
+    require $provider;
+
+    $this->app->register(SeveralProjectsWaitlistServiceProvider::class);
+
+    expect(app(ProjectCatalog::class)->urlPattern('default', Page::Invalid->value))->toBe('https://example.com/waitlist/oops')
+        ->and(Waitlist::project('rocket')->purposes('default')[0]->text)->toBe('Email me when Rocket launches. I can unsubscribe at any time.')
+        ->and(Waitlist::project('rocket')->for('default')->add('user@example.com', waitlistConsent())->entry->project)->toBe('rocket')
+        ->and(Waitlist::project('anvil')->for('default')->add('user@example.com', waitlistConsent())->entry->project)->toBe('anvil')
+        ->and(fn () => Waitlist::for('default')->add('user@example.com', waitlistConsent()))->toThrow(UnknownWaitlistException::class);
+
+    // What the install output warns about: without a resolver, the routes act
+    // for the default project, which has no lists.
+    config()->set(ConfigKey::RoutesEnabled->value, true);
+    config()->set(ConfigKey::RoutesMiddleware->value, []);
+
+    require __DIR__.'/../../routes/waitlist.php';
+
+    $this->postJson('/waitlist', ['email' => 'user@example.com', 'purposes' => waitlistConsent()])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('list');
+});
+
 describe('waitlist:install', function () {
     it('publishes the provider, the config and the migrations, and registers the provider', function () {
         $this->artisan('waitlist:install')
             ->expectsOutputToContain('Describe your waitlist in app/Providers/WaitlistServiceProvider.php, then run php artisan migrate.')
+            ->doesntExpectOutputToContain('The setup is incomplete')
             ->assertSuccessful();
 
         expect(File::exists($this->sandbox.'/app/Providers/WaitlistServiceProvider.php'))->toBeTrue()
@@ -102,14 +138,62 @@ describe('waitlist:install', function () {
             ]);
     });
 
-    it('keeps an application namespace of its own', function () {
+    it('starts with several projects with --projects and says the setup is incomplete', function () {
+        $this->artisan('waitlist:install', ['--projects' => true])
+            ->expectsOutputToContain('Describe your projects in app/Providers/WaitlistServiceProvider.php, then run php artisan migrate.')
+            ->expectsOutputToContain('The setup is incomplete until you bind a ProjectResolver in that provider.')
+            ->assertSuccessful();
+
+        expect(File::get($this->sandbox.'/app/Providers/WaitlistServiceProvider.php'))->toBe(File::get(dirname(__DIR__, 2).'/stubs/WaitlistServiceProvider.projects.stub'))
+            ->and(File::exists($this->sandbox.'/config/waitlist.php'))->toBeTrue()
+            ->and(File::glob($this->sandbox.'/database/migrations/*_create_waitlist_entries_table.php'))->toHaveCount(1)
+            ->and(require $this->sandbox.'/bootstrap/providers.php')->toBe([
+                'App\Providers\AppServiceProvider',
+                'App\Providers\WaitlistServiceProvider',
+            ]);
+    });
+
+    it('fails with --projects when the provider cannot be written, before publishing anything else', function () {
+        File::partialMock()->shouldReceive('copy')->andReturnFalse();
+
+        $this->artisan('waitlist:install', ['--projects' => true])
+            ->expectsOutputToContain('Could not write app/Providers/WaitlistServiceProvider.php')
+            ->doesntExpectOutputToContain('The setup is incomplete')
+            ->assertFailed();
+
+        expect(File::exists($this->sandbox.'/config/waitlist.php'))->toBeFalse()
+            ->and(require $this->sandbox.'/bootstrap/providers.php')->toBe(['App\Providers\AppServiceProvider']);
+    });
+
+    it('leaves a published provider alone with --projects and says so', function () {
+        $this->artisan('waitlist:install')->assertSuccessful();
+
+        $provider = $this->sandbox.'/app/Providers/WaitlistServiceProvider.php';
+        $before = File::get($provider);
+
+        $this->artisan('waitlist:install', ['--projects' => true])
+            ->expectsOutputToContain('app/Providers/WaitlistServiceProvider.php already exists and was left as it is.')
+            ->doesntExpectOutputToContain('The setup is incomplete')
+            ->assertSuccessful();
+
+        expect(File::get($provider))->toBe($before)
+            ->and(require $this->sandbox.'/bootstrap/providers.php')->toBe([
+                'App\Providers\AppServiceProvider',
+                'App\Providers\WaitlistServiceProvider',
+            ]);
+    });
+
+    it('keeps an application namespace of its own', function (array $options) {
         (fn () => $this->namespace = 'Acme\\')->call($this->app);
 
-        $this->artisan('waitlist:install')->assertSuccessful();
+        $this->artisan('waitlist:install', $options)->assertSuccessful();
 
         expect(File::get($this->sandbox.'/app/Providers/WaitlistServiceProvider.php'))->toContain('namespace Acme\Providers;')
             ->and(require $this->sandbox.'/bootstrap/providers.php')->toContain('Acme\Providers\WaitlistServiceProvider');
-    });
+    })->with([
+        'one project' => [[]],
+        'several projects' => [['--projects' => true]],
+    ]);
 
     it('asks you to register the provider when there is no providers file', function () {
         File::delete($this->sandbox.'/bootstrap/providers.php');

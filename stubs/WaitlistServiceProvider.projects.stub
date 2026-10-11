@@ -1,0 +1,109 @@
+<?php
+
+namespace App\Providers;
+
+use Illuminate\Support\ServiceProvider;
+use Taldres\Waitlist\Definitions\ProjectDefinition;
+use Taldres\Waitlist\Facades\Waitlist;
+
+/**
+ * Several projects, each with its own lists, wording and pages. Once the package routes are
+ * enabled, the setup is incomplete until a ProjectResolver is bound in
+ * register(): the routes act for the default project, which has no lists here,
+ * so every signup over HTTP answers 422. Your own controllers name the project:
+ * Waitlist::project('rocket').
+ */
+class WaitlistServiceProvider extends ServiceProvider
+{
+    /**
+     * Swap a part of the package by binding its contract, see
+     * docs/extending.md. Use bind(): the package registers its defaults
+     * first, so a bindIf() here would leave them in place.
+     */
+    public function register(): void
+    {
+        // Which project a signup, the wording and a manage link requested by
+        // address are for, by the site the form is on for example; see
+        // "Several products in one app" in docs/projects.md. Token links need
+        // none. Servers that call with credentials of their own, such as a
+        // Sanctum token, bind \Taldres\Waitlist\Support\AuthenticatedProjectResolver.
+        // $this->app->bind(\Taldres\Waitlist\Contracts\ProjectResolver::class, \App\Waitlist\SiteResolver::class);
+
+        // Read the wording registered with waitlist:wording --project, or sent
+        // by your projects' servers, instead of the purpose() texts below.
+        // When the projects live in your database, bind a catalog of your own
+        // instead, see docs/examples/central-waitlist-api.md.
+        // $this->app->bind(\Taldres\Waitlist\Contracts\ProjectCatalog::class, \Taldres\Waitlist\Support\StoredWordingCatalog::class);
+    }
+
+    /**
+     * Describe each project: what people can agree to, the lists they can
+     * join, the fields a signup may carry and the pages your mails link to.
+     * Nothing is shared between projects.
+     *
+     * Read the environment through config(), never env(): once the config is
+     * cached, env() returns null outside the config files.
+     */
+    public function boot(): void
+    {
+        // The default project has no lists, so a call that forgets project()
+        // fails instead of signing someone up for whichever project happens to
+        // be the default. A link with an unknown token belongs to no project
+        // and lands on this page; replace it with a page of your own.
+        Waitlist::define(fn (ProjectDefinition $project) => $project->urls(
+            invalid: 'https://example.com/waitlist/oops',
+        ));
+
+        Waitlist::define('rocket', function (ProjectDefinition $project): void {
+            // Never edit a version's wording; add a new version instead.
+            $project->purpose('waitlist', [
+                '2026-10' => 'Email me when Rocket launches. I can unsubscribe at any time.',
+            ]);
+
+            // $project->purpose('newsletter', [
+            //     '2026-10' => 'Also send me the monthly Rocket newsletter.',
+            // ]);
+
+            // A signup without "list" goes to the list named "default".
+            $project->list('default', purpose: 'waitlist');
+            // $project->list('beta', purpose: 'waitlist')->optional('newsletter');
+
+            // Extra fields a signup may send under "metadata". Anything not
+            // listed is refused; without fields, no metadata is accepted.
+            // $project->fields(fn () => [
+            //     'source' => ['nullable', 'string', 'max:50'],
+            // ]);
+
+            // Unset pages use the package routes when they are enabled.
+            // $project->urls(
+            //     confirm: 'https://rocket.example/waitlist/confirm/{token}',
+            //     unsubscribe: 'https://rocket.example/waitlist/leave/{token}',
+            //     manage: 'https://rocket.example/waitlist/preferences/{token}',
+            // );
+
+            // The websites that may use this project from a browser.
+            // $project->origins(['https://rocket.example']);
+        });
+
+        Waitlist::define('anvil', function (ProjectDefinition $project): void {
+            $project->purpose('waitlist', [
+                '2026-10' => 'Email me when Anvil launches. I can unsubscribe at any time.',
+            ]);
+
+            $project->list('default', purpose: 'waitlist');
+
+            // $project->urls(
+            //     confirm: 'https://anvil.example/waitlist/confirm/{token}',
+            //     unsubscribe: 'https://anvil.example/waitlist/leave/{token}',
+            //     manage: 'https://anvil.example/waitlist/preferences/{token}',
+            // );
+            // $project->origins(['https://anvil.example']);
+        });
+
+        // Who may sign up, read the wording and request a manage link by
+        // address. The package's default lets everyone through and keeps a
+        // caller with a project to that project; replace it here, see the
+        // "useWaitlist" gate in docs/projects.md.
+        // \Illuminate\Support\Facades\Gate::define('useWaitlist', fn (?\Illuminate\Contracts\Auth\Authenticatable $caller, string $project) => $caller !== null);
+    }
+}
