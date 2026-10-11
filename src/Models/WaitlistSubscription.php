@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Models;
 
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -156,15 +155,6 @@ class WaitlistSubscription extends Model
             $this->isConfirmed() => EntryStatus::Confirmed,
             default => EntryStatus::Pending,
         };
-    }
-
-    /**
-     * @param  Builder<self>  $query
-     * @return Builder<self>
-     */
-    public function scopeOpen(Builder $query): Builder
-    {
-        return $query->whereNull('ended_at');
     }
 
     protected static function newFactory(): WaitlistSubscriptionFactory

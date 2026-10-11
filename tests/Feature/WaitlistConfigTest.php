@@ -33,7 +33,6 @@ use Taldres\Waitlist\WaitlistServiceProvider;
 
 describe('the defaults', function () {
     it('are those of config/waitlist.php', function () {
-        $confirmation = WaitlistConfig::confirmation();
         $retention = WaitlistConfig::retention();
 
         expect(WaitlistConfig::entryModel())->toBe(WaitlistEntry::class)
@@ -44,12 +43,12 @@ describe('the defaults', function () {
             ->and(WaitlistConfig::defaultList())->toBe('default')
             ->and(WaitlistConfig::requireWordingHash())->toBeFalse()
             ->and(WaitlistConfig::doubleOptIn())->toBeTrue()
-            ->and($confirmation->tokenTtl)->toBe(60 * 24 * 7)
-            ->and($confirmation->resendCooldown)->toBe(5)
-            ->and($confirmation->maxConfirmations)->toBe(5)
-            ->and($confirmation->maxPendingPerAddress)->toBe(5)
-            ->and(WaitlistConfig::manage()->tokenTtl)->toBe(60)
-            ->and(WaitlistConfig::manage()->requestCooldown)->toBe(5)
+            ->and(WaitlistConfig::confirmTokenTtl())->toBe(60 * 24 * 7)
+            ->and(WaitlistConfig::resendCooldown())->toBe(5)
+            ->and(WaitlistConfig::maxConfirmations())->toBe(5)
+            ->and(WaitlistConfig::maxPendingPerAddress())->toBe(5)
+            ->and(WaitlistConfig::manageTokenTtl())->toBe(60)
+            ->and(WaitlistConfig::manageRequestCooldown())->toBe(5)
             ->and(WaitlistConfig::privacy()->storeIp)->toBeFalse()
             ->and(WaitlistConfig::privacy()->storeUserAgent)->toBeFalse()
             ->and($retention->pendingDays)->toBe(30)
@@ -76,7 +75,7 @@ describe('the defaults', function () {
     });
 
     it('pass the full check', function () {
-        WaitlistConfig::check();
+        checkWaitlistConfig();
     })->throwsNoExceptions();
 });
 
@@ -93,7 +92,7 @@ describe('values the app sets', function () {
         expect(WaitlistConfig::doubleOptIn())->toBeFalse()
             ->and(WaitlistConfig::privacy()->storeUserAgent)->toBeTrue()
             ->and(WaitlistConfig::privacy()->storeIp)->toBeTrue()
-            ->and(WaitlistConfig::manage()->tokenTtl)->toBe(30)
+            ->and(WaitlistConfig::manageTokenTtl())->toBe(30)
             ->and(WaitlistConfig::resendCooldown())->toBe(5)
             ->and(WaitlistConfig::connection())->toBe('side')
             ->and(WaitlistConfig::guards())->toBe(['sanctum', null]);
@@ -107,7 +106,7 @@ describe('values the app sets', function () {
         config()->set(ConfigKey::AuthenticationGuards->value, []);
 
         expect(WaitlistConfig::doubleOptIn())->toBeFalse()
-            ->and(WaitlistConfig::confirmation()->resendCooldown)->toBe(0)
+            ->and(WaitlistConfig::resendCooldown())->toBe(0)
             ->and(WaitlistConfig::retention()->pendingDays)->toBe(0)
             ->and(WaitlistConfig::privacy()->storeIp)->toBeFalse()
             ->and(WaitlistConfig::guards())->toBe([]);
@@ -119,7 +118,7 @@ describe('values the app sets', function () {
         config()->set(ConfigKey::SignupLimiter->value, null);
         config()->set(ConfigKey::LinksLimiter->value, '');
 
-        expect(WaitlistConfig::confirmation()->tokenTtl)->toBeNull()
+        expect(WaitlistConfig::confirmTokenTtl())->toBeNull()
             ->and(WaitlistConfig::retention()->unsubscribedDays)->toBeNull()
             ->and(WaitlistConfig::signupLimiter())->toBeNull()
             ->and(WaitlistConfig::linksLimiter())->toBeNull();
@@ -131,19 +130,19 @@ describe('values the app sets', function () {
 
         expect(WaitlistConfig::routeName())->toBe('');
 
-        WaitlistConfig::check();
+        checkWaitlistConfig();
     });
 
     it('are read anew whenever the config changes', function () {
-        expect(WaitlistConfig::confirmation()->maxConfirmations)->toBe(5);
+        expect(WaitlistConfig::maxConfirmations())->toBe(5);
 
         config()->set(ConfigKey::MaxConfirmations->value, 3);
 
-        expect(WaitlistConfig::confirmation()->maxConfirmations)->toBe(3);
+        expect(WaitlistConfig::maxConfirmations())->toBe(3);
 
         config()->set(ConfigKey::MaxConfirmations->value, 5);
 
-        expect(WaitlistConfig::confirmation()->maxConfirmations)->toBe(5);
+        expect(WaitlistConfig::maxConfirmations())->toBe(5);
     });
 
     it('are checked anew once the config changes', function () {
@@ -159,7 +158,7 @@ describe('a value that does not fit', function () {
     it('is refused with the key, what it must be and its type, never its value', function (ConfigKey|string $key, mixed $value, string $message) {
         config()->set($key instanceof ConfigKey ? $key->value : $key, $value);
 
-        expect(fn () => WaitlistConfig::check())->toThrow(InvalidConfigurationException::class, $message);
+        expect(fn () => checkWaitlistConfig())->toThrow(InvalidConfigurationException::class, $message);
     })->with([
         'an unreadable switch' => [ConfigKey::DoubleOptIn, 'maybe', 'The waitlist.double_opt_in.enabled config must be true or false, got a text it does not read.'],
         'an empty switch' => [ConfigKey::StoreIp, '', 'The waitlist.privacy.store_ip config must be true or false, got an empty text; if it comes from an empty variable in .env, remove the variable to keep the default.'],
@@ -200,7 +199,7 @@ describe('a value that does not fit', function () {
     it('is reported as missing rather than read from the package, as from a stale config cache', function () {
         config()->set('waitlist', Arr::except(config()->array('waitlist'), 'manage'));
 
-        WaitlistConfig::manage();
+        WaitlistConfig::manageTokenTtl();
     })->throws(InvalidConfigurationException::class, 'The waitlist.manage.token_ttl config is missing. If the config is cached, cache it again with php artisan config:cache.');
 
     it('is refused before the container hands out the binding', function () {
@@ -241,13 +240,13 @@ describe('a name', function () {
             ->and(WaitlistConfig::signupLimiter())->toBeNull()
             ->and(WaitlistConfig::linksLimiter())->toBeNull();
 
-        WaitlistConfig::check();
+        checkWaitlistConfig();
     });
 
     it('is refused for a route prefix with a placeholder by the full check as well, and read without one', function () {
         config()->set(ConfigKey::RoutesPrefix->value, 'p/{project}/waitlist');
 
-        expect(fn () => WaitlistConfig::check())->toThrow(InvalidConfigurationException::class, ConfigKey::RoutesPrefix->value);
+        expect(fn () => checkWaitlistConfig())->toThrow(InvalidConfigurationException::class, ConfigKey::RoutesPrefix->value);
 
         config()->set(ConfigKey::RoutesPrefix->value, 'p/project/waitlist');
 
@@ -260,7 +259,7 @@ describe('a binding', function () {
         config()->set($key->value, $contract);
 
         expect(fn () => WaitlistConfig::{$accessor}())->toThrow(InvalidConfigurationException::class, "The {$key->value} config must name a class that implements {$contract}, not the contract itself.")
-            ->and(fn () => WaitlistConfig::check())->toThrow(InvalidConfigurationException::class, $key->value);
+            ->and(fn () => checkWaitlistConfig())->toThrow(InvalidConfigurationException::class, $key->value);
     })->with([
         'the email normalizer' => [ConfigKey::EmailNormalizer, EmailNormalizer::class, 'emailNormalizer'],
         'the url generator' => [ConfigKey::UrlGenerator, ConfirmationUrlGenerator::class, 'urlGenerator'],
@@ -274,7 +273,7 @@ describe('a binding', function () {
 
         expect(WaitlistConfig::emailNormalizer())->toBe($class);
 
-        WaitlistConfig::check();
+        checkWaitlistConfig();
     })->with([WaitlistConfigAppNormalizer::class, WaitlistConfigAbstractNormalizer::class]);
 });
 
@@ -282,7 +281,7 @@ describe('a limiter', function () {
     it('that nothing defines is refused by the full check, naming the key', function (ConfigKey $key) {
         config()->set($key->value, 'a-limiter-nobody-defined');
 
-        expect(fn () => WaitlistConfig::check())->toThrow(InvalidConfigurationException::class, "The {$key->value} config must name a limiter defined with RateLimiter::for(), or null, got one that is not defined.");
+        expect(fn () => checkWaitlistConfig())->toThrow(InvalidConfigurationException::class, "The {$key->value} config must name a limiter defined with RateLimiter::for(), or null, got one that is not defined.");
     })->with([ConfigKey::SignupLimiter, ConfigKey::LinksLimiter]);
 
     it('is still read by its accessor, as the app may define it after the routes register', function () {
@@ -292,7 +291,7 @@ describe('a limiter', function () {
 
         RateLimiter::for('defined-later', fn () => Limit::perMinute(1));
 
-        expect(fn () => WaitlistConfig::check())->not->toThrow(InvalidConfigurationException::class);
+        expect(fn () => checkWaitlistConfig())->not->toThrow(InvalidConfigurationException::class);
     });
 
     it('passes the full check when the app defines it, as do a number, which Laravel reads as a limit, and null', function (mixed $signup, mixed $links) {
@@ -300,7 +299,7 @@ describe('a limiter', function () {
         config()->set(ConfigKey::SignupLimiter->value, $signup);
         config()->set(ConfigKey::LinksLimiter->value, $links);
 
-        expect(fn () => WaitlistConfig::check())->not->toThrow(InvalidConfigurationException::class);
+        expect(fn () => checkWaitlistConfig())->not->toThrow(InvalidConfigurationException::class);
     })->with([
         'one the app defines' => ['mine', 'mine'],
         'a number' => ['60', '30'],
@@ -311,11 +310,11 @@ describe('a limiter', function () {
     it('is checked against the limiters as they are defined now', function () {
         config()->set(ConfigKey::LinksLimiter->value, 'mine');
 
-        expect(fn () => WaitlistConfig::check())->toThrow(InvalidConfigurationException::class, ConfigKey::LinksLimiter->value);
+        expect(fn () => checkWaitlistConfig())->toThrow(InvalidConfigurationException::class, ConfigKey::LinksLimiter->value);
 
         RateLimiter::for('mine', fn () => Limit::perMinute(1));
 
-        expect(fn () => WaitlistConfig::check())->not->toThrow(InvalidConfigurationException::class);
+        expect(fn () => checkWaitlistConfig())->not->toThrow(InvalidConfigurationException::class);
     });
 });
 
@@ -497,7 +496,7 @@ describe('merging the app config with the package config', function () {
 
         config()->set('waitlist', PackageConfig::merge(['routes' => [], 'export' => []]));
 
-        WaitlistConfig::check();
+        checkWaitlistConfig();
     });
 
     it('runs when the provider registers, and not on a cached config', function () {
@@ -538,7 +537,7 @@ describe('merging the app config with the package config', function () {
 
         config()->set('waitlist', $merged);
 
-        expect(fn () => WaitlistConfig::check())
+        expect(fn () => checkWaitlistConfig())
             ->toThrow(InvalidConfigurationException::class, "The waitlist.{$path} config must be an array of settings, got ".get_debug_type($value).'.');
     })->with(function () {
         foreach (waitlistConfigGroups() as $path) {
@@ -579,12 +578,12 @@ describe('merging the app config with the package config', function () {
             app()->instance('config_loaded_from_cache', true);
             (new WaitlistServiceProvider(app()))->register();
 
-            WaitlistConfig::check();
+            checkWaitlistConfig();
 
             expect(config('waitlist'))->toBe($cached)
                 ->and(WaitlistConfig::privacy()->storeIp)->toBeTrue()
                 ->and(WaitlistConfig::routeMiddleware())->toBe(['web'])
-                ->and(WaitlistConfig::manage()->tokenTtl)->toBe(60);
+                ->and(WaitlistConfig::manageTokenTtl())->toBe(60);
         } finally {
             $repository->clear('WAITLIST_STORE_IP');
         }
@@ -683,14 +682,16 @@ describe('a setting of its own', function () {
             ->and(fn () => WaitlistConfig::requestMetadataDays())->toThrow(InvalidConfigurationException::class, ConfigKey::RetentionRequestMetadataDays->value);
     });
 
-    it('is still part of the group a check reads', function (string $accessor, ConfigKey $key) {
+    it('is still among the settings a check reads', function (ConfigKey $key) {
         config()->set($key->value, 'soon');
 
-        expect(fn () => WaitlistConfig::{$accessor}())->toThrow(InvalidConfigurationException::class, $key->value);
+        $messages = implode("\n", array_map(fn (Throwable $problem): string => $problem->getMessage(), WaitlistConfig::problems()));
+
+        expect($messages)->toContain($key->value);
     })->with([
-        ['confirmation', ConfigKey::ConfirmTokenTtl],
-        ['confirmation', ConfigKey::MaxPendingPerAddress],
-        ['manage', ConfigKey::ManageRequestCooldown],
-        ['retention', ConfigKey::RetentionUnsubscribedDays],
+        ConfigKey::ConfirmTokenTtl,
+        ConfigKey::MaxPendingPerAddress,
+        ConfigKey::ManageRequestCooldown,
+        ConfigKey::RetentionUnsubscribedDays,
     ]);
 });

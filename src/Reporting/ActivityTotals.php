@@ -25,11 +25,6 @@ final readonly class ActivityTotals implements Arrayable, JsonSerializable
         public array $departures = [],
     ) {}
 
-    public static function empty(): self
-    {
-        return new self([]);
-    }
-
     /**
      * Not a cohort rate: a confirmation can belong to an earlier signup, so it
      * can exceed 1. Null when nobody signed up.

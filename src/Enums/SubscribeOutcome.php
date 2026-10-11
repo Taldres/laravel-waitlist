@@ -26,9 +26,4 @@ enum SubscribeOutcome: string
      * later signup or resend sends it once one is settled.
      */
     case ConfirmationDeferred = 'confirmation_deferred';
-
-    public function startedCycle(): bool
-    {
-        return in_array($this, [self::Started, self::Resubscribed, self::ConfirmationDeferred], true);
-    }
 }

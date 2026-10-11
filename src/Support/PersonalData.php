@@ -6,7 +6,6 @@ namespace Taldres\Waitlist\Support;
 
 use DateTimeInterface;
 use Illuminate\Contracts\Support\Arrayable;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use JsonSerializable;
 use Taldres\Waitlist\Enums\EntryStatus;
@@ -59,23 +58,6 @@ final readonly class PersonalData implements Arrayable, JsonSerializable
             createdAt: $entry->created_at ?? Carbon::now(),
             updatedAt: $entry->updated_at ?? Carbon::now(),
         );
-    }
-
-    /**
-     * @return list<string>
-     */
-    public function effectivePurposes(): array
-    {
-        $latest = Arr::last($this->subscriptions);
-
-        if ($latest === null || $latest->endedAt !== null || $latest->confirmedAt === null) {
-            return [];
-        }
-
-        return array_values(array_unique(array_map(
-            fn (ConsentRecord $consent): string => $consent->purpose,
-            array_filter($latest->consents, fn (ConsentRecord $consent): bool => $consent->withdrawnAt === null),
-        )));
     }
 
     /**

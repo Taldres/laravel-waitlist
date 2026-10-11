@@ -15,9 +15,4 @@ final readonly class SubscribeResult
         public WaitlistSubscription $subscription,
         public SubscribeOutcome $outcome,
     ) {}
-
-    public function startedCycle(): bool
-    {
-        return $this->outcome->startedCycle();
-    }
 }

@@ -49,7 +49,7 @@ describe('ConfigKey', function () {
     it('is read by the full check, which names it when it holds something unreadable', function (ConfigKey $key) {
         config()->set($key->value, new stdClass);
 
-        expect(fn () => WaitlistConfig::check())->toThrow(InvalidConfigurationException::class, "The {$key->value} config ");
+        expect(fn () => checkWaitlistConfig())->toThrow(InvalidConfigurationException::class, "The {$key->value} config ");
     })->with(ConfigKey::cases());
 
     it('is reported by the full check when it is missing, as from a stale config cache', function (ConfigKey $key) {
@@ -57,7 +57,7 @@ describe('ConfigKey', function () {
         Arr::forget($config, substr($key->value, strlen('waitlist.')));
         config()->set('waitlist', $config);
 
-        expect(fn () => WaitlistConfig::check())
+        expect(fn () => checkWaitlistConfig())
             ->toThrow(InvalidConfigurationException::class, "The {$key->value} config is missing. If the config is cached, cache it again with php artisan config:cache.");
     })->with(ConfigKey::cases());
 
@@ -103,8 +103,6 @@ describe('ConfigKey', function () {
             config()->set("waitlist.{$path}", $value);
         }
 
-        $confirmation = WaitlistConfig::confirmation();
-        $manage = WaitlistConfig::manage();
         $privacy = WaitlistConfig::privacy();
         $retention = WaitlistConfig::retention();
         $export = WaitlistConfig::export();
@@ -113,8 +111,8 @@ describe('ConfigKey', function () {
             ->and(WaitlistConfig::defaultList())->toBe('beta')
             ->and(WaitlistConfig::requireWordingHash())->toBeTrue()
             ->and(WaitlistConfig::doubleOptIn())->toBeFalse()
-            ->and([$confirmation->tokenTtl, $confirmation->resendCooldown, $confirmation->maxConfirmations, $confirmation->maxPendingPerAddress])->toBe([101, 102, 103, 104])
-            ->and([$manage->tokenTtl, $manage->requestCooldown])->toBe([105, 106])
+            ->and([WaitlistConfig::confirmTokenTtl(), WaitlistConfig::resendCooldown(), WaitlistConfig::maxConfirmations(), WaitlistConfig::maxPendingPerAddress()])->toBe([101, 102, 103, 104])
+            ->and([WaitlistConfig::manageTokenTtl(), WaitlistConfig::manageRequestCooldown()])->toBe([105, 106])
             ->and([$privacy->storeIp, $privacy->storeUserAgent])->toBe([true, false])
             ->and([$retention->pendingDays, $retention->unsubscribedDays, $retention->requestMetadataDays])->toBe([107, 108, 109])
             ->and(WaitlistConfig::routesEnabled())->toBeTrue()
@@ -127,7 +125,7 @@ describe('ConfigKey', function () {
             ->and(WaitlistConfig::clientIpHeader())->toBe('X-Visitor-Ip')
             ->and([$export->spreadsheetSafe, $export->columns])->toBe([false, ['email', 'id']]);
 
-        WaitlistConfig::check();
+        checkWaitlistConfig();
     });
 
     it('holds only what config:cache can write, and reads back from it as it went in', function () {
