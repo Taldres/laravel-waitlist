@@ -31,18 +31,14 @@ class ForgetCommand extends Command
 
         if ($this->option('all')) {
             if (is_string($email) && $email !== '') {
-                $this->error('--all erases a whole list; leave out the email address.');
-
-                return self::FAILURE;
+                $this->fail('--all erases a whole list; leave out the email address.');
             }
 
             return $this->forgetList($list ?? '', $project ?? WaitlistEntry::DEFAULT_PROJECT);
         }
 
         if (! is_string($email) || $email === '') {
-            $this->error('An email address is required.');
-
-            return self::FAILURE;
+            $this->fail('An email address is required.');
         }
 
         $deleted = $forget(email: $email, list: $list, project: $project);
@@ -61,18 +57,14 @@ class ForgetCommand extends Command
     protected function forgetList(string $list, string $project): int
     {
         if ($list === '') {
-            $this->error('--all needs --list.');
-
-            return self::FAILURE;
+            $this->fail('--all needs --list.');
         }
 
         $label = $project === WaitlistEntry::DEFAULT_PROJECT ? $list : "{$project}/{$list}";
 
         // Without a terminal nobody can answer, and silence is no consent.
         if (! $this->option('force') && ! ($this->input->isInteractive() && $this->confirm("Permanently erase every entry on [{$label}]?"))) {
-            $this->error('Nothing erased. Pass --force to erase without asking.');
-
-            return self::FAILURE;
+            $this->fail('Nothing erased. Pass --force to erase without asking.');
         }
 
         // Not through the facade: a project missing from the catalog still has data to erase.

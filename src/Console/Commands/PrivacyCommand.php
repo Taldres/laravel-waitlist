@@ -341,8 +341,8 @@ class PrivacyCommand extends Command
     {
         $warnings = $this->linkWarnings($catalog, $projects);
 
-        if (SetupAudit::scheduledPrune() === null) {
-            $warnings[] = 'No scheduled task runs waitlist:prune, so the retention periods are not applied. Add Schedule::command(\'waitlist:prune\')->daily() to routes/console.php, or run it another way and ignore this.';
+        if (($hint = SetupAudit::unscheduledPruneHint()) !== null) {
+            $warnings[] = $hint;
         }
 
         if (! WaitlistConfig::routesEnabled()) {

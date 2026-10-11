@@ -67,6 +67,17 @@ final class SetupAudit
     }
 
     /**
+     * The hint waitlist:check and waitlist:privacy give while scheduledPrune()
+     * finds nothing.
+     */
+    public static function unscheduledPruneHint(): ?string
+    {
+        return self::scheduledPrune() === null
+            ? "No scheduled task runs waitlist:prune, so the retention periods are not applied. Add Schedule::command('waitlist:prune')->daily() to routes/console.php, or ignore this if you run it another way."
+            : null;
+    }
+
+    /**
      * Where the package routes as registered now differ from what the config
      * says: a group left out because a setting did not read when they were
      * registered, or a route cache built that way, or built while the routes

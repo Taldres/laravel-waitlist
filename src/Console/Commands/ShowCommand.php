@@ -27,9 +27,7 @@ class ShowCommand extends Command
         $email = $this->argument('email');
 
         if (! is_string($email) || $email === '') {
-            $this->error('An email address is required.');
-
-            return self::FAILURE;
+            $this->fail('An email address is required.');
         }
 
         $list = $this->option('list');
