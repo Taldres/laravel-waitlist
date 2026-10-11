@@ -20,7 +20,7 @@ it('passes where every setting reads and the tables are there', function () {
     expect($exit)->toBe(0)
         ->and($output)->toContain('Every setting reads.')
         ->and($output)->toContain('The tables and columns of this version exist.')
-        ->and($output)->not->toContain('is not read by this version');
+        ->and($output)->not->toContain('is not a setting the package reads');
 });
 
 it('names every setting that does not read at once, never its value', function () {
@@ -47,7 +47,7 @@ it('reports a config that is no array once', function () {
         ->and(substr_count($output, 'must be an array of settings'))->toBe(1);
 });
 
-it('warns of settings a published config still holds that this version does not read', function () {
+it('warns of settings in the config that the package does not read', function () {
     config()->set('waitlist.urls', ['confirm' => 'https://example.com/confirm?token={token}']);
     config()->set('waitlist.reporting', ['timezone' => 'Europe/Berlin']);
     config()->set('waitlist.retention.old_days', 7);
@@ -55,9 +55,9 @@ it('warns of settings a published config still holds that this version does not 
     [$exit, $output] = checkOutput();
 
     expect($exit)->toBe(0)
-        ->and($output)->toContain('waitlist.urls is not read by this version of the package')
-        ->and($output)->toContain('waitlist.reporting is not read')
-        ->and($output)->toContain('waitlist.retention.old_days is not read')
+        ->and($output)->toContain('waitlist.urls is not a setting the package reads')
+        ->and($output)->toContain('waitlist.reporting is not a setting')
+        ->and($output)->toContain('waitlist.retention.old_days is not a setting')
         ->and($output)->not->toContain('waitlist.urls.confirm');
 
     [$strict] = checkOutput(['--strict' => true]);
@@ -71,7 +71,7 @@ it('lists a group of unknown settings once, and leaves the settings of this vers
     expect(SetupAudit::unknownSettings())->toBe(['waitlist.lists']);
 });
 
-it('finds a column that the migrations created after the app ran them', function () {
+it('finds a column that the migrations create and the database lacks', function () {
     Schema::table('waitlist_subscriptions', fn ($table) => $table->dropColumn('confirmation_outcome'));
     Schema::table('waitlist_wordings', fn ($table) => $table->dropColumn('registered_by'));
 

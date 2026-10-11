@@ -11,9 +11,9 @@ use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Models\WaitlistWording;
 
 /**
- * What an app that upgrades the package gets wrong without a sound: settings
- * the package no longer reads, and tables or columns its migrations created
- * after the app ran them.
+ * What goes wrong without a sound in a setup: a setting the package does not
+ * read, such as a typo, and a table or column its migrations create that the
+ * database lacks.
  *
  * @internal
  */

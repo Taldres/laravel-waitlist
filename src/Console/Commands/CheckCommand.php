@@ -14,7 +14,7 @@ class CheckCommand extends Command
     protected $signature = 'waitlist:check
         {--strict : Fail on warnings too}';
 
-    protected $description = 'Check the settings, the tables and the leftovers of an older version, for a deploy';
+    protected $description = 'Check the settings and the tables, for a deploy';
 
     public function handle(): int
     {
@@ -33,7 +33,7 @@ class CheckCommand extends Command
         }
 
         foreach (SetupAudit::unknownSettings() as $setting) {
-            $this->components->warn("{$setting} is not read by this version of the package; remove it from config/waitlist.php and its variable from .env.");
+            $this->components->warn("{$setting} is not a setting the package reads; check it for a typo, or remove it from config/waitlist.php and its variable from .env.");
             $warned = true;
         }
 
@@ -52,7 +52,7 @@ class CheckCommand extends Command
         foreach ($missing as $table => $columns) {
             $this->components->error($columns === null
                 ? "The table {$table} does not exist; publish and run the package migrations."
-                : "The table {$table} lacks the columns ".implode(', ', $columns).'; the package migrations created them after you ran yours, so add them in a migration of your own.');
+                : "The table {$table} lacks the columns ".implode(', ', $columns).'; run the package migrations, or add the columns in a migration of your own.');
             $failed = true;
         }
 
