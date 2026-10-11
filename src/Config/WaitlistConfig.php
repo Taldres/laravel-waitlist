@@ -87,20 +87,6 @@ final class WaitlistConfig
     }
 
     /**
-     * Every setting of the confirmation, for a check. A step reads the ones
-     * it needs, so a mistake in one stops only the steps that use it.
-     */
-    public static function confirmation(): ConfirmationConfig
-    {
-        return new ConfirmationConfig(
-            tokenTtl: self::confirmTokenTtl(),
-            resendCooldown: self::resendCooldown(),
-            maxConfirmations: self::maxConfirmations(),
-            maxPendingPerAddress: self::maxPendingPerAddress(),
-        );
-    }
-
-    /**
      * Minutes a confirm link works; null never expires.
      */
     public static function confirmTokenTtl(): ?int
@@ -140,20 +126,6 @@ final class WaitlistConfig
     public static function maxPendingPerAddress(): ?int
     {
         return ConfigReader::of(config('waitlist'))->integerOrNull(ConfigKey::MaxPendingPerAddress, min: 1);
-    }
-
-    /**
-     * Whether a confirm link stops working once used.
-     */
-    /**
-     * Every setting of the preference page, for a check; see confirmation().
-     */
-    public static function manage(): ManageConfig
-    {
-        return new ManageConfig(
-            tokenTtl: self::manageTokenTtl(),
-            requestCooldown: self::manageRequestCooldown(),
-        );
     }
 
     /**
@@ -389,21 +361,6 @@ final class WaitlistConfig
     public static function exportColumns(): array
     {
         return ConfigReader::of(config('waitlist'))->columns(ConfigKey::ExportColumns, CsvExporter::EXPORTABLE);
-    }
-
-    /**
-     * Reads every setting, for a check before going live, and throws the first
-     * that does not read.
-     *
-     * @throws InvalidConfigurationException
-     */
-    public static function check(): void
-    {
-        $problems = self::problems();
-
-        if ($problems !== []) {
-            throw $problems[0];
-        }
     }
 
     /**

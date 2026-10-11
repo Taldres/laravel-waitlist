@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Event;
+use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Enums\ActivityType;
 use Taldres\Waitlist\Enums\ConfirmationOutcome;
@@ -18,6 +19,19 @@ use Taldres\Waitlist\Support\PurposeRegistry;
 use Taldres\Waitlist\Tests\TestCase;
 
 uses(TestCase::class)->in(__DIR__);
+
+/**
+ * Reads every setting and throws the first that does not read, the way the
+ * step that needs it would.
+ */
+function checkWaitlistConfig(): void
+{
+    $problems = WaitlistConfig::problems();
+
+    if ($problems !== []) {
+        throw $problems[0];
+    }
+}
 
 /**
  * Redefines the default project: the test purposes, the "*" list unless
@@ -167,7 +181,7 @@ function assertWaitlistInvariants(): void
 
             $signups = $entry->activity
                 ->where('waitlist_subscription_id', $cycle->getKey())
-                ->filter(fn (WaitlistActivity $row) => $row->type->isSignup())
+                ->filter(fn (WaitlistActivity $row) => in_array($row->type, [ActivityType::Subscribed, ActivityType::Resubscribed], true))
                 ->count();
             expect($signups)->toBe(1, "cycle {$cycle->id}: expected exactly one signup entry in the log");
         }

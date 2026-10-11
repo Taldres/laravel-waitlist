@@ -42,11 +42,6 @@ enum ActivityType: string
     /** An optional purpose was withdrawn; the cycle continues. */
     case ConsentWithdrawn = 'consent_withdrawn';
 
-    public function isSignup(): bool
-    {
-        return $this === self::Subscribed || $this === self::Resubscribed;
-    }
-
     /**
      * A step that ends the entry's place on its list. The log keeps the
      * status it left, so a later erasure of someone who had left already

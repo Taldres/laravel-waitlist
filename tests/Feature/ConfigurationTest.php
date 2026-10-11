@@ -98,8 +98,8 @@ it('reads switches and numbers the way env() leaves them', function () {
     expect(WaitlistConfig::doubleOptIn())->toBeFalse()
         ->and(WaitlistConfig::privacy()->storeIp)->toBeTrue()
         ->and(WaitlistConfig::routesEnabled())->toBeFalse()
-        ->and(WaitlistConfig::confirmation()->maxConfirmations)->toBe(3)
-        ->and(WaitlistConfig::confirmation()->resendCooldown)->toBeNull();
+        ->and(WaitlistConfig::maxConfirmations())->toBe(3)
+        ->and(WaitlistConfig::resendCooldown())->toBeNull();
 });
 
 it('refuses an empty double opt-in variable rather than turning confirmation off', function () {

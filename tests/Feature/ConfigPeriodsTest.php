@@ -111,7 +111,7 @@ describe('a period so large that it would wrap around', function () {
     it('is refused by the full check too', function (ConfigKey $key) {
         config()->set($key->value, PHP_INT_MAX);
 
-        expect(fn () => WaitlistConfig::check())->toThrow(InvalidConfigurationException::class, $key->value);
+        expect(fn () => checkWaitlistConfig())->toThrow(InvalidConfigurationException::class, $key->value);
     })->with(array_column(configPeriods(), 0));
 
     it('is read up to the longest that fits, and refused beyond', function (ConfigKey $key, string $accessor, string $reach) {

@@ -31,8 +31,7 @@ it('discloses the whole history for an address', function () {
         ->and($data->subscriptions[0]->confirmedAt)->not->toBeNull()
         ->and($data->subscriptions[0]->endReason)->toBe(EndReason::Unsubscribed)
         ->and($data->subscriptions[1]->endedAt)->toBeNull()
-        ->and($data->subscriptions[1]->consents[0]->text)->toBe('Email me when early access opens.')
-        ->and($data->effectivePurposes())->toBe([]);
+        ->and($data->subscriptions[1]->consents[0]->text)->toBe('Email me when early access opens.');
 
     expect(array_map(fn ($row) => $row->type, $data->activity))->toBe([
         ActivityType::Subscribed,

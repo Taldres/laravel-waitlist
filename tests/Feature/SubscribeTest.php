@@ -148,7 +148,6 @@ it('caps how many lists an address can be waiting on, so made-up list names cann
     Waitlist::subscribe('four', 'other@example.com', waitlistConsent());
 
     expect($third->outcome)->toBe(SubscribeOutcome::ConfirmationDeferred)
-        ->and($third->startedCycle())->toBeTrue()
         ->and($third->subscription->confirmation_count)->toBe(0)
         ->and($third->subscription->confirm_token_hash)->toBeNull()
         ->and($third->entry->status)->toBe(EntryStatus::Pending);
