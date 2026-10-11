@@ -58,8 +58,10 @@ back instead, and each mistake is reported once per request, job or command:
   guest's request, limited by its address; the signup and the gate still
   refuse them;
 - an email normalizer that throws an `InvalidConfigurationException` ends the
-  entry the token names but cannot find the address's other lists, so it stays
-  on them until it leaves again; the failed sweep is reported;
+  entry the token names and finds the address's other lists by that entry's
+  lookup hash, so lists hashed under another key than that entry are missed
+  until both are rekeyed; the failed normalizer is reported. An address that
+  no longer decrypts is swept the same way;
 - a catalog that does not read answers a browser in JSON instead of sending it
   to your page;
 - `rate_limits.link_per_minute` or `links_per_ip_per_minute` that do not read

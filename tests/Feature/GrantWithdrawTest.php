@@ -3,8 +3,10 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Exceptions;
 use Taldres\Waitlist\Actions\GrantConsent;
 use Taldres\Waitlist\Actions\SyncPurposes;
+use Taldres\Waitlist\Contracts\EmailNormalizer;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Enums\ActivityType;
 use Taldres\Waitlist\Enums\ConfigKey;
@@ -155,7 +157,7 @@ it('records a fresh grant after a withdrawal and keeps the old one as evidence',
     assertWaitlistInvariants();
 });
 
-it('withdraws a purpose for the address on every list of the project', function () {
+it('withdraws a purpose for the address on every list of the project', function (Closure $break) {
     Waitlist::define('acme', function (ProjectDefinition $project): void {
         $project->purpose('launch', ['v1' => 'Tell me about the launch.']);
         $project->purpose('newsletter', ['v1' => 'Acme news.']);
@@ -171,6 +173,9 @@ it('withdraws a purpose for the address on every list of the project', function 
     Waitlist::confirm($other['confirm']);
 
     Event::fake([ConsentWithdrawn::class]);
+    Exceptions::fake();
+
+    $break();
 
     Waitlist::withdrawConsent($beta['unsubscribe'], 'newsletter');
 
@@ -181,7 +186,12 @@ it('withdraws a purpose for the address on every list of the project', function 
 
     Event::assertDispatchedTimes(ConsentWithdrawn::class, 2);
     assertWaitlistInvariants();
-});
+})->with([
+    'with the address readable' => fn () => null,
+    // Found by the token entry's own hash instead of by the address.
+    'with an email normalizer that does not read' => fn () => bindUnreadable(EmailNormalizer::class),
+    'with the key of the address gone' => fn () => rotateAppKey(),
+]);
 
 it('leaves only the list a withdrawal of its primary purpose came from', function () {
     $beta = confirmedWith(['newsletter' => '2026-10']);

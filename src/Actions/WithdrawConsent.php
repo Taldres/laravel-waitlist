@@ -98,9 +98,9 @@ class WithdrawConsent
     /**
      * Found by address rather than by email_hash, so entries hashed under
      * another key are included. Without a readable address, or with an email
-     * normalizer that does not work, only the entry itself can be reached: the
-     * token still ends what it names, and the failed sweep over the other
-     * lists is reported.
+     * normalizer that does not work, the entry's own hash still reaches the
+     * lists hashed with the same key; only entries under another key are
+     * missed. A normalizer that does not work is reported.
      *
      * @return Collection<int, WaitlistEntry>
      */
@@ -109,7 +109,7 @@ class WithdrawConsent
         $email = $entry->readableEmail();
 
         if ($email === null) {
-            return new Collection([$entry]);
+            return $this->entriesOfHash($entry);
         }
 
         return ConfigFallback::read(
@@ -118,7 +118,23 @@ class WithdrawConsent
                 ->inProject($entry->project)
                 ->forEmail($email)
                 ->get(),
-            new Collection([$entry]),
-        );
+            null,
+        ) ?? $this->entriesOfHash($entry);
+    }
+
+    /**
+     * @return Collection<int, WaitlistEntry>
+     */
+    protected function entriesOfHash(WaitlistEntry $entry): Collection
+    {
+        $entries = static::modelClass()::query()
+            ->with('currentSubscription')
+            ->inProject($entry->project)
+            ->where('email_hash', $entry->email_hash)
+            ->get();
+
+        // A rekey in another process may have changed the stored hash since
+        // the entry was loaded; the token still ends what it names.
+        return $entries->contains($entry) ? $entries : $entries->push($entry);
     }
 }
