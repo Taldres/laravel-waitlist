@@ -18,7 +18,7 @@ legal requirement is satisfied.
 | Proof of consent (Art. 7(1)) | Registered wording and version stored per purpose and cycle, plus lifecycle records; these do not verify what was displayed or whether consent is legally valid |
 | Withdrawal as easy as consent (Art. 7(3)) | Per-purpose links and RFC 8058 one-click support; the application must deliver working links and implement an accessible withdrawal flow |
 | Data minimization (Art. 5(1)(c)) | The HTTP signup accepts only the fields a project or list defines; optional activity-log IP and user agent off by default; server-side calls and infrastructure need their own controls |
-| Storage limitation (Art. 5(1)(e)) | Retention periods applied by a scheduled `waitlist:prune` |
+| Storage limitation (Art. 5(1)(e)) | Retention periods applied by `waitlist:prune`, which the application schedules |
 | Self-service rights (Art. 12(2), 15, 17, 20) | Preference page behind a manage link mailed to the address: change purposes, download a JSON copy, erase; a project can turn it off and answer these requests itself |
 | Access and erasure on request (Art. 15, 17) | `waitlist:show`, `waitlist:forget`, `Waitlist::allProjects()->personalData()`, `Waitlist::allProjects()->forget()` |
 | Privacy by default (Art. 25) | Encryption always on, double opt-in on, request metadata off, routes off until enabled |
@@ -111,8 +111,18 @@ How to configure all of this: [Purposes and wording](purposes-and-wording.md).
 
 ## Retention
 
-`waitlist:prune` applies three periods from `waitlist.retention`, and the package
-schedules it (`15 3 * * *` by default). Laravel's scheduler must run. These are
+`waitlist:prune` applies three periods from `waitlist.retention`. Your
+application schedules it, in `routes/console.php`:
+
+```php
+use Illuminate\Support\Facades\Schedule;
+
+Schedule::command('waitlist:prune')->daily();
+```
+
+Time, time zone, overlap protection and the one server that runs it are yours to
+choose, and Laravel's scheduler must run. `waitlist:privacy` warns while no
+scheduled task runs the command. These are
 technical defaults, not statutory periods or a recommendation for your use case.
 The operator must choose and justify them and monitor cleanup failures. A project
 can promise periods of its own, see [Periods a project promises
@@ -210,8 +220,8 @@ Setup
 - [ ] IP and user agent stored only if you need them
 - [ ] [Fields](projects.md#fields) per project and list as few as possible, none if in doubt
 - [ ] Retention periods agreed with your data protection officer
-- [ ] Laravel's scheduler running, so `waitlist:prune` applies
-- [ ] `php artisan waitlist:check` passes on the production host: an unreadable `retention.schedule`, for one, is otherwise only reported to your logs, and `waitlist:prune` then never runs
+- [ ] `waitlist:prune` scheduled and Laravel's scheduler running, so the retention applies
+- [ ] `php artisan waitlist:check` passes on the production host: a setting that does not read is otherwise only met by the flow that uses it
 - [ ] `php artisan waitlist:privacy` run on the production host prints no warnings: mail links are https and not localhost, `APP_DEBUG` is off, and guests are meant to call the signup
 
 Signup form

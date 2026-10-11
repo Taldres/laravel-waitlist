@@ -82,7 +82,6 @@ describe('ConfigKey', function () {
             'retention.pending_days' => 107,
             'retention.unsubscribed_days' => 108,
             'retention.request_metadata_days' => 109,
-            'retention.schedule' => '5 4 * * *',
             'routes.enabled' => 'on',
             'routes.prefix' => 'lists',
             'routes.name' => 'lists.',
@@ -118,7 +117,6 @@ describe('ConfigKey', function () {
             ->and([$manage->tokenTtl, $manage->requestCooldown])->toBe([105, 106])
             ->and([$privacy->storeIp, $privacy->storeUserAgent])->toBe([true, false])
             ->and([$retention->pendingDays, $retention->unsubscribedDays, $retention->requestMetadataDays])->toBe([107, 108, 109])
-            ->and(WaitlistConfig::pruneSchedule())->toBe('5 4 * * *')
             ->and(WaitlistConfig::routesEnabled())->toBeTrue()
             ->and([WaitlistConfig::routePrefix(), WaitlistConfig::routeName()])->toBe(['lists', 'lists.'])
             ->and([WaitlistConfig::routeMiddleware(), WaitlistConfig::signupMiddleware(), WaitlistConfig::linksMiddleware()])->toBe([['web'], ['csrf'], ['signed']])

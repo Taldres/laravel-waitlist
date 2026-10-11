@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Support;
 
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Schema;
 use Taldres\Waitlist\Config\WaitlistConfig;
@@ -30,6 +31,22 @@ final class SetupAudit
         'activity' => ['id', 'waitlist_entry_id', 'waitlist_subscription_id', 'project', 'list', 'type', 'previous_status', 'purpose', 'reference', 'ip', 'user_agent', 'occurred_at', 'occurred_on'],
         'wording' => ['id', 'project', 'purpose', 'version', 'locale', 'text', 'registered_by', 'registered_at', 'retired_at'],
     ];
+
+    /**
+     * The cron expression of the application's scheduled task that runs
+     * waitlist:prune, or null when none does. A cron job outside Laravel's
+     * scheduler is not seen.
+     */
+    public static function scheduledPrune(): ?string
+    {
+        foreach (app(Schedule::class)->events() as $event) {
+            if (str_contains((string) $event->command, 'waitlist:prune')) {
+                return $event->expression;
+            }
+        }
+
+        return null;
+    }
 
     /**
      * Settings in config/waitlist.php that no key of this version names, as the

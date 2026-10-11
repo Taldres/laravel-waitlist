@@ -27,6 +27,7 @@ use Taldres\Waitlist\Events\SubscriptionExpired;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Exceptions\MissingWordingException;
 use Taldres\Waitlist\Support\PurposeRegistry;
+use Taldres\Waitlist\Support\SetupAudit;
 use Taldres\Waitlist\WaitlistManager;
 use Taldres\Waitlist\WaitlistServiceProvider;
 
@@ -198,7 +199,7 @@ class PrivacyCommand extends Command
             : "- {$text}: kept until erased";
 
         $retention = WaitlistConfig::retention();
-        $schedule = WaitlistConfig::pruneSchedule();
+        $scheduled = SetupAudit::scheduledPrune();
         [$offering, $without] = $this->manageLinkProjects($catalog, $projects);
 
         return [
@@ -210,9 +211,9 @@ class PrivacyCommand extends Command
             $period($retention->unsubscribedDays, 'Addresses that left erased'),
             $period($retention->requestMetadataDays, 'IP and user agent cleared from the log'),
             ...$this->projectRetention($catalog, $projects),
-            $schedule !== null
-                ? "- Applied by waitlist:prune on the schedule `{$schedule}`; Laravel's scheduler must run"
-                : '- Not scheduled by the package: run waitlist:prune yourself',
+            $scheduled !== null
+                ? "- Applied by waitlist:prune, which the application's scheduler runs on `{$scheduled}`; Laravel's scheduler must run"
+                : '- Applied by waitlist:prune, which no scheduled task of the application runs: schedule it, or run it another way',
             match (true) {
                 $without === [] => '- On request (Art. 17): waitlist:forget, or the person via a manage link sent to their address',
                 $offering === [] => '- On request (Art. 17): waitlist:forget',
@@ -338,6 +339,10 @@ class PrivacyCommand extends Command
     protected function warnings(ProjectCatalog $catalog, array $projects): array
     {
         $warnings = $this->linkWarnings($catalog, $projects);
+
+        if (SetupAudit::scheduledPrune() === null) {
+            $warnings[] = 'No scheduled task runs waitlist:prune, so the retention periods are not applied. Add Schedule::command(\'waitlist:prune\')->daily() to routes/console.php, or run it another way and ignore this.';
+        }
 
         if (! WaitlistConfig::routesEnabled()) {
             return $warnings;

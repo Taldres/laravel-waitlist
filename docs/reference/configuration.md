@@ -10,9 +10,9 @@ switches a limit or period off where a table below says so. Any other value is
 refused with an `InvalidConfigurationException` that names the key and what it
 must be, an empty variable included: a blank line in `.env` never turns double
 opt-in or a retention period off. If an empty variable in `.env` causes it,
-remove the variable to keep the default. Five settings read an empty value as
+remove the variable to keep the default. Four settings read an empty value as
 unset, like `null`, and say so in the tables below: the connection, the client
-IP header, the two limiters and the retention schedule.
+IP header and the two limiters.
 
 A period is bounded by the `timestamp` columns it is stored in or compared
 with, and a value beyond is refused with an `InvalidConfigurationException`
@@ -65,12 +65,10 @@ reported once per request, job or command:
   decides for itself.
 
 Nothing in this config stops the app from booting, artisan included: a route
-setting that does not read refuses the requests of its group, and a
-`retention.schedule` that does not read is reported to your logs and leaves
-`waitlist:prune` unscheduled. A route group registered while one of its
-settings did not read lacks what that setting meant to add, so it keeps
-refusing its requests until the routes are registered again: with cached
-routes, run `php artisan route:cache` once the config is fixed.
+setting that does not read refuses the requests of its group. A route group
+registered while one of its settings did not read lacks what that setting meant
+to add, so it keeps refusing its requests until the routes are registered again:
+with cached routes, run `php artisan route:cache` once the config is fixed.
 
 The package merges its defaults into your config when it registers: a key your
 published `config/waitlist.php` lacks takes the package's value, while a list
@@ -124,7 +122,6 @@ come from.
 | `retention.pending_days` | `WAITLIST_RETENTION_PENDING_DAYS` | 30 | unconfirmed signups, from the start of the cycle; 0 at the next run, `null` kept, at most the days since 1970 |
 | `retention.unsubscribed_days` | `WAITLIST_RETENTION_UNSUBSCRIBED_DAYS` | 1095 | people who left, from when they left; 0 at the next run, `null` kept, at most the days since 1970 |
 | `retention.request_metadata_days` | `WAITLIST_RETENTION_REQUEST_METADATA_DAYS` | 30 | IP and user agent on the log; 0 at the next run, `null` kept, at most the days since 1970 |
-| `retention.schedule` | `WAITLIST_RETENTION_SCHEDULE` | `15 3 * * *` | when `waitlist:prune` runs; `null` or empty schedules nothing; one that can never run, such as the 30th of February, is refused |
 
 The retention periods are technical defaults, not legal recommendations; see
 [GDPR in practice](../gdpr.md#retention). A project can promise its own periods,

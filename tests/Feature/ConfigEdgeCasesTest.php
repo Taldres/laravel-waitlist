@@ -299,7 +299,7 @@ function edgeCaseFlows(): array
         }],
         'waitlist:privacy' => [[
             ...$retention, ConfigKey::Catalog, ConfigKey::DoubleOptIn, ConfigKey::ResendCooldown, ConfigKey::MaxConfirmations, ConfigKey::MaxPendingPerAddress, ConfigKey::ManageTokenTtl,
-            ConfigKey::StoreIp, ConfigKey::StoreUserAgent, ConfigKey::RetentionSchedule, ConfigKey::RoutesEnabled,
+            ConfigKey::StoreIp, ConfigKey::StoreUserAgent, ConfigKey::RoutesEnabled,
         ], false, function ($test): Closure {
             return function (): void {
                 expect(Artisan::call('waitlist:privacy'))->toBe(0)
