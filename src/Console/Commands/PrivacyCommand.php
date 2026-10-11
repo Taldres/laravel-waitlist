@@ -15,6 +15,7 @@ use Taldres\Waitlist\Actions\IssueManageLink;
 use Taldres\Waitlist\Actions\ResendConfirmation;
 use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
+use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Enums\Page;
 use Taldres\Waitlist\Enums\WaitlistLimiter;
 use Taldres\Waitlist\Events\ConsentGranted;
@@ -28,6 +29,7 @@ use Taldres\Waitlist\Events\SubscriptionExpired;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Exceptions\MissingWordingException;
 use Taldres\Waitlist\Http\Limiters;
+use Taldres\Waitlist\Support\AuthenticatedProjectResolver;
 use Taldres\Waitlist\Support\PurposeRegistry;
 use Taldres\Waitlist\Support\SetupAudit;
 use Taldres\Waitlist\WaitlistManager;
@@ -312,7 +314,7 @@ class PrivacyCommand extends Command
 
         $header = WaitlistConfig::clientIpHeader();
 
-        if (! WaitlistConfig::authenticationRequired() && $header === null) {
+        if (! WaitlistConfig::authenticationRequired() && $header === null && ! $this->recognisesServers()) {
             return [];
         }
 
@@ -328,6 +330,24 @@ class PrivacyCommand extends Command
         }
 
         return $lines;
+    }
+
+    /**
+     * Whether a caller acting for a project can call without "required": named
+     * guards recognise it, and AuthenticatedProjectResolver only takes such
+     * callers. Signed-in users act for no project and are limited per IP.
+     */
+    protected function recognisesServers(): bool
+    {
+        try {
+            if (WaitlistConfig::guards() !== [null]) {
+                return true;
+            }
+        } catch (InvalidConfigurationException) {
+            // warnings() names the setting.
+        }
+
+        return rescue(fn (): bool => app(ProjectResolver::class) instanceof AuthenticatedProjectResolver, false, report: false);
     }
 
     /**
@@ -354,8 +374,8 @@ class PrivacyCommand extends Command
         }
 
         try {
-            if (WaitlistConfig::guards() !== [null] && ! WaitlistConfig::authenticationRequired()) {
-                $warnings[] = 'authentication.guards names guards but authentication.required is off, so guests can call the signup too. Turn it on if only your own servers may.';
+            if (WaitlistConfig::guards() !== [null] && ! SetupAudit::signupRequiresLogin()) {
+                $warnings[] = 'authentication.guards names guards but neither authentication.required nor an auth middleware in routes.group_middleware.signup keeps guests out, so guests can call the signup too. Turn one on if only signed-in callers may.';
             }
         } catch (InvalidConfigurationException $exception) {
             $warnings[] = $exception->getMessage();

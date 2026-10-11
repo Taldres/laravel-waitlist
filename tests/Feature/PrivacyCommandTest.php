@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Auth\Middleware\Authenticate;
 use Illuminate\Cache\RateLimiter as CacheRateLimiter;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Console\Scheduling\Schedule;
@@ -14,6 +15,7 @@ use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Output\ConsoleSectionOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
+use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\WaitlistLimiter;
@@ -21,6 +23,7 @@ use Taldres\Waitlist\Events\EntryForgotten;
 use Taldres\Waitlist\Events\ManageLinkRequested;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Facades\Waitlist;
+use Taldres\Waitlist\Support\AuthenticatedProjectResolver;
 use Taldres\Waitlist\Support\StoredWordingCatalog;
 use Taldres\Waitlist\Tests\TestCase;
 use Taldres\Waitlist\WaitlistServiceProvider;
@@ -202,12 +205,66 @@ it('warns when debug is on and guards leave guests in', function () {
 
     expect(privacyRecord())
         ->toContain('Warning: APP_DEBUG is on while the waitlist routes are enabled')
-        ->toContain('Warning: authentication.guards names guards but authentication.required is off');
+        ->toContain('Warning: authentication.guards names guards but neither authentication.required nor an auth middleware');
 
     config()->set('app.debug', false);
     config()->set(ConfigKey::AuthenticationRequired->value, true);
 
     expect(privacyRecord())->not->toContain('Warning:');
+});
+
+it('takes Laravel\'s auth middleware on the signup as keeping guests out, and states the limits per server', function (string $middleware) {
+    config()->set(ConfigKey::RoutesEnabled->value, true);
+    config()->set('app.url', 'https://api.example.com');
+    config()->set(ConfigKey::AuthenticationGuards->value, ['sanctum']);
+    config()->set(ConfigKey::SignupMiddleware->value, [$middleware]);
+
+    expect(privacyRecord())
+        ->not->toContain('Warning:')
+        ->toContain('- Rate limits for servers calling for a project: signups 120 per minute and server'.PHP_EOL);
+})->with([
+    'the auth alias with a guard' => 'auth:sanctum',
+    'the auth alias alone' => 'auth',
+    'the middleware class' => Authenticate::class,
+    'the middleware class with a guard' => Authenticate::class.':sanctum',
+]);
+
+it('states the limits per server only where a caller can act for a project', function (array $settings, bool $resolver, bool $servers) {
+    config()->set(ConfigKey::RoutesEnabled->value, true);
+    config()->set('app.url', 'https://api.example.com');
+
+    foreach ($settings as $key => $value) {
+        config()->set($key, $value);
+    }
+
+    if ($resolver) {
+        app()->bind(ProjectResolver::class, AuthenticatedProjectResolver::class);
+    }
+
+    expect(str_contains(privacyRecord(), 'Rate limits for servers calling for a project'))->toBe($servers);
+})->with([
+    'signed-in users only' => [[ConfigKey::SignupMiddleware->value => ['auth:sanctum']], false, false],
+    'servers recognised on a public form' => [[ConfigKey::AuthenticationGuards->value => ['sanctum']], false, true],
+    'servers only, by auth middleware and their resolver' => [[ConfigKey::SignupMiddleware->value => ['auth:sanctum']], true, true],
+]);
+
+it('still writes the record while the signup middleware does not read', function () {
+    config()->set(ConfigKey::RoutesEnabled->value, true);
+    config()->set('app.url', 'https://api.example.com');
+    config()->set(ConfigKey::AuthenticationGuards->value, ['sanctum']);
+    config()->set(ConfigKey::SignupMiddleware->value, [null]);
+
+    $this->artisan('waitlist:privacy')->assertSuccessful();
+    expect(privacyRecord())->toContain('# Waitlist processing record');
+});
+
+it('still warns while the signup middleware authenticates nobody', function () {
+    config()->set(ConfigKey::RoutesEnabled->value, true);
+    config()->set('app.url', 'https://api.example.com');
+    config()->set(ConfigKey::AuthenticationGuards->value, ['sanctum']);
+    config()->set(ConfigKey::SignupMiddleware->value, ['throttle:10,1']);
+
+    expect(privacyRecord())->toContain('Warning: authentication.guards names guards but neither');
 });
 
 it('warns of guards that do not read instead of failing', function () {

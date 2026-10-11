@@ -260,8 +260,10 @@ return [
     | from it, see docs/projects.md. Define the gate yourself to decide who may
     | do what; the default keeps a caller with a project (HasWaitlistProject)
     | to that project, and with "required" refuses guests (401) and callers
-    | without a project (403). Leave "required" off for public forms; turn it
-    | on for an API that only your projects' servers may call.
+    | without a project (403). Leave "required" off for public forms, and for
+    | an API that only your app's signed-in users may call, which takes
+    | auth:sanctum in routes.group_middleware.signup and a gate instead; turn
+    | it on for an API that only your projects' servers may call.
     |
     | A server signs up its visitors from one address, so the limits per
     | visitor are its job; the API only caps the server itself. Name the header
