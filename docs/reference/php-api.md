@@ -60,8 +60,8 @@ Waitlist::retireWording(string $purpose, string $version): int
 Waitlist::subscribe(string $list, string $email, array $purposes, array $metadata = [], ?RequestContext $context = null): SubscribeResult
 Waitlist::resendConfirmation(string $list, string $email, ?RequestContext $context = null): ?WaitlistEntry
 Waitlist::confirm(string $plainToken, ?RequestContext $context = null): WaitlistEntry
-Waitlist::confirmationMailed(WaitlistSubscription $subscription, string $reference, ?RequestContext $context = null): bool  // record the reference of the mail your listener reports sending, once per request; false for a repeat or an earlier request
-Waitlist::confirmationFailed(WaitlistSubscription $subscription, ?string $reference = null, ?RequestContext $context = null): bool  // report that your listener could not send the mail: the request stops counting against the cooldown and the caps
+Waitlist::confirmationMailed(EntrySubscribed $event, string $reference, ?RequestContext $context = null): bool  // record the reference of the mail your listener reports sending, once per request; false for a repeat or an earlier request
+Waitlist::confirmationFailed(EntrySubscribed $event, ?string $reference = null, ?RequestContext $context = null): bool  // report that your listener could not send the mail: the request stops counting against the cooldown and the caps
 Waitlist::grantConsent(string $manageToken, string $purpose, string $version, ?string $locale = null, ?RequestContext $context = null): WaitlistEntry
 Waitlist::withdrawConsent(string $unsubscribeToken, string $purpose, ?RequestContext $context = null): WaitlistEntry
 Waitlist::unsubscribe(string $unsubscribeToken, ?RequestContext $context = null): WaitlistEntry

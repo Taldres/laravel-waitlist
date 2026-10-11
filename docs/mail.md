@@ -141,7 +141,7 @@ class SendWaitlistConfirmationMail implements ShouldQueue, ShouldBeEncrypted
         ));
 
         // The reference of what you sent, e.g. template and version.
-        Waitlist::confirmationMailed($event->subscription, 'confirm-mail@2026-10');
+        Waitlist::confirmationMailed($event, 'confirm-mail@2026-10');
     }
 }
 ```
@@ -165,16 +165,19 @@ Laravel discovers the listener in `app/Listeners` by itself.
   public function failed(EntrySubscribed $event, Throwable $exception): void
   {
       // The provider's error code, never the address or its message.
-      Waitlist::confirmationFailed($event->subscription, 'http-429');
+      Waitlist::confirmationFailed($event, 'http-429');
   }
   ```
 
   The request stops counting, so the person's own retry gets a mail, and the log
   shows `confirmation_failed`.
 
-  Report with `$event->subscription`: it names the request by the hash of its
-  confirm link, which a new request replaces. Each request takes one report, and
-  the first one counts:
+  Report with the event itself: its confirm token names the request, which a new
+  request replaces. Hand the event as a whole to a job of your own, not
+  `$event->subscription`: a job with `SerializesModels` loads the model afresh,
+  with the latest request. The event carries the plain tokens, so make that job
+  `ShouldBeEncrypted`, like the listener. Each request takes one report, and the first one
+  counts:
 
   - A repeat of the report, or one about an earlier request that a newer one
     replaced, answers `false` and changes nothing, so it cannot free the cooldown
@@ -393,7 +396,7 @@ public function handle(EntrySubscribed $event): void
 
     Mail::mailer($product['mailer'])->to($event->entry->email)->send($mail);
 
-    Waitlist::confirmationMailed($event->subscription, "confirm-mail@{$event->entry->project}-2026-10");
+    Waitlist::confirmationMailed($event, "confirm-mail@{$event->entry->project}-2026-10");
 }
 ```
 

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Taldres\Waitlist\Enums\ActivityType;
@@ -13,10 +14,11 @@ use Taldres\Waitlist\Models\WaitlistActivity;
 use Taldres\Waitlist\Models\WaitlistSubscription;
 
 it('records the confirmation mail your listener sent, as proof of the double opt-in', function () {
+    $requests = captureRequests();
     $tokens = subscribeAndCapture('beta', 'user@example.com');
     $subscription = $tokens['entry']->latestSubscription;
 
-    Waitlist::confirmationMailed($subscription, 'confirm-mail@2026-10');
+    Waitlist::confirmationMailed($requests[0], 'confirm-mail@2026-10');
 
     expect(activityTypes())->toBe([ActivityType::Subscribed, ActivityType::ConfirmationRequested, ActivityType::ConfirmationMailed])
         ->and(WaitlistActivity::query()->where('type', ActivityType::ConfirmationMailed)->sole())
@@ -27,8 +29,9 @@ it('records the confirmation mail your listener sent, as proof of the double opt
 });
 
 it('clears the reference on erasure, since a message id could lead back to the person', function () {
-    $tokens = subscribeAndCapture('beta', 'user@example.com');
-    Waitlist::confirmationMailed($tokens['entry']->latestSubscription, '<abc123@mail.example.com>');
+    $requests = captureRequests();
+    subscribeAndCapture('beta', 'user@example.com');
+    Waitlist::confirmationMailed($requests[0], '<abc123@mail.example.com>');
 
     Waitlist::forget('user@example.com');
 
@@ -36,21 +39,22 @@ it('clears the reference on erasure, since a message id could lead back to the p
 });
 
 it('keeps the reference encrypted and takes long ones', function () {
-    $tokens = subscribeAndCapture('beta', 'user@example.com');
+    $requests = captureRequests();
+    subscribeAndCapture('beta', 'user@example.com');
     $reference = '<'.str_repeat('a', 300).'@mail.example.com>';
 
-    Waitlist::confirmationMailed($tokens['entry']->latestSubscription, $reference);
+    Waitlist::confirmationMailed($requests[0], $reference);
 
     expect(DB::table('waitlist_activity')->whereNotNull('reference')->value('reference'))->not->toBe($reference)
         ->and(WaitlistActivity::query()->where('type', ActivityType::ConfirmationMailed)->sole()->reference)->toBe($reference);
 });
 
 it('does nothing once the entry is gone, so a retried listener does not fail after mailing', function () {
-    $tokens = subscribeAndCapture('beta', 'user@example.com');
-    $subscription = $tokens['entry']->latestSubscription;
+    $requests = captureRequests();
+    subscribeAndCapture('beta', 'user@example.com');
     Waitlist::forget('user@example.com');
 
-    Waitlist::confirmationMailed($subscription, 'confirm-mail@2026-10');
+    Waitlist::confirmationMailed($requests[0], 'confirm-mail@2026-10');
 
     expect(WaitlistActivity::query()->where('type', ActivityType::ConfirmationMailed)->count())->toBe(0);
 });
@@ -233,10 +237,10 @@ it('has no request to report for a cycle that has ended or never had one', funct
         ->and(Waitlist::confirmationMailed($requests[0], 'mail-1'))->toBeFalse();
 
     config()->set(ConfigKey::DoubleOptIn->value, false);
-    $none = subscribeAndCapture('launch', 'none@example.com');
+    subscribeAndCapture('launch', 'none@example.com');
 
-    expect(Waitlist::confirmationFailed($none['entry']->latestSubscription))->toBeFalse()
-        ->and(Waitlist::confirmationMailed($none['entry']->latestSubscription, 'mail-1'))->toBeFalse()
+    expect(Waitlist::confirmationFailed($requests[1]))->toBeFalse()
+        ->and(Waitlist::confirmationMailed($requests[1], 'mail-1'))->toBeFalse()
         ->and(mailActivity(ActivityType::ConfirmationFailed) + mailActivity(ActivityType::ConfirmationMailed))->toBe(0);
 });
 
@@ -248,3 +252,55 @@ it('has nothing to report once the entry is gone, so a failed listener does not 
     expect(Waitlist::confirmationFailed($requests[0]))->toBeFalse()
         ->and(Waitlist::confirmationMailed($requests[0], 'mail-1'))->toBeFalse();
 });
+
+it('reports for the request the event announced, though its model was refreshed with a newer one', function () {
+    $requests = captureRequests();
+    subscribeAndCapture('beta', 'user@example.com');
+    $this->travel(10)->minutes();
+    Waitlist::resendConfirmation('beta', 'user@example.com');
+
+    $earlier = $requests[0];
+    $earlier->subscription->refresh();
+
+    expect($earlier->subscription->confirm_token_hash)->toBe(WaitlistSubscription::query()->sole()->confirm_token_hash)
+        ->and(Waitlist::confirmationFailed($earlier, 'late'))->toBeFalse()
+        ->and(Waitlist::confirmationMailed($earlier, 'late'))->toBeFalse()
+        ->and(mailActivity(ActivityType::ConfirmationFailed) + mailActivity(ActivityType::ConfirmationMailed))->toBe(0)
+        ->and(Waitlist::confirmationMailed($requests[1], 'mail-2'))->toBeTrue();
+});
+
+it('reports with an event handed to a queued job of the app', function () {
+    $requests = captureRequests();
+    subscribeAndCapture('beta', 'user@example.com');
+    $earlierJob = serialize(new ConfirmationMailJob($requests[0]));
+    $this->travel(10)->minutes();
+    Waitlist::resendConfirmation('beta', 'user@example.com');
+    $latestJob = serialize(new ConfirmationMailJob($requests[1]));
+
+    $earlier = unserialize($earlierJob)->event;
+    $latest = unserialize($latestJob)->event;
+
+    expect(Waitlist::confirmationMailed($earlier, 'mail-1'))->toBeFalse()
+        ->and(Waitlist::confirmationMailed($latest, 'mail-2'))->toBeTrue()
+        ->and(mailActivity(ActivityType::ConfirmationMailed))->toBe(1);
+});
+
+it('changes nothing for an event whose subscription and confirm token belong to different entries', function () {
+    $requests = captureRequests();
+    subscribeAndCapture('beta', 'one@example.com');
+    subscribeAndCapture('beta', 'two@example.com');
+
+    $mixed = clone $requests[0];
+    $mixed->confirmToken = $requests[1]->confirmToken;
+
+    expect(Waitlist::confirmationFailed($mixed))->toBeFalse()
+        ->and(Waitlist::confirmationMailed($mixed, 'mail-1'))->toBeFalse()
+        ->and(mailActivity(ActivityType::ConfirmationFailed) + mailActivity(ActivityType::ConfirmationMailed))->toBe(0);
+});
+
+final class ConfirmationMailJob
+{
+    use SerializesModels;
+
+    public function __construct(public EntrySubscribed $event) {}
+}
