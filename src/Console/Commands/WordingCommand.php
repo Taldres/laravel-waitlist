@@ -36,17 +36,13 @@ class WordingCommand extends Command
         $file = $this->argument('file');
 
         if (is_string($file) === (bool) $this->option('from-definitions')) {
-            $this->error('Pass a file or --from-definitions.');
-
-            return self::FAILURE;
+            $this->fail('Pass a file or --from-definitions.');
         }
 
         $wording = is_string($file) ? $this->fromFile($file) : $this->fromDefinitions($project);
 
         if (! is_array($wording) || ! $this->wellFormed($wording)) {
-            $this->error(is_string($file) ? "[{$file}] is not a JSON object of purpose => version => wording." : "The definition of [{$project}] holds no wording.");
-
-            return self::FAILURE;
+            $this->fail(is_string($file) ? "[{$file}] is not a JSON object of purpose => version => wording." : "The definition of [{$project}] holds no wording.");
         }
 
         try {
@@ -54,9 +50,7 @@ class WordingCommand extends Command
                 fn (): array => $this->sync($register, $project, $wording),
             );
         } catch (WordingConflictException $exception) {
-            $this->error($exception->getMessage().' Nothing was registered.');
-
-            return self::FAILURE;
+            $this->fail($exception->getMessage().' Nothing was registered.');
         }
 
         $this->info("Registered {$registered} wordings, retired {$retired} versions.");

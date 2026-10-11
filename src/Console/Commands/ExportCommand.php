@@ -24,9 +24,7 @@ class ExportCommand extends Command
         $list = $this->argument('list');
 
         if (! is_string($list) || $list === '') {
-            $this->error('A waitlist key is required.');
-
-            return self::FAILURE;
+            $this->fail('A waitlist key is required.');
         }
 
         $status = null;
@@ -36,9 +34,7 @@ class ExportCommand extends Command
             $status = EntryStatus::tryFrom($statusOption);
 
             if (! $status) {
-                $this->error("Invalid status [{$statusOption}].");
-
-                return self::FAILURE;
+                $this->fail("Invalid status [{$statusOption}].");
             }
         }
 

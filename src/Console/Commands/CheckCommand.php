@@ -42,8 +42,8 @@ class CheckCommand extends Command
             $warned = true;
         }
 
-        if (SetupAudit::scheduledPrune() === null) {
-            $this->components->warn("No scheduled task runs waitlist:prune, so the retention periods are not applied. Add Schedule::command('waitlist:prune')->daily() to routes/console.php, or ignore this if you run it another way.");
+        if (($hint = SetupAudit::unscheduledPruneHint()) !== null) {
+            $this->components->warn($hint);
         }
 
         try {
