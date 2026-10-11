@@ -10,6 +10,64 @@ This repository is a Laravel package. Keep the package focused, idiomatic, and e
 - Prefer explicit Laravel package code over helper abstractions unless the extension point is real.
 - Keep tests focused on observable package behavior through public APIs, service provider wiring, commands, routes, published resources, and documentation promises.
 
+## Laravel-first architecture
+
+This project is a Laravel package, not an application framework.
+Build on Laravel's conventions and extension points. Keep the package
+focused on waitlist behavior.
+
+### Before adding a capability
+
+- Check whether Laravel already provides the behavior.
+- Prefer an existing Laravel API over a package-specific equivalent.
+- State what package-specific requirement Laravel does not cover before
+  introducing an abstraction, configuration key, contract or subsystem.
+- Implement for a current use case. Do not build infrastructure for
+  hypothetical future integrations.
+
+### Responsibility boundaries
+
+The host application owns infrastructure and deployment policy:
+CORS, authentication mechanisms and guards, trusted proxies, sessions,
+CSRF, mail transports, queues, cache stores, logging, scheduler timing
+and deployment orchestration.
+
+The package owns waitlist behavior:
+subscription transitions, consent records, token purposes and lifetimes,
+resend limits, project authorization, retention and erasure.
+
+Use the application's infrastructure to implement package behavior.
+For example, provide a pruning command; let the application schedule it.
+Use Laravel authentication; add only the project authorization the
+package needs.
+
+### Integration rules
+
+- Do not create parallel authentication, routing, configuration,
+  validation, event, queue or scheduling systems.
+- Do not mutate global application settings during a request.
+- Do not replace application-defined gates, limiters, bindings or
+  middleware policy without an explicit documented opt-in.
+- Scope package defaults and middleware to package behavior and routes.
+- Use Laravel's container, gates, middleware, validation, events,
+  transactions, casts, RateLimiter and Artisan directly.
+- Add contracts only for real extension points with a concrete consumer.
+  Do not wrap Laravel APIs merely to rename them.
+- Keep HTTP infrastructure separate from domain actions. PHP callers
+  must not need an HTTP request to use the package.
+- Prefer one explicit implementation over a generic driver or plugin
+  system until multiple supported implementations actually require it.
+
+### Scope discipline
+
+- Choose the smallest change that satisfies the current requirement.
+- Do not add speculative configuration or abstractions "for flexibility".
+- Preserve domain safeguards; infrastructure simplification must not
+  remove token security, project isolation, consent integrity or privacy.
+- Do not refactor unrelated existing systems to satisfy these rules.
+- In change descriptions, explain which Laravel facilities are reused
+  and why any new package abstraction is necessary.
+
 ## Project Rules
 
 - Code, comments, commit messages and docs are in English. Comments only explain a non-obvious why.
