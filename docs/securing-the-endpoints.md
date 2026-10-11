@@ -22,7 +22,7 @@ you out of the box:
 | Token guessing | 64-char random tokens, looked up via SHA-256 hash, optional TTL |
 | Forwarded mails, providers reading headers | The token in every mail can only remove; the data and erasure need a manage link that is mailed to the address on request and expires |
 | Link scanners acting for the user | `GET` and `HEAD` never change state and never return the address; confirming, unsubscribing, exporting and erasing need `POST` |
-| Tokens sent to another host | Links to the package routes are built from `APP_URL`, never from the Host header of the request that triggered the mail |
+| Tokens sent to another host | Links to the package routes are built from `APP_URL`, never from the Host header of the request that triggered the mail; without an absolute `APP_URL` they are refused, not rooted at the request |
 | Forged consent wording | Clients send purpose versions only; the stored text comes from the catalog, or, for a project that takes it from its servers, from those servers alone ([C](#the-three-architectures)) |
 
 **B: Through your own backend (BFF pattern).** Package routes stay disabled;
