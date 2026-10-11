@@ -17,8 +17,8 @@ use Taldres\Waitlist\WaitlistServiceProvider;
 | https://github.com/Taldres/laravel-waitlist/blob/main/docs/reference/configuration.md
 |
 | An empty variable in .env is refused, naming the key, for every setting but
-| five that read it as unset, like null: the connection, the two limiters, the
-| client IP header and the retention schedule. Their comments say so.
+| four that read it as unset, like null: the connection, the two limiters and
+| the client IP header. Their comments say so.
 */
 
 return [
@@ -190,9 +190,9 @@ return [
     |
     | A project can promise periods of its own, see ProjectDefinition::retention().
     |
-    | The package schedules waitlist:prune with this cron expression; null, or
-    | an empty value, leaves scheduling to you. One that can never run, such as the 30th of
-    | February, is refused. Either way, Laravel's scheduler must run.
+    | waitlist:prune applies them. Schedule it in routes/console.php, for
+    | example Schedule::command('waitlist:prune')->daily(); the package does
+    | not, and waitlist:privacy warns when no scheduled task runs it.
     |
     */
 
@@ -200,7 +200,6 @@ return [
         'pending_days' => env('WAITLIST_RETENTION_PENDING_DAYS', 30),
         'unsubscribed_days' => env('WAITLIST_RETENTION_UNSUBSCRIBED_DAYS', 1095),
         'request_metadata_days' => env('WAITLIST_RETENTION_REQUEST_METADATA_DAYS', 30),
-        'schedule' => env('WAITLIST_RETENTION_SCHEDULE', '15 3 * * *'),
     ],
 
     /*

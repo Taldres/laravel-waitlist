@@ -31,8 +31,10 @@ say where they looked.
   `bootstrap/providers.php`. It never overwrites a published file and registers
   the provider only once, so it can run again. An app namespace other than `App`
   is kept.
-- **`waitlist:prune`** is scheduled by the package (`retention.schedule`, 03:15
-  daily); Laravel's scheduler must run. See [GDPR in practice](../gdpr.md#retention).
+- **`waitlist:prune`** applies the retention periods. Schedule it yourself, for
+  example `Schedule::command('waitlist:prune')->daily()`, and keep Laravel's
+  scheduler running; `waitlist:privacy` warns while no scheduled task runs it. See
+  [GDPR in practice](../gdpr.md#retention).
 - **`waitlist:forget --all`** asks before erasing a list; without a terminal to
   ask, it needs `--force`. Use it once a list's purpose is fulfilled, after the
   launch for example.

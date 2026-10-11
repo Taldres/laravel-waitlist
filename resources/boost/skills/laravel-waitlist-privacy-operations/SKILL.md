@@ -67,10 +67,10 @@ Waitlist::for('beta')->forgetAll();
 
 ### Retention
 
-`waitlist:prune` runs on the package's schedule (`waitlist.retention.schedule`,
-`15 3 * * *`; `null` leaves scheduling to you, a cron expression that can never run
-is refused); Laravel's scheduler must run (`php artisan schedule:run` every
-minute). Periods in `waitlist.retention`: `pending_days` (30), `unsubscribed_days`
+`waitlist:prune` runs on your schedule, which the package does not set:
+`Schedule::command('waitlist:prune')->daily()` in `routes/console.php`, with
+Laravel's scheduler running (`php artisan schedule:run` every minute);
+`waitlist:privacy` warns while no scheduled task runs it. Periods in `waitlist.retention`: `pending_days` (30), `unsubscribed_days`
 (1095), `request_metadata_days` (30); `null` keeps data, while a period reaching
 back before 1970 (a 36500-day "forever") is refused. `waitlist:prune` applies every
 period that reads, then reports the ones that do not and fails the run: watch the
@@ -112,7 +112,7 @@ complete record: it does not audit infrastructure or find every recipient.
 - `APP_KEY` backed up apart from the database
 - double opt-in on; IP and user agent off unless needed
 - fields per project and list (`->fields()`) as few as possible, none if in doubt
-- scheduler running; retention periods chosen and justified
+- `waitlist:prune` scheduled and the scheduler running; retention periods chosen and justified
 - `php artisan waitlist:privacy` run on the production host prints no warnings (mail
   links https and not localhost, `APP_DEBUG` off, guests meant to call the signup)
 - config reads: no empty `WAITLIST_*=` line in `.env` (an empty value is refused;

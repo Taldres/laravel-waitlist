@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Taldres\Waitlist;
 
 use Illuminate\Cache\RateLimiting\Limit;
-use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Foundation\CachesConfiguration;
@@ -131,16 +130,6 @@ class WaitlistServiceProvider extends ServiceProvider
         $this->publishesMigrations([
             __DIR__.'/../database/migrations' => database_path('migrations'),
         ], ['waitlist', 'waitlist-migrations']);
-
-        $this->callAfterResolving(Schedule::class, function (Schedule $schedule): void {
-            // Reported rather than thrown: the app's own tasks must still be
-            // scheduled.
-            $cron = ConfigFallback::read(WaitlistConfig::pruneSchedule(...), fallback: null);
-
-            if ($cron !== null) {
-                $schedule->command(PruneCommand::class)->cron($cron)->withoutOverlapping();
-            }
-        });
 
         $this->commands([
             ExportCommand::class,

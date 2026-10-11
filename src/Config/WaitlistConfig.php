@@ -229,14 +229,6 @@ final class WaitlistConfig
         return ConfigReader::of(config('waitlist'))->lookbackDaysOrNull(ConfigKey::RetentionRequestMetadataDays, min: 0);
     }
 
-    /**
-     * When waitlist:prune runs; null schedules nothing.
-     */
-    public static function pruneSchedule(): ?string
-    {
-        return ConfigReader::of(config('waitlist'))->cronOrNull(ConfigKey::RetentionSchedule);
-    }
-
     public static function routesEnabled(): bool
     {
         return ConfigReader::of(config('waitlist'))->boolean(ConfigKey::RoutesEnabled);
@@ -397,7 +389,6 @@ final class WaitlistConfig
         self::manage();
         self::privacy();
         self::retention();
-        self::pruneSchedule();
         self::routesEnabled();
         self::routePrefix();
         self::routeName();

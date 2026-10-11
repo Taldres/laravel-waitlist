@@ -6,6 +6,7 @@ namespace Taldres\Waitlist\Console\Commands;
 
 use Closure;
 use Illuminate\Console\Command;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
@@ -198,7 +199,7 @@ class PrivacyCommand extends Command
             : "- {$text}: kept until erased";
 
         $retention = WaitlistConfig::retention();
-        $schedule = WaitlistConfig::pruneSchedule();
+        $scheduled = $this->scheduledPrune();
         [$offering, $without] = $this->manageLinkProjects($catalog, $projects);
 
         return [
@@ -210,9 +211,9 @@ class PrivacyCommand extends Command
             $period($retention->unsubscribedDays, 'Addresses that left erased'),
             $period($retention->requestMetadataDays, 'IP and user agent cleared from the log'),
             ...$this->projectRetention($catalog, $projects),
-            $schedule !== null
-                ? "- Applied by waitlist:prune on the schedule `{$schedule}`; Laravel's scheduler must run"
-                : '- Not scheduled by the package: run waitlist:prune yourself',
+            $scheduled !== null
+                ? "- Applied by waitlist:prune, which the application's scheduler runs on `{$scheduled}`; Laravel's scheduler must run"
+                : '- Applied by waitlist:prune, which no scheduled task of the application runs: schedule it, or run it another way',
             match (true) {
                 $without === [] => '- On request (Art. 17): waitlist:forget, or the person via a manage link sent to their address',
                 $offering === [] => '- On request (Art. 17): waitlist:forget',
@@ -329,6 +330,21 @@ class PrivacyCommand extends Command
     }
 
     /**
+     * The cron expression of the application's task that runs waitlist:prune,
+     * or null when there is none; a cron job outside Laravel is not seen.
+     */
+    protected function scheduledPrune(): ?string
+    {
+        foreach (app(Schedule::class)->events() as $event) {
+            if (str_contains((string) $event->command, 'waitlist:prune')) {
+                return $event->expression;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * What a launch would trip over, from the same settings the record reads:
      * run it on the production host.
      *
@@ -338,6 +354,10 @@ class PrivacyCommand extends Command
     protected function warnings(ProjectCatalog $catalog, array $projects): array
     {
         $warnings = $this->linkWarnings($catalog, $projects);
+
+        if ($this->scheduledPrune() === null) {
+            $warnings[] = 'No scheduled task runs waitlist:prune, so the retention periods are not applied. Add Schedule::command(\'waitlist:prune\')->daily() to routes/console.php, or run it another way and ignore this.';
+        }
 
         if (! WaitlistConfig::routesEnabled()) {
             return $warnings;
