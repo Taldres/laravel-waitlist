@@ -18,14 +18,12 @@ Prepare a safe package release checklist and implementation without tagging, pus
 2. Validate the release state with `composer test` before recommending a release.
 3. Confirm whether version metadata needs to change; many Laravel packages rely on Git tags rather than a hardcoded package version.
 4. Review tag naming, release branch, and GitHub release workflow behavior before any release command.
-5. Read the Unreleased section as an upgrading reader would. Whatever removes a setting, changes a default, a route, a contract or the schema is also in `docs/upgrading.md`, and its pull request carries the `breaking` label, which `.github/release.yml` turns into the Breaking Changes section of the release notes. Before 1.0 a breaking change is a minor.
-6. Name each migration a release adds in the notes. From the first release on, create migrations never change: a schema change is a new migration guarded with `Schema::hasColumn` or `Schema::hasTable`, see `docs/upgrading.md`.
-7. Do not tag, push, or publish without explicit user approval.
+5. Until the first release the create migrations change freely. From the first release on they never change: a schema change is a new migration guarded with `Schema::hasColumn` or `Schema::hasTable`, and the notes name it.
+6. Do not tag, push, or publish without explicit user approval.
 
 ## References
 
 - `CHANGELOG.md`
-- `docs/upgrading.md`
 - `.github/release.yml`
 - `.github/workflows/update-changelog.yml`
 - `.github/workflows/tests.yml`
