@@ -32,8 +32,10 @@ say where they looked.
   `bootstrap/providers.php`. It never overwrites a published file and registers
   the provider only once, so it can run again. An app namespace other than `App`
   is kept.
-- **`waitlist:prune`** is scheduled by the package (`retention.schedule`, 03:15
-  daily); Laravel's scheduler must run. See [GDPR in practice](../gdpr.md#retention).
+- **`waitlist:prune`** applies the retention periods. Schedule it yourself, for
+  example `Schedule::command('waitlist:prune')->daily()`, and keep Laravel's
+  scheduler running; `waitlist:privacy` warns while no scheduled task runs it. See
+  [GDPR in practice](../gdpr.md#retention).
 - **`waitlist:forget --all`** asks before erasing a list; without a terminal to
   ask, it needs `--force`. Use it once a list's purpose is fulfilled, after the
   launch for example.
@@ -53,7 +55,8 @@ say where they looked.
   once, by key and never by value, so a typo in `.env` is found on deploy and not
   by the first request that needs it. It also warns of settings in a published
   `config/waitlist.php` that the package does not read (a typo, say, which stays
-  ignored otherwise), and compares the tables and columns with the database,
+  ignored otherwise), warns while no scheduled task of your application runs
+  `waitlist:prune`, and compares the tables and columns with the database,
   naming what your migrations lack. The exit code is 1 for a setting or
   a table, and with `--strict` for a warning too. `php artisan about` shows a
   Laravel Waitlist section with the same state.

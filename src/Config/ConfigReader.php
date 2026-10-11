@@ -4,11 +4,9 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Config;
 
-use Cron\CronExpression;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use ReflectionClass;
-use RuntimeException;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 
@@ -150,30 +148,6 @@ final class ConfigReader
             is_string($value) => $value,
             default => throw self::invalid($key, 'be a text or null', $value),
         };
-    }
-
-    /**
-     * For a schedule that null, or an empty text, leaves off. Checked here,
-     * as Laravel only parses it when it looks for due tasks, and a broken one
-     * there stops every other task of the app as well.
-     */
-    public function cronOrNull(ConfigKey $key): ?string
-    {
-        $cron = $this->stringOrNull($key);
-
-        if ($cron === null) {
-            return null;
-        }
-
-        if (! CronExpression::isValidExpression($cron)) {
-            throw new InvalidConfigurationException("The {$key->value} config must be a cron expression such as 15 3 * * *, or null, got one that is not.");
-        }
-
-        if (! self::comesDue($cron)) {
-            throw new InvalidConfigurationException("The {$key->value} config must be a cron expression that can run, such as 15 3 * * *, or null, got one that never does.");
-        }
-
-        return $cron;
     }
 
     /**
@@ -339,22 +313,6 @@ final class ConfigReader
     private static function onlyNames(array $values): bool
     {
         return Arr::every($values, fn (mixed $value): bool => is_string($value) && trim($value) !== '');
-    }
-
-    /**
-     * Whether the expression has a next run at all: parsing accepts the 30th
-     * of February, for which the library gives up looking after its iteration
-     * limit.
-     */
-    private static function comesDue(string $cron): bool
-    {
-        try {
-            (new CronExpression($cron))->getNextRunDate();
-        } catch (RuntimeException) {
-            return false;
-        }
-
-        return true;
     }
 
     /**

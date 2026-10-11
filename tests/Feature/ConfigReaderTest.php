@@ -236,14 +236,6 @@ describe('an environment variable', function () {
         expect(fn () => configReaderFromEnv('WAITLIST_CLIENT_IP_HEADER', $text)->stringOrNull(ConfigKey::ClientIpHeader))
             ->toThrow(InvalidConfigurationException::class, 'The waitlist.authentication.client_ip_header config must be a text or null, got bool.');
     })->with(['true', 'false', '(true)', '(false)']);
-
-    it('reads as a schedule, where null and empty leave it off, and refuses what is no cron expression', function () {
-        expect(configReaderFromEnv('WAITLIST_RETENTION_SCHEDULE', '0 4 * * *')->cronOrNull(ConfigKey::RetentionSchedule))->toBe('0 4 * * *')
-            ->and(configReaderFromEnv('WAITLIST_RETENTION_SCHEDULE', 'null')->cronOrNull(ConfigKey::RetentionSchedule))->toBeNull()
-            ->and(configReaderFromEnv('WAITLIST_RETENTION_SCHEDULE', '')->cronOrNull(ConfigKey::RetentionSchedule))->toBeNull()
-            ->and(fn () => configReaderFromEnv('WAITLIST_RETENTION_SCHEDULE', 'nightly')->cronOrNull(ConfigKey::RetentionSchedule))
-            ->toThrow(InvalidConfigurationException::class, 'The waitlist.retention.schedule config must be a cron expression such as 15 3 * * *, or null, got one that is not.');
-    });
 });
 
 describe('a name', function () {
@@ -340,61 +332,6 @@ describe('an export column list', function () {
     it('is refused with the columns that may not be exported, naming each', function () {
         expect(fn () => configReaderOf(ConfigKey::ExportColumns, ['email', 'secret', 'id', 'token'])->columns(ConfigKey::ExportColumns, ['id', 'email']))
             ->toThrow(InvalidConfigurationException::class, 'The waitlist.export.columns config lists columns that may not be exported: secret, token.');
-    });
-});
-
-describe('a schedule', function () {
-    it('is refused when it parses but can never run, as the prune it stands for would silently never happen', function (string $cron) {
-        expect(fn () => configReaderOf(ConfigKey::RetentionSchedule, $cron)->cronOrNull(ConfigKey::RetentionSchedule))
-            ->toThrow(InvalidConfigurationException::class, 'The waitlist.retention.schedule config must be a cron expression that can run, such as 15 3 * * *, or null, got one that never does.');
-    })->with([
-        'the 30th of February' => '0 0 30 2 *',
-        'the 31st of February' => '0 0 31 2 *',
-        'the 31st of April' => '0 0 31 4 *',
-        'the 31st of June, September and November' => '0 0 31 6,9,11 *',
-        'the 30th and 31st of February' => '15 3 30-31 2 *',
-    ]);
-
-    it('still reads the leap day, the last day of a long month and a day reached through the weekday', function (string $cron) {
-        expect(configReaderOf(ConfigKey::RetentionSchedule, $cron)->cronOrNull(ConfigKey::RetentionSchedule))->toBe($cron);
-    })->with([
-        'the leap day' => '0 0 29 2 *',
-        'the last days of February' => '0 0 28-31 2 *',
-        'the 31st of a long month' => '0 0 31 1 *',
-        'the 31st of every month with one' => '0 0 31 * *',
-        'the 31st of January and April' => '0 0 31 1,4 *',
-        'the 30th of February or a Monday' => '0 0 30 2 1',
-        'the default' => '15 3 * * *',
-        'a macro' => '@daily',
-    ]);
-
-    it('is still told apart from one that does not parse', function (string $cron) {
-        expect(fn () => configReaderOf(ConfigKey::RetentionSchedule, $cron)->cronOrNull(ConfigKey::RetentionSchedule))
-            ->toThrow(InvalidConfigurationException::class, 'must be a cron expression such as 15 3 * * *, or null, got one that is not.');
-    })->with([
-        'words' => 'not-a-cron',
-        'blank' => ' ',
-        'a minute of 60' => '60 * * * *',
-        'a weekday of 8' => '0 0 * * 8',
-        'a step of zero' => '*/0 * * * *',
-        'six fields with seconds' => '* * * * * *',
-        'a reboot shortcut' => '@reboot',
-        'an unknown shortcut' => '@every_minute',
-    ]);
-
-    it('is refused when it is no text, before the parser is asked', function (mixed $cron, string $got) {
-        expect(fn () => configReaderOf(ConfigKey::RetentionSchedule, $cron)->cronOrNull(ConfigKey::RetentionSchedule))
-            ->toThrow(InvalidConfigurationException::class, "The waitlist.retention.schedule config must be a text or null, got {$got}.");
-    })->with([
-        'a list' => [['15 3 * * *'], 'array'],
-        'a number' => [3, 'int'],
-    ]);
-
-    it('is refused with a null byte, or read as unset when empty', function () {
-        expect(fn () => configReaderOf(ConfigKey::RetentionSchedule, "15 3 * * *\0")->cronOrNull(ConfigKey::RetentionSchedule))
-            ->toThrow(InvalidConfigurationException::class, ConfigKey::RetentionSchedule->value)
-            ->and(configReaderOf(ConfigKey::RetentionSchedule, '')->cronOrNull(ConfigKey::RetentionSchedule))->toBeNull()
-            ->and(configReaderOf(ConfigKey::RetentionSchedule, null)->cronOrNull(ConfigKey::RetentionSchedule))->toBeNull();
     });
 });
 
@@ -510,7 +447,6 @@ describe('a message', function () {
         'a number below its minimum' => [fn () => configReaderOf(ConfigKey::ManageTokenTtl, '-4242424242424242')->integer(ConfigKey::ManageTokenTtl, min: 1)],
         'a text' => [fn () => configReaderOf(ConfigKey::DefaultList, [configReaderSecret()])->string(ConfigKey::DefaultList)],
         'a text or null' => [fn () => configReaderOf(ConfigKey::Connection, [configReaderSecret()])->stringOrNull(ConfigKey::Connection)],
-        'a schedule' => [fn () => configReaderOf(ConfigKey::RetentionSchedule, configReaderSecret())->cronOrNull(ConfigKey::RetentionSchedule)],
         'middleware' => [fn () => configReaderOf(ConfigKey::RoutesMiddleware, [configReaderSecret(), 1])->middleware(ConfigKey::RoutesMiddleware)],
         'guards' => [fn () => configReaderOf(ConfigKey::AuthenticationGuards, [configReaderSecret(), 1])->guards(ConfigKey::AuthenticationGuards)],
         'columns' => [fn () => configReaderOf(ConfigKey::ExportColumns, [configReaderSecret(), 1])->columns(ConfigKey::ExportColumns, ['id'])],

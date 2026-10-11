@@ -7,7 +7,6 @@ namespace Taldres\Waitlist;
 use Closure;
 use Composer\InstalledVersions;
 use Illuminate\Cache\RateLimiting\Limit;
-use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Foundation\CachesConfiguration;
@@ -41,6 +40,7 @@ use Taldres\Waitlist\Definitions\ProjectDefinitions;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Http\RouteRegistration;
+use Taldres\Waitlist\Support\SetupAudit;
 
 class WaitlistServiceProvider extends ServiceProvider
 {
@@ -129,16 +129,6 @@ class WaitlistServiceProvider extends ServiceProvider
             __DIR__.'/../database/migrations' => database_path('migrations'),
         ], ['waitlist', 'waitlist-migrations']);
 
-        $this->callAfterResolving(Schedule::class, function (Schedule $schedule): void {
-            // Reported rather than thrown: the app's own tasks must still be
-            // scheduled.
-            $cron = ConfigFallback::read(WaitlistConfig::pruneSchedule(...), fallback: null);
-
-            if ($cron !== null) {
-                $schedule->command(PruneCommand::class)->cron($cron)->withoutOverlapping();
-            }
-        });
-
         AboutCommand::add('Laravel Waitlist', static fn (): array => self::about());
 
         $this->commands([
@@ -176,7 +166,7 @@ class WaitlistServiceProvider extends ServiceProvider
             'Authentication required' => $read(fn (): string => WaitlistConfig::authenticationRequired() ? 'yes' : 'no'),
             'Double opt-in' => $read(fn (): string => WaitlistConfig::doubleOptIn() ? 'on' : 'off'),
             'Retention' => $read(fn (): string => sprintf('unconfirmed %s, left %s, request metadata %s', $days(WaitlistConfig::pendingDays()), $days(WaitlistConfig::unsubscribedDays()), $days(WaitlistConfig::requestMetadataDays()))),
-            'Prune schedule' => $read(fn (): string => WaitlistConfig::pruneSchedule() ?? 'not scheduled'),
+            'Prune schedule' => SetupAudit::scheduledPrune() ?? 'not scheduled',
         ];
     }
 

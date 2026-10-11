@@ -10,9 +10,9 @@ switches a limit or period off where a table below says so. Any other value is
 refused with an `InvalidConfigurationException` that names the key and what it
 must be, an empty variable included: a blank line in `.env` never turns double
 opt-in or a retention period off. If an empty variable in `.env` causes it,
-remove the variable to keep the default. Five settings read an empty value as
+remove the variable to keep the default. Four settings read an empty value as
 unset, like `null`, and say so in the tables below: the connection, the client
-IP header, the two limiters and the retention schedule.
+IP header and the two limiters.
 
 A period is bounded by the `timestamp` columns it is stored in or compared
 with, and a value beyond is refused with an `InvalidConfigurationException`
@@ -121,7 +121,6 @@ come from.
 | `retention.pending_days` | `WAITLIST_RETENTION_PENDING_DAYS` | 30 | unconfirmed signups, from the start of the cycle; 0 at the next run, `null` kept, at most the days since 1970 |
 | `retention.unsubscribed_days` | `WAITLIST_RETENTION_UNSUBSCRIBED_DAYS` | 1095 | people who left, from when they left; 0 at the next run, `null` kept, at most the days since 1970 |
 | `retention.request_metadata_days` | `WAITLIST_RETENTION_REQUEST_METADATA_DAYS` | 30 | IP and user agent on the log; 0 at the next run, `null` kept, at most the days since 1970 |
-| `retention.schedule` | `WAITLIST_RETENTION_SCHEDULE` | `15 3 * * *` | when `waitlist:prune` runs; `null` or empty schedules nothing; one that can never run, such as the 30th of February, is refused |
 
 The retention periods are technical defaults, not legal recommendations; see
 [GDPR in practice](../gdpr.md#retention). A project can promise its own periods,

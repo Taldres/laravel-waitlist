@@ -3,8 +3,6 @@
 declare(strict_types=1);
 
 use Illuminate\Cache\RateLimiting\Limit;
-use Illuminate\Console\Scheduling\Event;
-use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Env;
 use Illuminate\Support\Facades\Exceptions;
@@ -57,7 +55,6 @@ describe('the defaults', function () {
             ->and($retention->pendingDays)->toBe(30)
             ->and($retention->unsubscribedDays)->toBe(1095)
             ->and($retention->requestMetadataDays)->toBe(30)
-            ->and(WaitlistConfig::pruneSchedule())->toBe('15 3 * * *')
             ->and(WaitlistConfig::routesEnabled())->toBeFalse()
             ->and(WaitlistConfig::routeName())->toBe('waitlist.')
             ->and(WaitlistConfig::signupLimiter())->toBe(WaitlistServiceProvider::SIGNUP_LIMITER)
@@ -121,13 +118,11 @@ describe('values the app sets', function () {
         config()->set(ConfigKey::RetentionUnsubscribedDays->value, null);
         config()->set(ConfigKey::SignupLimiter->value, null);
         config()->set(ConfigKey::LinksLimiter->value, '');
-        config()->set(ConfigKey::RetentionSchedule->value, '');
 
         expect(WaitlistConfig::confirmation()->tokenTtl)->toBeNull()
             ->and(WaitlistConfig::retention()->unsubscribedDays)->toBeNull()
             ->and(WaitlistConfig::signupLimiter())->toBeNull()
-            ->and(WaitlistConfig::linksLimiter())->toBeNull()
-            ->and(WaitlistConfig::pruneSchedule())->toBeNull();
+            ->and(WaitlistConfig::linksLimiter())->toBeNull();
     });
 
     it('may leave the route prefix and name empty, for routes at the root', function () {
@@ -192,8 +187,6 @@ describe('a value that does not fit', function () {
         'a model that is not a waitlist model' => [ConfigKey::ConsentModel, stdClass::class, 'The waitlist.consent_model config must point to a '.WaitlistConsent::class.' subclass.'],
         'the contract itself for a class' => [ConfigKey::EmailNormalizer, EmailNormalizer::class, 'The waitlist.email_normalizer config must name a class that implements '.EmailNormalizer::class.', not the contract itself.'],
         'a class that does not implement its contract' => [ConfigKey::ProjectResolver, stdClass::class, 'The waitlist.project_resolver config must point to a Taldres\Waitlist\Contracts\ProjectResolver implementation.'],
-        'a schedule that is not a cron expression' => [ConfigKey::RetentionSchedule, 'not-a-cron', 'The waitlist.retention.schedule config must be a cron expression such as 15 3 * * *, or null, got one that is not.'],
-        'a schedule that parses but never runs' => [ConfigKey::RetentionSchedule, '0 0 30 2 *', 'The waitlist.retention.schedule config must be a cron expression that can run, such as 15 3 * * *, or null, got one that never does.'],
         'a group that is not an array' => ['waitlist.double_opt_in', 'on', 'The waitlist.double_opt_in config must be an array of settings, got string.'],
         'a nested group that is null' => ['waitlist.routes.rate_limits', null, 'The waitlist.routes.rate_limits config must be an array of settings, got null.'],
     ]);
@@ -446,48 +439,10 @@ describe('a mistake in the config while the app boots', function () {
 });
 
 describe('a mistake in the retention config', function () {
-    beforeEach(function () {
-        app()->forgetInstance(Schedule::class);
-    });
-
-    it('leaves the scheduler alone, as the periods are checked when prune runs', function () {
+    it('is reported when prune runs, not before', function () {
         config()->set(ConfigKey::RetentionPendingDays->value, -1);
 
-        $commands = array_map(fn (Event $event) => (string) $event->command, app(Schedule::class)->events());
-
-        expect(implode(' ', $commands))->toContain('waitlist:prune')
-            ->and(fn () => app(PruneEntries::class)())->toThrow(InvalidConfigurationException::class, 'The waitlist.retention.pending_days config must be at least 0.');
-    });
-
-    it('is reported for a schedule that is not a cron expression or never runs, while the app\'s other tasks still run', function (string $cron, string $message) {
-        Exceptions::fake();
-        config()->set(ConfigKey::RetentionSchedule->value, $cron);
-
-        $ran = false;
-        $schedule = app(Schedule::class);
-        $schedule->call(function () use (&$ran): void {
-            $ran = true;
-        })->everyMinute();
-
-        $due = $schedule->dueEvents(app());
-        $due->each(fn (Event $event) => $event->run(app()));
-
-        expect($due)->toHaveCount(1)
-            ->and($ran)->toBeTrue();
-
-        Exceptions::assertReported(fn (InvalidConfigurationException $exception) => $exception->getMessage() === $message);
-    })->with([
-        'not a cron expression' => ['not-a-cron', 'The waitlist.retention.schedule config must be a cron expression such as 15 3 * * *, or null, got one that is not.'],
-        'the 30th of February' => ['0 0 30 2 *', 'The waitlist.retention.schedule config must be a cron expression that can run, such as 15 3 * * *, or null, got one that never does.'],
-    ]);
-
-    it('is reported for the schedule itself, without failing the app\'s other tasks', function () {
-        Exceptions::fake();
-        config()->set(ConfigKey::RetentionSchedule->value, ['15 3 * * *']);
-
-        expect(app(Schedule::class)->events())->toBe([]);
-
-        Exceptions::assertReported(fn (InvalidConfigurationException $exception) => $exception->getMessage() === 'The waitlist.retention.schedule config must be a text or null, got array.');
+        expect(fn () => app(PruneEntries::class)())->toThrow(InvalidConfigurationException::class, 'The waitlist.retention.pending_days config must be at least 0.');
     });
 });
 
@@ -532,7 +487,7 @@ describe('merging the app config with the package config', function () {
     it('still fills an empty group, at any depth, as one that sets nothing', function () {
         $defaults = PackageConfig::merge([]);
 
-        $merged = PackageConfig::merge(['routes' => [], 'export' => [], 'double_opt_in' => ['enabled' => false], 'retention' => ['schedule' => []]]);
+        $merged = PackageConfig::merge(['routes' => [], 'export' => [], 'double_opt_in' => ['enabled' => false], 'retention' => ['pending_days' => []]]);
 
         expect($merged['routes'])->toBe($defaults['routes'])
             ->and($merged['export'])->toBe($defaults['export'])

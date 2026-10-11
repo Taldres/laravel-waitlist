@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Event;
 use Symfony\Component\Console\Output\BufferedOutput;
@@ -16,6 +17,12 @@ use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Facades\Waitlist;
 use Taldres\Waitlist\Support\StoredWordingCatalog;
 use Taldres\Waitlist\Tests\TestCase;
+
+beforeEach(function () {
+    // The record warns when nothing runs waitlist:prune; an app schedules it.
+    app()->forgetInstance(Schedule::class);
+    app(Schedule::class)->command('waitlist:prune')->dailyAt('03:15');
+});
 
 function privacyRecord(): string
 {
@@ -39,7 +46,7 @@ it('describes data, purposes and retention from the configuration', function () 
         ->toContain('| default | any other list | newsletter | no | 2026-10 | Also send me the newsletter. | yes |')
         ->toContain('- Unconfirmed signups erased: after 30 days')
         ->toContain('- Addresses that left erased: after 1095 days')
-        ->toContain('on the schedule `15 3 * * *`')
+        ->toContain('which the application\'s scheduler runs on `15 3 * * *`')
         ->toContain('- Confirmation mails limited to one per 5 minutes and 5 per cycle')
         ->toContain('- At most 5 confirmation requests per address and day for unconfirmed lists of a project; further ones are held back')
         ->toContain('- No public endpoints (package routes disabled)');
@@ -194,13 +201,26 @@ it('keeps the warnings out of a record written to a file', function () {
         ->and($error->fetch())->toContain('Warning: APP_DEBUG is on');
 });
 
-it('reports disabled periods and scheduling', function () {
+it('reports disabled periods', function () {
     config()->set(ConfigKey::RetentionUnsubscribedDays->value, null);
-    config()->set(ConfigKey::RetentionSchedule->value, null);
+
+    expect(privacyRecord())->toContain('- Addresses that left erased: kept until erased');
+});
+
+it('warns when no scheduled task of the application runs the retention', function () {
+    app()->forgetInstance(Schedule::class);
 
     expect(privacyRecord())
-        ->toContain('- Addresses that left erased: kept until erased')
-        ->toContain('- Not scheduled by the package: run waitlist:prune yourself');
+        ->toContain('which no scheduled task of the application runs: schedule it, or run it another way')
+        ->toContain("Warning: No scheduled task runs waitlist:prune, so the retention periods are not applied. Add Schedule::command('waitlist:prune')->daily() to routes/console.php");
+});
+
+it('does not take another scheduled task for the retention', function () {
+    app()->forgetInstance(Schedule::class);
+    app(Schedule::class)->command('inspire')->daily();
+    app(Schedule::class)->call(fn () => null)->daily();
+
+    expect(privacyRecord())->toContain('Warning: No scheduled task runs waitlist:prune');
 });
 
 it('lists the listeners personal data flows to', function () {

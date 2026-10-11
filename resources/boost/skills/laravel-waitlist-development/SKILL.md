@@ -33,8 +33,9 @@ php artisan migrate
 
 `waitlist:install` publishes `app/Providers/WaitlistServiceProvider.php`
 (`waitlist-provider`), `config/waitlist.php` (`waitlist-config`) and the migrations
-(`waitlist-migrations`). Laravel's scheduler must run: the package schedules
-`waitlist:prune` itself.
+(`waitlist-migrations`). Schedule `waitlist:prune` yourself,
+`Schedule::command('waitlist:prune')->daily()` in `routes/console.php`, and keep
+Laravel's scheduler running.
 
 ### 2. Define purposes, lists, fields and pages
 
@@ -203,7 +204,7 @@ $entry->hasConsentFor('newsletter');
   `on`/`off`, `yes`/`no`, `1`/`0` and whole numbers (`05` is 5); anything else is
   refused, an empty `KEY=` line included: delete the line to keep the default.
   `null` says never or off (`double_opt_in.token_ttl`, retention periods, cooldowns,
-  caps, a limiter, `retention.schedule`); a manage link always expires. A confirm or
+  caps, a limiter); a manage link always expires. A confirm or
   manage link may not end after 2038-01-19, and a retention period or cooldown may
   not reach back before 1970, so a 36500-day "forever" is refused: write `null`. A
   cron expression that can never run and a route `prefix` with `{}` are refused too.

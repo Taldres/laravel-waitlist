@@ -2,11 +2,18 @@
 
 declare(strict_types=1);
 
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schema;
 use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Support\SetupAudit;
+
+beforeEach(function () {
+    // An app schedules waitlist:prune; without it the check warns.
+    app()->forgetInstance(Schedule::class);
+    app(Schedule::class)->command('waitlist:prune')->dailyAt('03:15');
+});
 
 function checkOutput(array $arguments = []): array
 {
@@ -22,6 +29,23 @@ it('passes where every setting reads and the tables are there', function () {
         ->and($output)->toContain('Every setting reads.')
         ->and($output)->toContain('The tables and columns of this version exist.')
         ->and($output)->not->toContain('is not a setting the package reads');
+});
+
+it('warns while no scheduled task runs the retention, and fails on it with --strict', function () {
+    app()->forgetInstance(Schedule::class);
+
+    [$exit, $output] = checkOutput();
+
+    expect($exit)->toBe(0)
+        ->and($output)->toContain("No scheduled task runs waitlist:prune, so the retention periods are not applied. Add Schedule::command('waitlist:prune')->daily() to routes/console.php");
+
+    [$strict] = checkOutput(['--strict' => true]);
+
+    expect($strict)->toBe(1);
+
+    Artisan::call('about', ['--only' => 'laravel_waitlist', '--json' => true]);
+
+    expect(json_decode(Artisan::output(), true)['laravel_waitlist']['prune_schedule'])->toBe('not scheduled');
 });
 
 it('names every setting that does not read at once, never its value', function () {
