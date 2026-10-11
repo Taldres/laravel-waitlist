@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist;
 
+use Closure;
+use Composer\InstalledVersions;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Foundation\CachesConfiguration;
 use Illuminate\Contracts\Http\Kernel as HttpKernel;
+use Illuminate\Foundation\Console\AboutCommand;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
@@ -19,6 +22,7 @@ use Taldres\Waitlist\Auth\WaitlistGate;
 use Taldres\Waitlist\Config\ConfigFallback;
 use Taldres\Waitlist\Config\PackageConfig;
 use Taldres\Waitlist\Config\WaitlistConfig;
+use Taldres\Waitlist\Console\Commands\CheckCommand;
 use Taldres\Waitlist\Console\Commands\ExportCommand;
 use Taldres\Waitlist\Console\Commands\ForgetCommand;
 use Taldres\Waitlist\Console\Commands\InstallCommand;
@@ -38,6 +42,7 @@ use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Http\Middleware\CheckRouteConfig;
 use Taldres\Waitlist\Http\RouteRegistration;
+use Taldres\Waitlist\Support\SetupAudit;
 
 class WaitlistServiceProvider extends ServiceProvider
 {
@@ -66,14 +71,16 @@ class WaitlistServiceProvider extends ServiceProvider
         $this->app->singleton(ProjectDefinitions::class);
         $this->app->scoped(ConfigFallback::class);
 
-        $this->app->bind(EmailNormalizer::class, fn (Application $app): EmailNormalizer => self::make($app, ConfigKey::EmailNormalizer, WaitlistConfig::emailNormalizer(), EmailNormalizer::class));
-        $this->app->bind(ConfirmationUrlGenerator::class, fn (Application $app): ConfirmationUrlGenerator => self::make($app, ConfigKey::UrlGenerator, WaitlistConfig::urlGenerator(), ConfirmationUrlGenerator::class));
-        $this->app->bind(ProjectCatalog::class, fn (Application $app): ProjectCatalog => self::make($app, ConfigKey::Catalog, WaitlistConfig::catalog(), ProjectCatalog::class));
-        $this->app->bind(ProjectResolver::class, fn (Application $app): ProjectResolver => self::make($app, ConfigKey::ProjectResolver, WaitlistConfig::projectResolver(), ProjectResolver::class));
+        // bindIf(): a contract the app or another package has bound already is
+        // theirs; the config keys name what the package binds when nobody did.
+        $this->app->bindIf(EmailNormalizer::class, fn (Application $app): EmailNormalizer => self::make($app, ConfigKey::EmailNormalizer, WaitlistConfig::emailNormalizer(), EmailNormalizer::class));
+        $this->app->bindIf(ConfirmationUrlGenerator::class, fn (Application $app): ConfirmationUrlGenerator => self::make($app, ConfigKey::UrlGenerator, WaitlistConfig::urlGenerator(), ConfirmationUrlGenerator::class));
+        $this->app->bindIf(ProjectCatalog::class, fn (Application $app): ProjectCatalog => self::make($app, ConfigKey::Catalog, WaitlistConfig::catalog(), ProjectCatalog::class));
+        $this->app->bindIf(ProjectResolver::class, fn (Application $app): ProjectResolver => self::make($app, ConfigKey::ProjectResolver, WaitlistConfig::projectResolver(), ProjectResolver::class));
         // A closure from Waitlist::verifySpamUsing() wins over the configured
         // class; bind() re-evaluates on every resolution, so registering in any
         // boot() works regardless of provider order.
-        $this->app->bind(SpamProtector::class, fn (Application $app): SpamProtector => $app->make(WaitlistManager::class)->spamProtector()
+        $this->app->bindIf(SpamProtector::class, fn (Application $app): SpamProtector => $app->make(WaitlistManager::class)->spamProtector()
             ?? self::make($app, ConfigKey::SpamProtector, WaitlistConfig::spamProtector(), SpamProtector::class));
     }
 
@@ -85,16 +92,22 @@ class WaitlistServiceProvider extends ServiceProvider
             Gate::define(WaitlistGate::ABILITY, WaitlistGate::default(...));
         }
 
-        // Registered even with the package routes off, for your own routes.
-        RateLimiter::for(self::SIGNUP_LIMITER, self::signupLimits(...));
+        // Registered even with the package routes off, for your own routes. A
+        // limiter of the same name that the app defines keeps its place, as the
+        // gate does.
+        if (RateLimiter::limiter(self::SIGNUP_LIMITER) === null) {
+            RateLimiter::for(self::SIGNUP_LIMITER, self::signupLimits(...));
+        }
 
         // Per token, not per IP: one-click requests share mail providers' IPs.
-        RateLimiter::for(self::LINKS_LIMITER, fn (Request $request): array => [
-            Limit::perMinute(ConfigFallback::read(WaitlistConfig::linkPerMinute(...), fallback: self::LINK_PER_MINUTE))
-                ->by($request->route()?->uri().'|'.hash('sha256', (string) $request->route('token'))),
-            Limit::perMinute(ConfigFallback::read(WaitlistConfig::linksPerIpPerMinute(...), fallback: self::LINKS_PER_IP_PER_MINUTE))
-                ->by(self::linkSource($request).'|links'),
-        ]);
+        if (RateLimiter::limiter(self::LINKS_LIMITER) === null) {
+            RateLimiter::for(self::LINKS_LIMITER, fn (Request $request): array => [
+                Limit::perMinute(ConfigFallback::read(WaitlistConfig::linkPerMinute(...), fallback: self::LINK_PER_MINUTE))
+                    ->by($request->route()?->uri().'|'.hash('sha256', (string) $request->route('token'))),
+                Limit::perMinute(ConfigFallback::read(WaitlistConfig::linksPerIpPerMinute(...), fallback: self::LINKS_PER_IP_PER_MINUTE))
+                    ->by(self::linkSource($request).'|links'),
+            ]);
+        }
 
         // Laravel sorts the middleware of a route by its priority list, which
         // puts the limiter and the bindings, with "web" the cookies and the
@@ -131,7 +144,10 @@ class WaitlistServiceProvider extends ServiceProvider
             __DIR__.'/../database/migrations' => database_path('migrations'),
         ], ['waitlist', 'waitlist-migrations']);
 
+        AboutCommand::add('Laravel Waitlist', static fn (): array => self::about());
+
         $this->commands([
+            CheckCommand::class,
             ExportCommand::class,
             ForgetCommand::class,
             InstallCommand::class,
@@ -141,6 +157,44 @@ class WaitlistServiceProvider extends ServiceProvider
             ShowCommand::class,
             WordingCommand::class,
         ]);
+    }
+
+    /**
+     * The section of `php artisan about`. A setting that does not read shows as
+     * such instead of failing the command; waitlist:check says which.
+     *
+     * @return array<string, string>
+     */
+    private static function about(): array
+    {
+        $read = self::readable(...);
+        $days = static fn (?int $days): string => $days === null ? 'kept' : "{$days} days";
+
+        return [
+            'Version' => InstalledVersions::getPrettyVersion('taldres/laravel-waitlist') ?? 'unknown',
+            'Settings' => ($problems = count(WaitlistConfig::problems())) === 0 ? 'every setting reads' : "{$problems} do not read, run waitlist:check",
+            'Routes' => $read(fn (): string => WaitlistConfig::routesEnabled() ? '/'.trim(WaitlistConfig::routePrefix(), '/') : 'off'),
+            'Projects' => $read(fn (): string => implode(', ', app(ProjectCatalog::class)->projects())),
+            'Catalog' => $read(fn (): string => WaitlistConfig::catalog()),
+            'Project resolver' => $read(fn (): string => WaitlistConfig::projectResolver()),
+            'Spam protector' => $read(fn (): string => WaitlistConfig::spamProtector()),
+            'Authentication required' => $read(fn (): string => WaitlistConfig::authenticationRequired() ? 'yes' : 'no'),
+            'Double opt-in' => $read(fn (): string => WaitlistConfig::doubleOptIn() ? 'on' : 'off'),
+            'Retention' => $read(fn (): string => sprintf('unconfirmed %s, left %s, request metadata %s', $days(WaitlistConfig::pendingDays()), $days(WaitlistConfig::unsubscribedDays()), $days(WaitlistConfig::requestMetadataDays()))),
+            'Prune schedule' => SetupAudit::scheduledPrune() ?? 'not scheduled',
+        ];
+    }
+
+    /**
+     * @param  Closure(): string  $value
+     */
+    private static function readable(Closure $value): string
+    {
+        try {
+            return $value();
+        } catch (InvalidConfigurationException) {
+            return 'does not read';
+        }
     }
 
     /**

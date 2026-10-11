@@ -75,7 +75,14 @@ class DefaultConfirmationUrlGenerator implements ConfirmationUrlGenerator
         }
 
         $root = config('app.url');
+        $parts = is_string($root) ? parse_url($root) : false;
 
-        return is_string($root) && $root !== '' ? rtrim($root, '/').$path : $urls->to($path);
+        // No fallback to the request's root: that is the Host header the sender
+        // chose, and the token would follow it.
+        if (! is_string($root) || ! is_array($parts) || ! in_array($parts['scheme'] ?? null, ['http', 'https'], true) || ! isset($parts['host'])) {
+            throw new InvalidConfigurationException('The links to the waitlist routes are built from app.url, which must be an absolute http or https URL such as https://example.com. Set APP_URL, or give the pages their own URLs with urls().');
+        }
+
+        return rtrim($root, '/').$path;
     }
 }

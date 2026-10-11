@@ -6,7 +6,6 @@ namespace Taldres\Waitlist\Console\Commands;
 
 use Closure;
 use Illuminate\Console\Command;
-use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
@@ -28,6 +27,7 @@ use Taldres\Waitlist\Events\SubscriptionExpired;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Exceptions\MissingWordingException;
 use Taldres\Waitlist\Support\PurposeRegistry;
+use Taldres\Waitlist\Support\SetupAudit;
 use Taldres\Waitlist\WaitlistManager;
 use Taldres\Waitlist\WaitlistServiceProvider;
 
@@ -199,7 +199,7 @@ class PrivacyCommand extends Command
             : "- {$text}: kept until erased";
 
         $retention = WaitlistConfig::retention();
-        $scheduled = $this->scheduledPrune();
+        $scheduled = SetupAudit::scheduledPrune();
         [$offering, $without] = $this->manageLinkProjects($catalog, $projects);
 
         return [
@@ -330,21 +330,6 @@ class PrivacyCommand extends Command
     }
 
     /**
-     * The cron expression of the application's task that runs waitlist:prune,
-     * or null when there is none; a cron job outside Laravel is not seen.
-     */
-    protected function scheduledPrune(): ?string
-    {
-        foreach (app(Schedule::class)->events() as $event) {
-            if (str_contains((string) $event->command, 'waitlist:prune')) {
-                return $event->expression;
-            }
-        }
-
-        return null;
-    }
-
-    /**
      * What a launch would trip over, from the same settings the record reads:
      * run it on the production host.
      *
@@ -355,7 +340,7 @@ class PrivacyCommand extends Command
     {
         $warnings = $this->linkWarnings($catalog, $projects);
 
-        if ($this->scheduledPrune() === null) {
+        if (SetupAudit::scheduledPrune() === null) {
             $warnings[] = 'No scheduled task runs waitlist:prune, so the retention periods are not applied. Add Schedule::command(\'waitlist:prune\')->daily() to routes/console.php, or run it another way and ignore this.';
         }
 

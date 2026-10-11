@@ -109,13 +109,23 @@ Rocket.
 ## 3. Let the sites call the app
 
 Both sites are other origins, so allow them in CORS
-(`php artisan config:publish cors` if the file does not exist yet):
+(`php artisan config:publish cors` if the file does not exist yet), and name each
+in its project, so that Rocket's site cannot sign people up for Anvil:
 
 ```php
 // config/cors.php
 'paths' => ['api/*', 'waitlist', 'waitlist/*'],
 'allowed_origins' => ['https://rocket.example', 'https://anvil.example'],
 ```
+
+```php
+Waitlist::define('rocket', fn (ProjectDefinition $project) => $project->origins(['https://rocket.example']));
+Waitlist::define('anvil', fn (ProjectDefinition $project) => $project->origins(['https://anvil.example']));
+```
+
+CORS lets both sites read the answers of the app; `origins()` refuses a site that
+is not the project's own with `403`. More headers and settings in
+[Securing the endpoints](../securing-the-endpoints.md#cors).
 
 Behind a load balancer or CDN, configure
 [trusted proxies](https://laravel.com/docs/requests#configuring-trusted-proxies),

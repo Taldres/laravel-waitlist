@@ -182,8 +182,12 @@ keeping or dropping one does not.
   ```
 
   It guards the package routes only; in own controllers, check it yourself.
-- Frontend on another origin: add `'waitlist', 'waitlist/*'` to `paths` in
-  `config/cors.php`.
+- Frontend on another origin: allow it in `config/cors.php` (`paths` with
+  `'waitlist', 'waitlist/*'`, the site in `allowed_origins`, `Retry-After` in
+  `exposed_headers`). `$project->origins(['https://site.example'])` in the definition
+  additionally refuses other websites' browsers with `403` for that project (a
+  request without an `Origin` header, as from a server, is not affected; it keeps
+  other websites out, not bots).
 - Behind a proxy or CDN: configure trusted proxies, or all visitors share one rate
   limit bucket.
 - Routes that are off (the default) answer `404` before any rate limit or session

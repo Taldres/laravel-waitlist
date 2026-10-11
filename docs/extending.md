@@ -16,6 +16,11 @@ Add your own columns, methods and integrations without forking the package.
 | add columns | [your own models](#your-own-models) |
 | add methods to the API | [macros](#macros) |
 
+Each contract in the table is bound to the class its config key names. A binding
+of your own for the contract, `$this->app->bind(SpamProtector::class, ...)` for
+example, is used instead, whether your provider registers before the package's or
+after it; the config key then names nothing the package resolves.
+
 ## Your own models
 
 Extend the package model and point the config at it:
