@@ -72,9 +72,9 @@ Waitlist::define(function (ProjectDefinition $project): void {
   `Waitlist::project('<key>')->for($list)`. Without `project()` the facade always
   means the default project, never all of them; an unknown project throws
   `UnknownProjectException`.
-  For projects kept in a database, bind your own `ProjectCatalog` (`waitlist.catalog`):
-  it supplies lists, fields, wording versions and frontend URL patterns per project.
-  Over HTTP, a `ProjectResolver` (`waitlist.project_resolver`) picks the project of
+  For projects kept in a database, bind your own `ProjectCatalog` in a provider's
+  `register()`: it supplies lists, fields, wording versions and frontend URL
+  patterns per project. Over HTTP, the bound `ProjectResolver` picks the project of
   a signup, e.g. from a publishable key; never put that check into
   `routes.middleware`, which also guards the token links in mails. Checks for
   the forms only, such as CSRF or an origin check, go into
@@ -82,12 +82,13 @@ Waitlist::define(function (ProjectDefinition $project): void {
 - Frontend pages per project in `$project->urls(...)`: `confirm`, `unsubscribe`,
   `manage` (mail links, `{token}` replaced) and `confirmed`, `expired`, `invalid`,
   `unsubscribed`, `erased` (where a browser lands after posting).
-- Rate limits per group in `routes.limiters`: `signup` → `waitlist` (per IP),
-  `links` → `waitlist-links` (per token). Tune `routes.rate_limits`, point a group at
-  your own `RateLimiter::for()` name (a name nothing defines is refused), or set it
-  to `null`. An own limiter decides the key (`->by()`), the limits, exemptions
-  (`Limit::none()`), per-route rules (`$request->routeIs()`) and the response;
-  `rate_limits` does not apply to it.
+- Rate limits per group, each through a fixed limiter name: `signup` → `waitlist`
+  (per IP), `links` → `waitlist-links` (per token). Tune `routes.rate_limits`, or
+  replace a group's limiter by defining that name with `RateLimiter::for()` in a
+  service provider; returning `Limit::none()` from it turns the group's limit off.
+  No setting turns a limit off. An own limiter decides the key (`->by()`), the
+  limits, exemptions (`Limit::none()`), per-route rules (`$request->routeIs()`) and
+  the response; `rate_limits` does not apply to it.
   Never key `links` by IP alone: one-click unsubscribes share mail providers' IPs.
   A caller acting for a project (`HasWaitlistProject`) is a server: it is capped
   as a whole (`rate_limits.caller_signup_per_minute`) and limits its visitors
@@ -100,7 +101,7 @@ Waitlist::define(function (ProjectDefinition $project): void {
 - A form rendering its own copy of the text (CMS) adds `hash` = sha256 of the shown
   text; a mismatch is a 422. `WAITLIST_REQUIRE_WORDING_HASH=true` requires it
   for every consent newly recorded, not for keeping or withdrawing one.
-- Wording written in the frontend or CMS: set `waitlist.catalog` to
+- Wording written in the frontend or CMS: bind `ProjectCatalog` to
   `StoredWordingCatalog` and register it on deploy with
   `php artisan waitlist:wording wording.json` (purpose => version => text; first
   `--from-definitions` to carry over what `purpose()` holds), or
@@ -204,7 +205,7 @@ $entry->hasConsentFor('newsletter');
   `on`/`off`, `yes`/`no`, `1`/`0` and whole numbers (`05` is 5); anything else is
   refused, an empty `KEY=` line included: delete the line to keep the default.
   `null` says never or off (`double_opt_in.token_ttl`, retention periods, cooldowns,
-  caps, a limiter); a manage link always expires. A confirm or
+  caps); a manage link always expires. A confirm or
   manage link may not end after 2038-01-19, and a retention period or cooldown may
   not reach back before 1970, so a 36500-day "forever" is refused: write `null`. A
   cron expression that can never run and a route `prefix` with `{}` are refused too.
@@ -221,15 +222,21 @@ $entry->hasConsentFor('newsletter');
   included. A key for the package only goes in a service provider's `boot()`:
   `Waitlist::encryptUsing($encrypter)` with any `Illuminate\Contracts\Encryption\Encrypter`.
   Its keys also make the lookup hash, so they must stay stable.
-- Supported extension points: your own models, the contracts with their config keys
-  (`catalog`, `url_generator`, `project_resolver`, `email_normalizer`,
-  `spam_protector`), container bindings, the `useWaitlist` gate, events and macros.
-  A binding names a class that implements the contract, or an interface or abstract
-  class your app binds; the contract itself and a class the container cannot build
-  are refused. Other public classes (actions, `SubscriptionLifecycle`, controllers,
-  the default implementations) are open but promise nothing, and a subclass only
-  takes effect where the package resolves the class from the container or the
-  config, not where it creates it with `new`.
+- Supported extension points: your own models, the contracts with their container
+  bindings (`ProjectCatalog`, `ConfirmationUrlGenerator`, `ProjectResolver`,
+  `EmailNormalizer`, `SpamProtector`), the `useWaitlist` gate, events and macros.
+  Bind a contract with `$this->app->bind()` in a provider's `register()`: the
+  package binds its defaults with `bindIf()` first, so a `bindIf()` of yours is
+  ignored. On the package endpoints a `Waitlist::verifySpamUsing()` closure wins
+  over the bound `SpamProtector`, which is then not built; `app(SpamProtector::class)`
+  stays the bound class. Remove `catalog`, `url_generator`, `project_resolver`,
+  `email_normalizer` and `spam_protector` from a published config: one that names
+  a class other than the default makes resolving its contract throw until the
+  contract is bound, and `waitlist:check` fail until it is removed. Other
+  public classes (actions, `SubscriptionLifecycle`, controllers, the default
+  implementations) are open but promise nothing, and a subclass only takes
+  effect where the package resolves the class from the container or the config,
+  not where it creates it with `new`.
   Guide: https://github.com/Taldres/laravel-waitlist/blob/main/docs/extending.md
 - `php artisan waitlist:privacy` prints the facts for the record of processing.
 - The operator is responsible for lawful processing, valid consent, notices,

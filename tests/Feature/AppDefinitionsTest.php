@@ -12,6 +12,7 @@ use Taldres\Waitlist\Contracts\EmailNormalizer;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Contracts\SpamProtector;
+use Taldres\Waitlist\Enums\WaitlistLimiter;
 use Taldres\Waitlist\WaitlistServiceProvider;
 
 /*
@@ -39,15 +40,15 @@ describe('a limiter the app defined first', function () {
             ->and($limit->key)->toBe('mine')
             ->and(RateLimiter::limiter($other))->not->toBeNull();
     })->with([
-        'signups' => [WaitlistServiceProvider::SIGNUP_LIMITER, WaitlistServiceProvider::LINKS_LIMITER],
-        'links' => [WaitlistServiceProvider::LINKS_LIMITER, WaitlistServiceProvider::SIGNUP_LIMITER],
+        'signups' => [WaitlistLimiter::Signup->value, WaitlistLimiter::Links->value],
+        'links' => [WaitlistLimiter::Links->value, WaitlistLimiter::Signup->value],
     ]);
 
     it('is replaced by nothing when the package registers both', function () {
         (new WaitlistServiceProvider(app()))->boot();
 
-        expect(RateLimiter::limiter(WaitlistServiceProvider::SIGNUP_LIMITER))->not->toBeNull()
-            ->and(RateLimiter::limiter(WaitlistServiceProvider::LINKS_LIMITER))->not->toBeNull();
+        expect(RateLimiter::limiter(WaitlistLimiter::Signup->value))->not->toBeNull()
+            ->and(RateLimiter::limiter(WaitlistLimiter::Links->value))->not->toBeNull();
     });
 });
 

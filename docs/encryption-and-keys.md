@@ -67,8 +67,8 @@ default lowercases and trims. It is part of the lookup hash, so choose it before
 the first signup and keep it.
 
 ```php
-// config/waitlist.php
-'email_normalizer' => App\Waitlist\GmailAwareNormalizer::class,
+// app/Providers/WaitlistServiceProvider.php, in register()
+$this->app->bind(\Taldres\Waitlist\Contracts\EmailNormalizer::class, \App\Waitlist\GmailAwareNormalizer::class);
 ```
 
 ## Your own encrypter

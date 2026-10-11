@@ -10,7 +10,6 @@ use Taldres\Waitlist\Auth\WaitlistGate;
 use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
-use Taldres\Waitlist\Contracts\SpamProtector;
 use Taldres\Waitlist\Enums\ApiError;
 use Taldres\Waitlist\Enums\WaitlistAction;
 use Taldres\Waitlist\Exceptions\UnknownWaitlistException;
@@ -49,7 +48,7 @@ class ManageLinkController
         ]);
 
         // Anyone can type an address here, as on the signup form.
-        if (! app(SpamProtector::class)->passes($request)) {
+        if (! $waitlist->spamProtector()->passes($request)) {
             return new JsonResponse(['message' => 'Spam check failed.', 'error' => ApiError::SpamCheckFailed->value], 422);
         }
 

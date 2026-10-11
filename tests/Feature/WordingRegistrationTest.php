@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\DB;
 use Taldres\ImmutableAttributes\Exceptions\ImmutableAttributeException;
+use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
-use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Exceptions\UnknownPurposeException;
 use Taldres\Waitlist\Exceptions\WordingConflictException;
 use Taldres\Waitlist\Facades\Waitlist;
@@ -14,7 +14,7 @@ use Taldres\Waitlist\Support\DefinedProjectCatalog;
 use Taldres\Waitlist\Support\StoredWordingCatalog;
 
 beforeEach(function () {
-    config()->set(ConfigKey::Catalog->value, StoredWordingCatalog::class);
+    app()->bind(ProjectCatalog::class, StoredWordingCatalog::class);
 
     $this->file = function (array $wording): string {
         $path = tempnam(sys_get_temp_dir(), 'wording');
@@ -128,11 +128,11 @@ it('writes nothing from a file with a conflict', function () {
 });
 
 it('registers for a project and warns when the catalog does not read registered wording', function () {
-    config()->set(ConfigKey::Catalog->value, DefinedProjectCatalog::class);
+    app()->bind(ProjectCatalog::class, DefinedProjectCatalog::class);
     $file = ($this->file)(['launch' => ['v1' => 'Tell me when Acme launches.']]);
 
     $this->artisan('waitlist:wording', ['file' => $file, '--project' => 'acme'])
-        ->expectsOutputToContain(ConfigKey::Catalog->value.' does not read registered wording')
+        ->expectsOutputToContain('The catalog bound to '.ProjectCatalog::class.' does not read registered wording')
         ->assertSuccessful();
 
     unlink($file);

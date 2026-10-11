@@ -10,7 +10,6 @@ use Illuminate\Support\Facades\DB;
 use Taldres\Waitlist\Actions\RegisterWording;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Definitions\ProjectDefinitions;
-use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Exceptions\WordingConflictException;
 use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Models\WaitlistWording;
@@ -29,7 +28,7 @@ class WordingCommand extends Command
     public function handle(RegisterWording $register): int
     {
         if (! app(ProjectCatalog::class) instanceof StoredWordingCatalog) {
-            $this->warn(ConfigKey::Catalog->value.' does not read registered wording; set it to '.StoredWordingCatalog::class.' or a catalog of your own that does.');
+            $this->warn('The catalog bound to '.ProjectCatalog::class.' does not read registered wording; bind '.StoredWordingCatalog::class.' or a catalog of your own that does.');
         }
 
         $project = $this->option('project');

@@ -13,8 +13,10 @@ use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Output\ConsoleSectionOutput;
 use Symfony\Component\Console\Output\OutputInterface;
+use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Enums\ConfigKey;
+use Taldres\Waitlist\Enums\WaitlistLimiter;
 use Taldres\Waitlist\Events\EntryForgotten;
 use Taldres\Waitlist\Events\ManageLinkRequested;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
@@ -59,11 +61,6 @@ it('describes data, purposes and retention from the configuration', function () 
     config()->set(ConfigKey::RoutesEnabled->value, true);
 
     expect(privacyRecord())->toContain('- Rate limits: signups 10 per minute and IP, token links 10 per minute and token; GET never changes state');
-
-    config()->set(ConfigKey::SignupLimiter->value, 'signup-strict');
-    config()->set(ConfigKey::LinksLimiter->value, null);
-
-    expect(privacyRecord())->toContain('- Rate limits: signups by your [signup-strict] limiter, token links not limited by the package;');
 });
 
 it('names the limit of servers calling for a project and where their visitors come from', function () {
@@ -86,27 +83,20 @@ it('names the limit of servers calling for a project and where their visitors co
         ->toContain("- A visitor's address is read from the `X-Visitor-Ip` header of servers calling for a project, never of guests");
 });
 
-it('leaves out the limit of servers where your limiter replaces the package\'s, and where the routes are off', function () {
+it('leaves out the limit of servers where the routes are off', function () {
     config()->set(ConfigKey::ClientIpHeader->value, 'X-Visitor-Ip');
 
     expect(privacyRecord())->not->toContain('servers calling for a project');
-
-    config()->set(ConfigKey::RoutesEnabled->value, true);
-    config()->set(ConfigKey::SignupLimiter->value, 'signup-strict');
-
-    expect(privacyRecord())
-        ->not->toContain('Rate limits for servers calling for a project')
-        ->toContain('header of servers calling for a project');
 });
 
 dataset('limiters the app may define', [
     'signups' => [
-        WaitlistServiceProvider::SIGNUP_LIMITER,
+        WaitlistLimiter::Signup->value,
         '- Rate limits: signups by your [waitlist] limiter, token links 10 per minute and token; GET never changes state',
         false,
     ],
     'links' => [
-        WaitlistServiceProvider::LINKS_LIMITER,
+        WaitlistLimiter::Links->value,
         '- Rate limits: signups 10 per minute and IP, token links by your [waitlist-links] limiter; GET never changes state',
         true,
     ],
@@ -153,15 +143,6 @@ describe('a limiter named like one of the package\'s', function () {
         expect($record)->toContain($rateLimits)
             ->and(str_contains($record, 'Rate limits for servers calling for a project'))->toBe($servers);
     })->with('limiters the app may define');
-
-    it('names the limiter that the config points at, whatever the package registered', function () {
-        RateLimiter::for('signup-strict', fn () => Limit::perMinute(1)->by('mine'));
-        config()->set(ConfigKey::SignupLimiter->value, 'signup-strict');
-
-        expect(privacyRecord())
-            ->toContain('- Rate limits: signups by your [signup-strict] limiter, token links 10 per minute and token;')
-            ->not->toContain('Rate limits for servers calling for a project');
-    });
 });
 
 it('needs the limit of servers only where it describes it', function () {
@@ -317,7 +298,7 @@ it('lists every locale of a version', function () {
 });
 
 it('describes a list without wording yet instead of failing', function () {
-    config()->set(ConfigKey::Catalog->value, StoredWordingCatalog::class);
+    app()->bind(ProjectCatalog::class, StoredWordingCatalog::class);
 
     expect(privacyRecord())->toContain('| default | any other list | — | — | — | The purpose [waitlist] of the waitlist [default/*] has no wording. | — |');
 });

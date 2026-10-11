@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Testing\TestResponse;
+use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Events\EntrySubscribed;
@@ -23,7 +24,7 @@ const ACME_ORIGIN = 'https://acme.example';
 beforeEach(function () {
     config()->set(ConfigKey::RoutesEnabled->value, true);
     config()->set(ConfigKey::RoutesMiddleware->value, []);
-    config()->set(ConfigKey::ProjectResolver->value, HeaderProjectResolver::class);
+    app()->bind(ProjectResolver::class, HeaderProjectResolver::class);
 
     require __DIR__.'/../../routes/waitlist.php';
 

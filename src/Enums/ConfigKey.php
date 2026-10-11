@@ -16,7 +16,6 @@ enum ConfigKey: string
     case ActivityModel = 'waitlist.activity_model';
     case Connection = 'waitlist.connection';
     case DefaultList = 'waitlist.default_list';
-    case Catalog = 'waitlist.catalog';
     case WordingRequireHash = 'waitlist.wording.require_hash';
 
     case DoubleOptIn = 'waitlist.double_opt_in.enabled';
@@ -41,20 +40,14 @@ enum ConfigKey: string
     case RoutesMiddleware = 'waitlist.routes.middleware';
     case SignupMiddleware = 'waitlist.routes.group_middleware.signup';
     case LinksMiddleware = 'waitlist.routes.group_middleware.links';
-    case SignupLimiter = 'waitlist.routes.limiters.signup';
-    case LinksLimiter = 'waitlist.routes.limiters.links';
     case SignupPerMinute = 'waitlist.routes.rate_limits.signup_per_minute';
     case LinkPerMinute = 'waitlist.routes.rate_limits.link_per_minute';
     case LinksPerIpPerMinute = 'waitlist.routes.rate_limits.links_per_ip_per_minute';
     case CallerSignupPerMinute = 'waitlist.routes.rate_limits.caller_signup_per_minute';
 
-    case UrlGenerator = 'waitlist.url_generator';
-    case ProjectResolver = 'waitlist.project_resolver';
     case AuthenticationGuards = 'waitlist.authentication.guards';
     case AuthenticationRequired = 'waitlist.authentication.required';
     case ClientIpHeader = 'waitlist.authentication.client_ip_header';
-    case EmailNormalizer = 'waitlist.email_normalizer';
-    case SpamProtector = 'waitlist.spam_protector';
 
     case ExportSpreadsheetSafe = 'waitlist.export.spreadsheet_safe';
     case ExportColumns = 'waitlist.export.columns';

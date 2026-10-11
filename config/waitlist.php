@@ -4,12 +4,6 @@ use Taldres\Waitlist\Models\WaitlistActivity;
 use Taldres\Waitlist\Models\WaitlistConsent;
 use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Models\WaitlistSubscription;
-use Taldres\Waitlist\Support\DefaultConfirmationUrlGenerator;
-use Taldres\Waitlist\Support\DefaultEmailNormalizer;
-use Taldres\Waitlist\Support\DefaultProjectResolver;
-use Taldres\Waitlist\Support\DefinedProjectCatalog;
-use Taldres\Waitlist\Support\NullSpamProtector;
-use Taldres\Waitlist\WaitlistServiceProvider;
 
 /*
 | Every setting is described in docs/reference/configuration.md, which is not
@@ -17,8 +11,8 @@ use Taldres\Waitlist\WaitlistServiceProvider;
 | https://github.com/Taldres/laravel-waitlist/blob/main/docs/reference/configuration.md
 |
 | An empty variable in .env is refused, naming the key, for every setting but
-| four that read it as unset, like null: the connection, the two limiters and
-| the client IP header. Their comments say so.
+| two that read it as unset, like null: the connection and the client IP
+| header. Their comments say so.
 */
 
 return [
@@ -65,28 +59,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Catalog
+    | Wording
     |--------------------------------------------------------------------------
     |
     | Projects, their lists, the wording of their purposes, the fields a signup
-    | may carry and their frontend URLs come from a ProjectCatalog. The default
-    | reads what you describe with Waitlist::define() in a service provider,
-    | see docs/projects.md. StoredWordingCatalog reads the wording registered
-    | with waitlist:wording instead, and the rest from the definitions. Bind
-    | your own to keep it all in a database; your catalog then decides double
-    | opt-in per list (ListPolicy::$doubleOptIn) instead of
-    | double_opt_in.enabled.
+    | may carry and their frontend URLs are not configured here: describe them
+    | with Waitlist::define() in a service provider, see docs/projects.md.
     |
-    */
-
-    'catalog' => DefinedProjectCatalog::class,
-
-    /*
     | A form that renders its own copy of the wording, e.g. from a CMS, can
     | post back the hash of what it showed ({version, locale, hash}); a hash
     | that does not match the registered text is refused. require_hash makes
     | the hash mandatory for every choice a form posts.
+    |
     */
+
     'wording' => [
         'require_hash' => env('WAITLIST_REQUIRE_WORDING_HASH', false),
     ],
@@ -225,7 +211,7 @@ return [
     |
     | The middleware applies to every route, including the links in your mails
     | and RFC 8058 one-click requests, which carry no credentials. Put
-    | authentication into the project resolver below instead.
+    | authentication into the project resolver instead, see "authentication".
     |
     | group_middleware adds middleware to one group only, after its rate limit
     | (Laravel still sorts the cookies and session of "web" ahead of it):
@@ -233,11 +219,11 @@ return [
     | check, which the token links that mail providers call must not face.
     |
     | Rate limits apply per group: "signup" (signup, wording, manage links by
-    | address) and "links" (everything with a token). The numbers under
-    | rate_limits are whole numbers, at least 1, counted per minute. Each names a limiter: the
-    | package's "waitlist" and "waitlist-links", tuned by rate_limits, or one
-    | you define with RateLimiter::for(); a name nothing defines is refused.
-    | Null, or an empty value, turns a group's limit off.
+    | address) through the limiter "waitlist", and "links" (everything with a
+    | token) through "waitlist-links". The numbers under rate_limits tune the
+    | package's own two: whole numbers, at least 1, counted per minute. To
+    | replace a group's limit, define the limiter of its name yourself with
+    | RateLimiter::for(); to turn it off, return Limit::none() from there.
     | Guests are limited per IP; a server calling for its project (see
     | "authentication") per server, since all its visitors share its address.
     |
@@ -252,46 +238,30 @@ return [
             'signup' => [],
             'links' => [],
         ],
-        'limiters' => [
-            'signup' => 'waitlist',
-            'links' => 'waitlist-links',
-        ],
         'rate_limits' => [
             'signup_per_minute' => env('WAITLIST_RATE_LIMIT_SIGNUP', 10),           // per visitor and endpoint
             // The package's own link limits, 10 and 600, are also what stands in
             // for a value here that does not read.
-            'link_per_minute' => env('WAITLIST_RATE_LIMIT_LINK', WaitlistServiceProvider::LINK_PER_MINUTE), // per token
-            'links_per_ip_per_minute' => env('WAITLIST_RATE_LIMIT_LINKS_PER_IP', WaitlistServiceProvider::LINKS_PER_IP_PER_MINUTE), // bounds made-up tokens
+            'link_per_minute' => env('WAITLIST_RATE_LIMIT_LINK', 10), // per token
+            'links_per_ip_per_minute' => env('WAITLIST_RATE_LIMIT_LINKS_PER_IP', 600), // bounds made-up tokens
             'caller_signup_per_minute' => env('WAITLIST_RATE_LIMIT_CALLER_SIGNUP', 120), // per server with a project and endpoint
         ],
     ],
 
     /*
     |--------------------------------------------------------------------------
-    | Bindings
+    | Authentication
     |--------------------------------------------------------------------------
-    */
-
-    'url_generator' => DefaultConfirmationUrlGenerator::class,
-
-    /*
-    | Which project a signup, a request for the wording, or a manage link
-    | requested by address is for. The default always answers "default"; a
-    | central waitlist API resolves it from a key or the Origin, and may
-    | reject a request. AuthenticatedProjectResolver takes it from the caller
-    | (see "authentication"). Links with a token need no resolver.
-    */
-    'project_resolver' => DefaultProjectResolver::class,
-
-    /*
+    |
     | Who calls the signup, the wording and the manage link by address: the
     | user of the first of these guards that authenticates the request; null
-    | is the default guard. The resolver and the useWaitlist gate both see this
-    | caller. Define the gate yourself to decide who may do what; the default
-    | keeps a caller with a project (HasWaitlistProject) to that project, and
-    | with "required" refuses guests (401) and callers without a project (403).
-    | Leave "required" off for public forms; turn it on for an API that only
-    | your projects' servers may call.
+    | is the default guard. The project resolver and the useWaitlist gate both
+    | see this caller; bind AuthenticatedProjectResolver to take the project
+    | from it, see docs/projects.md. Define the gate yourself to decide who may
+    | do what; the default keeps a caller with a project (HasWaitlistProject)
+    | to that project, and with "required" refuses guests (401) and callers
+    | without a project (403). Leave "required" off for public forms; turn it
+    | on for an API that only your projects' servers may call.
     |
     | A server signs up its visitors from one address, so the limits per
     | visitor are its job; the API only caps the server itself. Name the header
@@ -300,22 +270,14 @@ return [
     | that address with the consent. It is read from callers with a project
     | only, never from guests, who could send anything. Null, or an empty value,
     | names none.
+    |
     */
+
     'authentication' => [
         'guards' => [null],
         'required' => env('WAITLIST_AUTHENTICATION_REQUIRED', false),
         'client_ip_header' => env('WAITLIST_CLIENT_IP_HEADER'),
     ],
-    'email_normalizer' => DefaultEmailNormalizer::class,
-
-    /*
-    | Guards the signup and the manage link requested by address, where anyone
-    | can type an address. The default accepts everything; bind your own
-    | implementation (Turnstile, reCAPTCHA, honeypot), see
-    | docs/securing-the-endpoints.md. It covers the HTTP endpoints only. A
-    | closure registered via Waitlist::verifySpamUsing() takes precedence.
-    */
-    'spam_protector' => NullSpamProtector::class,
 
     /*
     |--------------------------------------------------------------------------

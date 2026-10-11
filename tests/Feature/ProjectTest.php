@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
+use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Enums\ConfigKey;
@@ -174,7 +175,7 @@ it('applies a project\'s purposes to grants from the manage link', function () {
 });
 
 it('takes lists, wording and links from a bound catalog', function () {
-    config()->set(ConfigKey::Catalog->value, ArrayProjectCatalog::class);
+    app()->bind(ProjectCatalog::class, ArrayProjectCatalog::class);
 
     $result = Waitlist::project('shop')->for('restock')->add('user@example.com', ['restock' => 'v1']);
 
@@ -220,7 +221,7 @@ describe('over HTTP', function () {
     beforeEach(function () {
         config()->set(ConfigKey::RoutesEnabled->value, true);
         config()->set(ConfigKey::RoutesMiddleware->value, []);
-        config()->set(ConfigKey::ProjectResolver->value, HeaderProjectResolver::class);
+        app()->bind(ProjectResolver::class, HeaderProjectResolver::class);
         defineProjectTestAcme(fn (ProjectDefinition $project) => $project->urls(
             unsubscribe: 'https://acme.test/leave/{token}',
             confirmed: 'https://acme.test/thanks',

@@ -98,8 +98,8 @@ class SiteResolver implements ProjectResolver
 ```
 
 ```php
-// config/waitlist.php
-'project_resolver' => App\Waitlist\SiteResolver::class,
+// app/Providers/WaitlistServiceProvider.php, in register()
+$this->app->bind(\Taldres\Waitlist\Contracts\ProjectResolver::class, \App\Waitlist\SiteResolver::class);
 ```
 
 The resolver runs for the signup, the wording and manage links requested by

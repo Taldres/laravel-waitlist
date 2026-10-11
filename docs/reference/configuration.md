@@ -10,9 +10,9 @@ switches a limit or period off where a table below says so. Any other value is
 refused with an `InvalidConfigurationException` that names the key and what it
 must be, an empty variable included: a blank line in `.env` never turns double
 opt-in or a retention period off. If an empty variable in `.env` causes it,
-remove the variable to keep the default. Four settings read an empty value as
-unset, like `null`, and say so in the tables below: the connection, the client
-IP header and the two limiters.
+remove the variable to keep the default. Two settings read an empty value as
+unset, like `null`, and say so in the tables below: the connection and the
+client IP header.
 
 A period is bounded by the `timestamp` columns it is stored in or compared
 with, and a value beyond is refused with an `InvalidConfigurationException`
@@ -57,9 +57,9 @@ back instead, and each mistake is reported once per request, job or command:
 - guards or a client IP header that do not resolve treat a token link as a
   guest's request, limited by its address; the signup and the gate still
   refuse them;
-- an email normalizer that does not work ends the entry the token names but
-  cannot find the address's other lists, so it stays on them until it leaves
-  again; the failed sweep is reported;
+- an email normalizer that throws an `InvalidConfigurationException` ends the
+  entry the token names but cannot find the address's other lists, so it stays
+  on them until it leaves again; the failed sweep is reported;
 - a catalog that does not read answers a browser in JSON instead of sending it
   to your page;
 - `rate_limits.link_per_minute` or `links_per_ip_per_minute` that do not read
@@ -87,12 +87,15 @@ are registered when the app boots, so turn them on in `phpunit.xml` or
 
 Projects, their purposes, lists, fields and pages are not configured here: you
 describe them with `Waitlist::define()` in a service provider, see
-[Projects, lists and fields](../projects.md). The config only decides where they
-come from.
+[Projects, lists and fields](../projects.md). They come from the `ProjectCatalog`
+bound in the container, `DefinedProjectCatalog` by default, which reads the
+definitions. Bind `StoredWordingCatalog` to read the wording from
+`waitlist:wording` and the rest from the definitions, or a catalog of your own,
+which replaces the definitions and decides double opt-in per list; see
+[Extending](../extending.md).
 
 | Key | Default | What it is |
 | --- | --- | --- |
-| `catalog` | `DefinedProjectCatalog` | Where projects, lists, wording, fields and pages come from. The default reads `Waitlist::define()`; `StoredWordingCatalog` reads the wording from `waitlist:wording` and the rest from the definitions; your own catalog replaces the definitions and decides double opt-in per list |
 | `default_list` | `default` | The list the HTTP endpoints use when a request names none |
 | `wording.require_hash` | `WAITLIST_REQUIRE_WORDING_HASH`, off | Refuse a purpose choice that is recorded without the hash of the text shown; keeping or withdrawing a purpose needs none |
 
@@ -139,14 +142,16 @@ itself](../projects.md#periods-a-project-promises-itself).
 | `middleware` | | `['api']` | applies to every route, token links included: no authentication here |
 | `group_middleware.signup` | | `[]` | added to signup, wording and manage links by address only, after the rate limit, apart from what Laravel always sorts ahead of it, such as the session of `web`: checks for your forms, such as CSRF or an origin check, see [Checks for your forms only](../securing-the-endpoints.md#checks-for-your-forms-only) |
 | `group_middleware.links` | | `[]` | added to everything with a token only |
-| `limiters.signup` | | `waitlist` | named limiter for signup, wording and manage links by address; `null` or empty off; a name no `RateLimiter::for()` defines is refused |
-| `limiters.links` | | `waitlist-links` | named limiter for everything with a token; `null` or empty off; a name no `RateLimiter::for()` defines is refused |
 | `rate_limits.signup_per_minute` | `WAITLIST_RATE_LIMIT_SIGNUP` | 10 | per visitor and endpoint: a guest's IP, or the address a server forwards; at least 1, as do all four |
 | `rate_limits.link_per_minute` | `WAITLIST_RATE_LIMIT_LINK` | 10 | per token; one that does not read gives way to 10, reported |
 | `rate_limits.links_per_ip_per_minute` | `WAITLIST_RATE_LIMIT_LINKS_PER_IP` | 600 | bounds made-up tokens per IP, per server, or per visitor a server forwards; one that does not read gives way to 600, reported |
 | `rate_limits.caller_signup_per_minute` | `WAITLIST_RATE_LIMIT_CALLER_SIGNUP` | 120 | per server calling for a project and endpoint, see [Servers calling for a project](../securing-the-endpoints.md#servers-calling-for-a-project) |
 
-See [Securing the endpoints](../securing-the-endpoints.md#rate-limits) for your own limiters.
+The numbers tune the package's limiters, `waitlist` for signup, wording and manage
+links by address and `waitlist-links` for everything with a token. To replace one,
+or to turn it off with `Limit::none()`, define a limiter of that name with
+`RateLimiter::for()`; no setting turns a limit off. See [Securing the
+endpoints](../securing-the-endpoints.md#rate-limits).
 
 ## Who may call: `authentication`
 
@@ -159,19 +164,26 @@ never need credentials.
 | `required` | `WAITLIST_AUTHENTICATION_REQUIRED` | off | the default `useWaitlist` gate refuses guests (`401`) and callers without a project (`403`); a gate of your own decides for itself |
 | `client_ip_header` | `WAITLIST_CLIENT_IP_HEADER` | `null` | the header in which servers calling for a project forward their visitor's address, e.g. `X-Waitlist-Client-Ip`: limits per visitor and the recorded IP use it; never read from guests; empty is unset |
 
-## Bindings
+## Models
 
-Swap in your own implementation; see [Extending](../extending.md). A binding
-names a class, or an interface or abstract class your app binds in the
-container; the contract itself and a model class that is abstract are refused.
+Swap in your own subclasses; see [Extending](../extending.md#your-own-models). A
+model class that is abstract is refused.
 
 | Key | Default | Decides |
 | --- | --- | --- |
 | `model`, `subscription_model`, `consent_model`, `activity_model` | the package models | the Eloquent models, for extra columns |
-| `url_generator` | `DefaultConfirmationUrlGenerator` | the confirm, unsubscribe and manage URLs in mails |
-| `project_resolver` | `DefaultProjectResolver`, always `default` | which project an HTTP signup is for; `AuthenticatedProjectResolver` takes it from the caller |
-| `email_normalizer` | `DefaultEmailNormalizer`, lowercase and trim | which spellings are the same address; part of the lookup hash |
-| `spam_protector` | `NullSpamProtector`, accepts all | the bot check on the signup and manage links by address |
+
+The contracts are not configured here: the package binds its defaults in the
+container, and a `bind()` in a provider of yours replaces them, see
+[Extending](../extending.md).
+
+| Contract | Default | Decides |
+| --- | --- | --- |
+| `ConfirmationUrlGenerator` | `DefaultConfirmationUrlGenerator` | the confirm, unsubscribe and manage URLs in mails |
+| `ProjectResolver` | `DefaultProjectResolver`, always `default` | which project an HTTP signup is for; `AuthenticatedProjectResolver` takes it from the caller |
+| `EmailNormalizer` | `DefaultEmailNormalizer`, lowercase and trim | which spellings are the same address; part of the lookup hash |
+| `SpamProtector` | `NullSpamProtector`, accepts all | the bot check on the signup and manage links by address; a closure from `Waitlist::verifySpamUsing()` wins there |
+| `ProjectCatalog` | `DefinedProjectCatalog` | where projects, lists, wording, fields and pages come from, see [Projects and wording](#projects-and-wording) |
 
 ## CSV export: `export`
 

@@ -14,7 +14,8 @@ Four things stay apart:
 
 | What | Where |
 | --- | --- |
-| Technical settings: connection, retention, which catalog | `config/waitlist.php` |
+| Technical settings: connection, retention | `config/waitlist.php` |
+| Which catalog and which resolver | bindings in a service provider |
 | Projects, lists, fields, wording versions, frontend URLs | your database, behind a `ProjectCatalog` |
 | Which project a signup is for | a `ProjectResolver`, e.g. from a publishable key |
 | The wording a person agreed to | the consent snapshot the package stores |
@@ -28,8 +29,8 @@ other method answers from `Waitlist::define()`, which knows none of your databas
 projects, so override each one that should read your tables:
 
 ```php
-// config/waitlist.php
-'catalog' => App\Waitlist\DatabaseCatalog::class,
+// app/Providers/WaitlistServiceProvider.php, in register()
+$this->app->bind(\Taldres\Waitlist\Contracts\ProjectCatalog::class, \App\Waitlist\DatabaseCatalog::class);
 ```
 
 ```php
@@ -172,8 +173,8 @@ class PublishableKeyResolver implements ProjectResolver
 ```
 
 ```php
-// config/waitlist.php
-'project_resolver' => App\Waitlist\PublishableKeyResolver::class,
+// app/Providers/WaitlistServiceProvider.php, in register()
+$this->app->bind(\Taldres\Waitlist\Contracts\ProjectResolver::class, \App\Waitlist\PublishableKeyResolver::class);
 ```
 
 ```dotenv

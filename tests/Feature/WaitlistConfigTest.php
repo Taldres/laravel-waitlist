@@ -2,33 +2,23 @@
 
 declare(strict_types=1);
 
-use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Env;
 use Illuminate\Support\Facades\Exceptions;
-use Illuminate\Support\Facades\RateLimiter;
 use Taldres\Waitlist\Actions\PruneEntries;
 use Taldres\Waitlist\Config\PackageConfig;
 use Taldres\Waitlist\Config\WaitlistConfig;
-use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
-use Taldres\Waitlist\Contracts\EmailNormalizer;
-use Taldres\Waitlist\Contracts\ProjectCatalog;
-use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Contracts\SpamProtector;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\EntryStatus;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Facades\Waitlist;
+use Taldres\Waitlist\Http\Limiters;
 use Taldres\Waitlist\Models\WaitlistActivity;
 use Taldres\Waitlist\Models\WaitlistConsent;
 use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Models\WaitlistSubscription;
-use Taldres\Waitlist\Support\DefaultConfirmationUrlGenerator;
-use Taldres\Waitlist\Support\DefaultEmailNormalizer;
-use Taldres\Waitlist\Support\DefaultProjectResolver;
-use Taldres\Waitlist\Support\DefinedProjectCatalog;
-use Taldres\Waitlist\Support\NullSpamProtector;
 use Taldres\Waitlist\WaitlistServiceProvider;
 
 describe('the defaults', function () {
@@ -56,20 +46,13 @@ describe('the defaults', function () {
             ->and($retention->requestMetadataDays)->toBe(30)
             ->and(WaitlistConfig::routesEnabled())->toBeFalse()
             ->and(WaitlistConfig::routeName())->toBe('waitlist.')
-            ->and(WaitlistConfig::signupLimiter())->toBe(WaitlistServiceProvider::SIGNUP_LIMITER)
-            ->and(WaitlistConfig::linksLimiter())->toBe(WaitlistServiceProvider::LINKS_LIMITER)
             ->and(WaitlistConfig::signupPerMinute())->toBe(10)
-            ->and(WaitlistConfig::linkPerMinute())->toBe(10)
-            ->and(WaitlistConfig::linksPerIpPerMinute())->toBe(600)
+            ->and(WaitlistConfig::linkPerMinute())->toBe(Limiters::LINK_PER_MINUTE)
+            ->and(WaitlistConfig::linksPerIpPerMinute())->toBe(Limiters::LINKS_PER_IP_PER_MINUTE)
             ->and(WaitlistConfig::callerSignupPerMinute())->toBe(120)
             ->and(WaitlistConfig::guards())->toBe([null])
             ->and(WaitlistConfig::authenticationRequired())->toBeFalse()
             ->and(WaitlistConfig::clientIpHeader())->toBeNull()
-            ->and(WaitlistConfig::catalog())->toBe(DefinedProjectCatalog::class)
-            ->and(WaitlistConfig::urlGenerator())->toBe(DefaultConfirmationUrlGenerator::class)
-            ->and(WaitlistConfig::projectResolver())->toBe(DefaultProjectResolver::class)
-            ->and(WaitlistConfig::emailNormalizer())->toBe(DefaultEmailNormalizer::class)
-            ->and(WaitlistConfig::spamProtector())->toBe(NullSpamProtector::class)
             ->and(WaitlistConfig::export()->spreadsheetSafe)->toBeTrue()
             ->and(WaitlistConfig::export()->columns)->toBe(['id', 'list', 'email', 'status', 'purposes', 'confirmed_at', 'unsubscribed_at', 'metadata', 'created_at']);
     });
@@ -115,13 +98,11 @@ describe('values the app sets', function () {
     it('take null where the setting allows it, and an empty text as null for names', function () {
         config()->set(ConfigKey::ConfirmTokenTtl->value, null);
         config()->set(ConfigKey::RetentionUnsubscribedDays->value, null);
-        config()->set(ConfigKey::SignupLimiter->value, null);
-        config()->set(ConfigKey::LinksLimiter->value, '');
+        config()->set(ConfigKey::ClientIpHeader->value, '');
 
         expect(WaitlistConfig::confirmTokenTtl())->toBeNull()
             ->and(WaitlistConfig::retention()->unsubscribedDays)->toBeNull()
-            ->and(WaitlistConfig::signupLimiter())->toBeNull()
-            ->and(WaitlistConfig::linksLimiter())->toBeNull();
+            ->and(WaitlistConfig::clientIpHeader())->toBeNull();
     });
 
     it('may leave the route prefix and name empty, for routes at the root', function () {
@@ -184,8 +165,6 @@ describe('a value that does not fit', function () {
         'columns that are not names' => [ConfigKey::ExportColumns, ['email', 5], 'The waitlist.export.columns config must be a list of column names, got array.'],
         'columns that may not be exported' => [ConfigKey::ExportColumns, ['email', 'confirm_token_hash'], 'The waitlist.export.columns config lists columns that may not be exported: confirm_token_hash.'],
         'a model that is not a waitlist model' => [ConfigKey::ConsentModel, stdClass::class, 'The waitlist.consent_model config must point to a '.WaitlistConsent::class.' subclass.'],
-        'the contract itself for a class' => [ConfigKey::EmailNormalizer, EmailNormalizer::class, 'The waitlist.email_normalizer config must name a class that implements '.EmailNormalizer::class.', not the contract itself.'],
-        'a class that does not implement its contract' => [ConfigKey::ProjectResolver, stdClass::class, 'The waitlist.project_resolver config must point to a Taldres\Waitlist\Contracts\ProjectResolver implementation.'],
         'a group that is not an array' => ['waitlist.double_opt_in', 'on', 'The waitlist.double_opt_in config must be an array of settings, got string.'],
         'a nested group that is null' => ['waitlist.routes.rate_limits', null, 'The waitlist.routes.rate_limits config must be an array of settings, got null.'],
     ]);
@@ -201,44 +180,15 @@ describe('a value that does not fit', function () {
 
         WaitlistConfig::manageTokenTtl();
     })->throws(InvalidConfigurationException::class, 'The waitlist.manage.token_ttl config is missing. If the config is cached, cache it again with php artisan config:cache.');
-
-    it('is refused before the container hands out the binding', function () {
-        config()->set(ConfigKey::EmailNormalizer->value, stdClass::class);
-
-        app(EmailNormalizer::class);
-    })->throws(InvalidConfigurationException::class, 'The waitlist.email_normalizer config must point to a Taldres\Waitlist\Contracts\EmailNormalizer implementation.');
-
-    it('is refused when the container resolves the class to something without the contract', function () {
-        app()->bind(DefaultEmailNormalizer::class, fn () => new stdClass);
-
-        app(EmailNormalizer::class);
-    })->throws(InvalidConfigurationException::class, 'The container resolves '.DefaultEmailNormalizer::class.' to something that is not a Taldres\Waitlist\Contracts\EmailNormalizer.');
-
-    it('lets the container resolve the class to a decorator that keeps the contract', function () {
-        $decorator = new class implements EmailNormalizer
-        {
-            public function normalize(string $email): string
-            {
-                return strtolower($email);
-            }
-        };
-        app()->bind(DefaultEmailNormalizer::class, fn () => $decorator);
-
-        expect(app(EmailNormalizer::class))->toBe($decorator);
-    });
 });
 
 describe('a name', function () {
     it('is read as unset when it is empty, where null is allowed', function () {
         config()->set(ConfigKey::Connection->value, '');
         config()->set(ConfigKey::ClientIpHeader->value, '');
-        config()->set(ConfigKey::SignupLimiter->value, '');
-        config()->set(ConfigKey::LinksLimiter->value, '');
 
         expect(WaitlistConfig::connection())->toBeNull()
-            ->and(WaitlistConfig::clientIpHeader())->toBeNull()
-            ->and(WaitlistConfig::signupLimiter())->toBeNull()
-            ->and(WaitlistConfig::linksLimiter())->toBeNull();
+            ->and(WaitlistConfig::clientIpHeader())->toBeNull();
 
         checkWaitlistConfig();
     });
@@ -254,76 +204,12 @@ describe('a name', function () {
     });
 });
 
-describe('a binding', function () {
-    it('is refused when it names the contract itself, by its accessor and by the full check', function (ConfigKey $key, string $contract, string $accessor) {
-        config()->set($key->value, $contract);
-
-        expect(fn () => WaitlistConfig::{$accessor}())->toThrow(InvalidConfigurationException::class, "The {$key->value} config must name a class that implements {$contract}, not the contract itself.")
-            ->and(fn () => checkWaitlistConfig())->toThrow(InvalidConfigurationException::class, $key->value);
-    })->with([
-        'the email normalizer' => [ConfigKey::EmailNormalizer, EmailNormalizer::class, 'emailNormalizer'],
-        'the url generator' => [ConfigKey::UrlGenerator, ConfirmationUrlGenerator::class, 'urlGenerator'],
-        'the catalog' => [ConfigKey::Catalog, ProjectCatalog::class, 'catalog'],
-        'the project resolver' => [ConfigKey::ProjectResolver, ProjectResolver::class, 'projectResolver'],
-        'the spam protector' => [ConfigKey::SpamProtector, SpamProtector::class, 'spamProtector'],
-    ]);
-
-    it('may name another interface or an abstract class, which the app can bind in the container', function (string $class) {
-        config()->set(ConfigKey::EmailNormalizer->value, $class);
-
-        expect(WaitlistConfig::emailNormalizer())->toBe($class);
-
-        checkWaitlistConfig();
-    })->with([WaitlistConfigAppNormalizer::class, WaitlistConfigAbstractNormalizer::class]);
-});
-
-describe('a limiter', function () {
-    it('that nothing defines is refused by the full check, naming the key', function (ConfigKey $key) {
-        config()->set($key->value, 'a-limiter-nobody-defined');
-
-        expect(fn () => checkWaitlistConfig())->toThrow(InvalidConfigurationException::class, "The {$key->value} config must name a limiter defined with RateLimiter::for(), or null, got one that is not defined.");
-    })->with([ConfigKey::SignupLimiter, ConfigKey::LinksLimiter]);
-
-    it('is still read by its accessor, as the app may define it after the routes register', function () {
-        config()->set(ConfigKey::SignupLimiter->value, 'defined-later');
-
-        expect(WaitlistConfig::signupLimiter())->toBe('defined-later');
-
-        RateLimiter::for('defined-later', fn () => Limit::perMinute(1));
-
-        expect(fn () => checkWaitlistConfig())->not->toThrow(InvalidConfigurationException::class);
-    });
-
-    it('passes the full check when the app defines it, as do a number, which Laravel reads as a limit, and null', function (mixed $signup, mixed $links) {
-        RateLimiter::for('mine', fn () => Limit::perMinute(1));
-        config()->set(ConfigKey::SignupLimiter->value, $signup);
-        config()->set(ConfigKey::LinksLimiter->value, $links);
-
-        expect(fn () => checkWaitlistConfig())->not->toThrow(InvalidConfigurationException::class);
-    })->with([
-        'one the app defines' => ['mine', 'mine'],
-        'a number' => ['60', '30'],
-        'none' => [null, null],
-        'the package limiters' => [WaitlistServiceProvider::SIGNUP_LIMITER, WaitlistServiceProvider::LINKS_LIMITER],
-    ]);
-
-    it('is checked against the limiters as they are defined now', function () {
-        config()->set(ConfigKey::LinksLimiter->value, 'mine');
-
-        expect(fn () => checkWaitlistConfig())->toThrow(InvalidConfigurationException::class, ConfigKey::LinksLimiter->value);
-
-        RateLimiter::for('mine', fn () => Limit::perMinute(1));
-
-        expect(fn () => checkWaitlistConfig())->not->toThrow(InvalidConfigurationException::class);
-    });
-});
-
 describe('a mistake in one setting', function () {
     it('never keeps a person from unsubscribing', function () {
         $tokens = subscribeAndCapture('beta', 'user@example.com');
 
         config()->set(ConfigKey::ExportColumns->value, ['email', 'unsubscribe_token']);
-        config()->set(ConfigKey::SpamProtector->value, stdClass::class);
+        bindUnreadable(SpamProtector::class);
         config()->set(ConfigKey::SignupPerMinute->value, 'many');
         config()->set(ConfigKey::MaxPendingPerAddress->value, 0);
         config()->set(ConfigKey::DefaultList->value, '');
@@ -339,7 +225,7 @@ describe('a mistake in one setting', function () {
         $tokens = subscribeAndCapture('beta', 'user@example.com');
 
         config()->set(ConfigKey::ExportColumns->value, ['email', 'unsubscribe_token']);
-        config()->set(ConfigKey::SpamProtector->value, stdClass::class);
+        bindUnreadable(SpamProtector::class);
         config()->set(ConfigKey::SignupPerMinute->value, 'many');
         config()->set(ConfigKey::CallerSignupPerMinute->value, 0);
 
@@ -375,7 +261,6 @@ describe('a mistake in the config while the app boots', function () {
         Exceptions::assertReported(fn (InvalidConfigurationException $exception) => $exception->getMessage() === $message);
     })->with([
         'signup middleware' => [ConfigKey::SignupMiddleware, null, 'The waitlist.routes.group_middleware.signup config must be a list of middleware names, got null.'],
-        'the signup limiter' => [ConfigKey::SignupLimiter, 5, 'The waitlist.routes.limiters.signup config must be a text or null, got int.'],
     ]);
 
     it('leaves out the token links of a group that does not read, and leaves the signup alone', function (ConfigKey $key, mixed $value, string $message) {
@@ -396,7 +281,6 @@ describe('a mistake in the config while the app boots', function () {
         Exceptions::assertReported(fn (InvalidConfigurationException $exception) => $exception->getMessage() === $message);
     })->with([
         'links middleware' => [ConfigKey::LinksMiddleware, null, 'The waitlist.routes.group_middleware.links config must be a list of middleware names, got null.'],
-        'the links limiter' => [ConfigKey::LinksLimiter, 5, 'The waitlist.routes.limiters.links config must be a text or null, got int.'],
     ]);
 
     it('boots with a key missing from a stale config cache, so artisan can cache it again', function () {
@@ -429,7 +313,7 @@ describe('a mistake in the config while the app boots', function () {
     ]);
 
     it('reports a setting once, however many routes it belongs to', function () {
-        config()->set(ConfigKey::SignupLimiter->value, 5);
+        config()->set(ConfigKey::SignupMiddleware->value, null);
 
         (new WaitlistServiceProvider(app()))->boot();
 
@@ -517,14 +401,14 @@ describe('merging the app config with the package config', function () {
     it('keeps the keys the package does not know, at every depth', function () {
         $merged = PackageConfig::merge([
             'legacy' => ['a' => 1],
-            'routes' => ['custom' => true, 'rate_limits' => ['burst' => 3], 'limiters' => ['third' => 'mine']],
+            'routes' => ['custom' => true, 'rate_limits' => ['burst' => 3], 'group_middleware' => ['third' => ['mine']]],
         ]);
 
         expect($merged['legacy'])->toBe(['a' => 1])
             ->and($merged['routes']['custom'])->toBeTrue()
             ->and($merged['routes']['rate_limits']['burst'])->toBe(3)
             ->and($merged['routes']['rate_limits']['signup_per_minute'])->toBe(10)
-            ->and($merged['routes']['limiters'])->toEqual(['signup' => 'waitlist', 'links' => 'waitlist-links', 'third' => 'mine']);
+            ->and($merged['routes']['group_middleware'])->toEqual(['signup' => [], 'links' => [], 'third' => ['mine']]);
     });
 
     it('keeps a group the app sets to something that is no array, so that it is refused when read', function (string $path, mixed $value) {
@@ -547,7 +431,7 @@ describe('merging the app config with the package config', function () {
     });
 
     it('has nothing left to fill in what it filled already, however often the provider registers', function () {
-        $app = ['routes' => ['enabled' => true, 'limiters' => ['signup' => null]], 'export' => ['columns' => ['id']], 'manage' => ['token_ttl' => [1]], 'legacy' => 1];
+        $app = ['routes' => ['enabled' => true, 'group_middleware' => ['signup' => null]], 'export' => ['columns' => ['id']], 'manage' => ['token_ttl' => [1]], 'legacy' => 1];
         $once = PackageConfig::merge($app);
 
         expect(PackageConfig::merge($once))->toBe($once);
@@ -619,10 +503,6 @@ abstract class WaitlistConfigAbstractConsent extends WaitlistConsent {}
 abstract class WaitlistConfigAbstractActivity extends WaitlistActivity {}
 
 class WaitlistConfigReplacementEntry extends WaitlistEntry {}
-
-interface WaitlistConfigAppNormalizer extends EmailNormalizer {}
-
-abstract class WaitlistConfigAbstractNormalizer implements EmailNormalizer {}
 
 describe('a model that cannot be instantiated', function () {
     it('is refused for every model setting', function (ConfigKey $key, string $accessor, string $abstract) {

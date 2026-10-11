@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Artisan;
 use Taldres\Waitlist\Config\WaitlistConfig;
-use Taldres\Waitlist\Contracts\EmailNormalizer;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Definitions\ProjectDefinitions;
@@ -58,10 +57,6 @@ it('throws an InvalidConfigurationException for every setup mistake, never a Wai
     'a model that is not a waitlist model' => [function () {
         config()->set(ConfigKey::Model->value, stdClass::class);
         Waitlist::exists('user@example.com');
-    }],
-    'a binding that does not implement its contract' => [function () {
-        config()->set(ConfigKey::EmailNormalizer->value, stdClass::class);
-        app(EmailNormalizer::class);
     }],
     'guards that are not a list of names' => [function () {
         config()->set(ConfigKey::AuthenticationGuards->value, 'sanctum');

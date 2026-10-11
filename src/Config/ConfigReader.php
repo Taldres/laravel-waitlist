@@ -225,27 +225,6 @@ final class ConfigReader
         return $class;
     }
 
-    /**
-     * @template T of object
-     *
-     * @param  class-string<T>  $contract
-     * @return class-string<T>
-     */
-    public function implementation(ConfigKey $key, string $contract): string
-    {
-        $class = $this->value($key);
-
-        if (! is_string($class) || ! is_a($class, $contract, true)) {
-            throw new InvalidConfigurationException("The {$key->value} config must point to a {$contract} implementation.");
-        }
-
-        if ($class === $contract) {
-            throw new InvalidConfigurationException("The {$key->value} config must name a class that implements {$contract}, not the contract itself.");
-        }
-
-        return $class;
-    }
-
     private function number(ConfigKey $key, int $min, bool $nullable): ?int
     {
         $value = $this->value($key);

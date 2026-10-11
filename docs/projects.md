@@ -54,8 +54,9 @@ Why code and not `config/waitlist.php`:
 - **Everything about a project is in one place**, next to the code that uses it.
 
 The config keeps the settings that are about running the waitlist, not about a
-product: double opt-in, retention, rate limits, routes and the bindings, see
-[Configuration](reference/configuration.md).
+product: double opt-in, retention, rate limits, routes and the models, see
+[Configuration](reference/configuration.md). The contracts are bound in the
+container instead, see [Extending](extending.md).
 
 **Read the environment through `config()`, never `env()`.** Once the config is
 cached, `env()` returns `null` outside the config files, so a URL built from it
@@ -443,8 +444,8 @@ class SiteResolver implements ProjectResolver
 ```
 
 ```php
-// config/waitlist.php
-'project_resolver' => App\Waitlist\SiteResolver::class,
+// app/Providers/WaitlistServiceProvider.php, in register()
+$this->app->bind(\Taldres\Waitlist\Contracts\ProjectResolver::class, \App\Waitlist\SiteResolver::class);
 ```
 
 A signup form is public, so the resolver needs no secret: it only decides which
@@ -475,6 +476,13 @@ Your own controllers need no resolver: they name the project themselves with
 Listeners see the project on the entry, `$event->entry->project`, and pick the
 sender, template and mailer from it. See [Mail](mail.md#several-projects).
 
+### Limits per project
+
+A project's definition has no rate limits: the numbers under `routes.rate_limits`
+are the same for every project. A limiter of your own that asks which project a
+request is for sets them apart, see "Different limits per project" under
+[Rate limits](securing-the-endpoints.md#rate-limits).
+
 ## Who may call: the `useWaitlist` gate
 
 Two setups cover most apps; the settings below each do one job in them, and every
@@ -483,7 +491,7 @@ other combination is possible.
 | | A public form (architecture A) | Your sites' servers with credentials (architecture C) |
 | --- | --- | --- |
 | Who calls | anyone, as a guest | each site's server, with a token of its own |
-| `project_resolver` | the default (one project), or your own from a publishable key or the Origin | `AuthenticatedProjectResolver`: the project follows from the caller |
+| `ProjectResolver` binding | the default (one project), or your own from a publishable key or the Origin | `AuthenticatedProjectResolver`: the project follows from the caller |
 | `authentication.guards` | not needed | the guard that authenticates the server, such as `sanctum` |
 | `authentication.required` | off | on: guests get `401`, callers without a project `403` |
 | `useWaitlist` gate | the default lets everyone through; define it only to restrict | the default keeps a caller to its own project; define it for abilities per action or list |
@@ -568,9 +576,12 @@ class Project extends Model implements Authenticatable, HasWaitlistProject
 ```
 
 ```php
-// config/waitlist.php
-'project_resolver' => Taldres\Waitlist\Support\AuthenticatedProjectResolver::class,
+// app/Providers/WaitlistServiceProvider.php, in register()
+$this->app->bind(\Taldres\Waitlist\Contracts\ProjectResolver::class, \Taldres\Waitlist\Support\AuthenticatedProjectResolver::class);
+```
 
+```php
+// config/waitlist.php
 'authentication' => [
     'guards' => ['sanctum'],   // in this order; the first that authenticates wins
     'required' => true,

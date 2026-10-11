@@ -53,17 +53,11 @@ it('rejects a subscription model that is not a waitlist subscription', function 
     Waitlist::subscribe('beta', 'user@example.com', waitlistConsent());
 })->throws(InvalidArgumentException::class, ConfigKey::SubscriptionModel->value);
 
-it('uses the configured email normalizer', function () {
-    config()->set(ConfigKey::EmailNormalizer->value, UppercaseNormalizer::class);
+it('uses the bound email normalizer', function () {
+    app()->bind(EmailNormalizer::class, UppercaseNormalizer::class);
 
     expect(Waitlist::subscribe('beta', ' USER@Example.com ', waitlistConsent())->entry->email)->toBe('user@example.com');
 });
-
-it('rejects a configured class that does not implement its contract', function () {
-    config()->set(ConfigKey::EmailNormalizer->value, stdClass::class);
-
-    app(EmailNormalizer::class);
-})->throws(InvalidArgumentException::class, ConfigKey::EmailNormalizer->value);
 
 it('runs every table on the configured connection', function () {
     config()->set('database.connections.waitlist_a', config('database.connections.testing'));

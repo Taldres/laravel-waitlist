@@ -16,6 +16,7 @@ use Taldres\Waitlist\Actions\ResendConfirmation;
 use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Enums\Page;
+use Taldres\Waitlist\Enums\WaitlistLimiter;
 use Taldres\Waitlist\Events\ConsentGranted;
 use Taldres\Waitlist\Events\ConsentWithdrawn;
 use Taldres\Waitlist\Events\EntryConfirmed;
@@ -26,10 +27,10 @@ use Taldres\Waitlist\Events\ManageLinkRequested;
 use Taldres\Waitlist\Events\SubscriptionExpired;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Exceptions\MissingWordingException;
+use Taldres\Waitlist\Http\Limiters;
 use Taldres\Waitlist\Support\PurposeRegistry;
 use Taldres\Waitlist\Support\SetupAudit;
 use Taldres\Waitlist\WaitlistManager;
-use Taldres\Waitlist\WaitlistServiceProvider;
 
 class PrivacyCommand extends Command
 {
@@ -283,8 +284,8 @@ class PrivacyCommand extends Command
                 ? ["- At most {$pending} confirmation requests per address and day for unconfirmed lists of a project; further ones are held back"]
                 : []),
             WaitlistConfig::routesEnabled()
-                ? '- Rate limits: signups '.$this->rateLimit(WaitlistConfig::signupLimiter(), WaitlistServiceProvider::SIGNUP_LIMITER, WaitlistConfig::signupPerMinute().' per minute and IP')
-                    .', token links '.$this->rateLimit(WaitlistConfig::linksLimiter(), WaitlistServiceProvider::LINKS_LIMITER, WaitlistConfig::linkPerMinute().' per minute and token')
+                ? '- Rate limits: signups '.$this->rateLimit(WaitlistLimiter::Signup, WaitlistConfig::signupPerMinute().' per minute and IP')
+                    .', token links '.$this->rateLimit(WaitlistLimiter::Links, WaitlistConfig::linkPerMinute().' per minute and token')
                     .'; GET never changes state'
                 : '- No public endpoints (package routes disabled)',
             ...$this->servers(),
@@ -317,7 +318,7 @@ class PrivacyCommand extends Command
 
         $lines = [];
 
-        if (WaitlistConfig::signupLimiter() === WaitlistServiceProvider::SIGNUP_LIMITER && WaitlistServiceProvider::ownsLimiter(WaitlistServiceProvider::SIGNUP_LIMITER)) {
+        if (Limiters::owns(WaitlistLimiter::Signup)) {
             $lines[] = '- Rate limits for servers calling for a project: signups '.WaitlistConfig::callerSignupPerMinute().' per minute and server'
                 .($header !== null ? ', and '.WaitlistConfig::signupPerMinute().' per minute and visitor' : '');
         }
@@ -487,13 +488,9 @@ class PrivacyCommand extends Command
             : 'Closure in '.Str::chopStart($file, base_path().DIRECTORY_SEPARATOR).':'.$reflection->getStartLine();
     }
 
-    protected function rateLimit(?string $limiter, string $packageLimiter, string $packageLimit): string
+    protected function rateLimit(WaitlistLimiter $limiter, string $packageLimit): string
     {
-        return match (true) {
-            $limiter === null => 'not limited by the package',
-            $limiter === $packageLimiter && WaitlistServiceProvider::ownsLimiter($packageLimiter) => $packageLimit,
-            default => "by your [{$limiter}] limiter",
-        };
+        return Limiters::owns($limiter) ? $packageLimit : "by your [{$limiter->value}] limiter";
     }
 
     /**

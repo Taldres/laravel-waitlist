@@ -32,7 +32,7 @@ class CheckCommand extends Command
             $failed = true;
         }
 
-        foreach (SetupAudit::routeProblems() as $problem) {
+        foreach ([...SetupAudit::routeProblems(), ...SetupAudit::bindingProblems()] as $problem) {
             $this->components->error($problem);
             $failed = true;
         }

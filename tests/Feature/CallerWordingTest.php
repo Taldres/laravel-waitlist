@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Testing\TestResponse;
 use Taldres\Waitlist\Actions\SyncPurposes;
 use Taldres\Waitlist\Auth\WaitlistGate;
+use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\WaitlistAction;
@@ -51,7 +52,7 @@ function callerWordingChoice(string $text = CALLER_WORDING, string $version = '2
 beforeEach(function () {
     config()->set(ConfigKey::RoutesEnabled->value, true);
     config()->set(ConfigKey::RoutesMiddleware->value, []);
-    config()->set(ConfigKey::ProjectResolver->value, HeaderProjectResolver::class);
+    app()->bind(ProjectResolver::class, HeaderProjectResolver::class);
 
     require __DIR__.'/../../routes/waitlist.php';
 

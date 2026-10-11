@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Exceptions;
 use Taldres\Waitlist\Config\ConfigFallback;
+use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
+use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Enums\ActivityType;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\EntryStatus;
@@ -14,10 +16,10 @@ use Taldres\Waitlist\Events\EntrySubscribed;
 use Taldres\Waitlist\Events\ManageLinkRequested;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Facades\Waitlist;
+use Taldres\Waitlist\Http\Limiters;
 use Taldres\Waitlist\Models\WaitlistActivity;
 use Taldres\Waitlist\Models\WaitlistConsent;
 use Taldres\Waitlist\Models\WaitlistEntry;
-use Taldres\Waitlist\WaitlistServiceProvider;
 
 /*
  * Leaving, withdrawing, confirming an issued link, erasing and pruning must
@@ -241,21 +243,24 @@ describe('a setting a step falls back from', function () {
 });
 
 describe('a URL generator or catalog that does not resolve', function () {
-    it('keeps no flow that builds no link from working', function (string $flow, string $setting, mixed $value) {
+    it('keeps no flow that builds no link from working', function (string $flow, string $contract) {
         $this->withoutExceptionHandling();
 
-        isolationRun($flow, [$setting => $value], $this);
-    })->with(function () {
-        yield from isolationCases(['unsubscribe by token', 'withdraw one purpose', 'one-click unsubscribe', 'leave from the manage page', 'waitlist:prune an abandoned signup'], [
-            'url_generator' => [ConfigKey::UrlGenerator->value, stdClass::class],
-        ]);
+        $act = isolationFlows()[$flow]($this);
+        bindUnreadable($contract);
 
-        yield from isolationCases(['unsubscribe by token', 'withdraw one purpose', 'one-click unsubscribe', 'leave from the manage page'], [
-            'catalog' => [ConfigKey::Catalog->value, stdClass::class],
-        ]);
+        $act();
+    })->with(function () {
+        foreach (['unsubscribe by token', 'withdraw one purpose', 'one-click unsubscribe', 'leave from the manage page', 'waitlist:prune an abandoned signup'] as $flow) {
+            yield "{$flow} / the URL generator" => [$flow, ConfirmationUrlGenerator::class];
+        }
+
+        foreach (['unsubscribe by token', 'withdraw one purpose', 'one-click unsubscribe', 'leave from the manage page'] as $flow) {
+            yield "{$flow} / the catalog" => [$flow, ProjectCatalog::class];
+        }
 
         // Saving purposes reads the wording from the catalog, but no link.
-        yield 'update purposes on the manage page / url_generator' => ['update purposes on the manage page', ConfigKey::UrlGenerator->value, stdClass::class];
+        yield 'update purposes on the manage page / the URL generator' => ['update purposes on the manage page', ConfirmationUrlGenerator::class];
     });
 });
 
@@ -263,10 +268,10 @@ describe('a catalog that does not resolve', function () {
     it('stops waitlist:prune before it deletes anything, as the periods a project promised are unknown', function () {
         isolationSubscribe(confirm: false);
         $this->travel(31)->days();
-        config()->set(ConfigKey::Catalog->value, stdClass::class);
+        bindUnreadable(ProjectCatalog::class);
         $this->withoutExceptionHandling();
 
-        expect(fn () => Artisan::call('waitlist:prune'))->toThrow(InvalidConfigurationException::class, ConfigKey::Catalog->value)
+        expect(fn () => Artisan::call('waitlist:prune'))->toThrow(InvalidConfigurationException::class, ProjectCatalog::class)
             ->and(WaitlistEntry::query()->count())->toBe(1);
     });
 });
@@ -434,15 +439,15 @@ describe('link limits that do not read', function () {
 
         config()->set(ConfigKey::LinkPerMinute->value, 'many');
 
-        $statuses = array_map(fn (): int => $this->getJson("/waitlist/unsubscribe/{$tokens['unsubscribe']}")->status(), range(1, WaitlistServiceProvider::LINK_PER_MINUTE + 1));
+        $statuses = array_map(fn (): int => $this->getJson("/waitlist/unsubscribe/{$tokens['unsubscribe']}")->status(), range(1, Limiters::LINK_PER_MINUTE + 1));
 
-        expect(array_count_values($statuses))->toBe([200 => WaitlistServiceProvider::LINK_PER_MINUTE, 429 => 1]);
+        expect(array_count_values($statuses))->toBe([200 => Limiters::LINK_PER_MINUTE, 429 => 1]);
     });
 
     it('fall back to the values config/waitlist.php ships', function () {
         $limits = (require __DIR__.'/../../config/waitlist.php')['routes']['rate_limits'];
 
         expect([$limits['link_per_minute'], $limits['links_per_ip_per_minute']])
-            ->toBe([WaitlistServiceProvider::LINK_PER_MINUTE, WaitlistServiceProvider::LINKS_PER_IP_PER_MINUTE]);
+            ->toBe([Limiters::LINK_PER_MINUTE, Limiters::LINKS_PER_IP_PER_MINUTE]);
     });
 });

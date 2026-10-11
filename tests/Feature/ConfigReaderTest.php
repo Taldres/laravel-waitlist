@@ -7,12 +7,10 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Env;
 use Taldres\Waitlist\Config\ConfigReader;
 use Taldres\Waitlist\Config\PackageConfig;
-use Taldres\Waitlist\Contracts\EmailNormalizer;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Models\WaitlistConsent;
 use Taldres\Waitlist\Models\WaitlistEntry;
-use Taldres\Waitlist\Support\DefaultEmailNormalizer;
 
 /**
  * A reader over a config that holds only $value, at the place of $key.
@@ -335,40 +333,17 @@ describe('an export column list', function () {
     });
 });
 
-interface ConfigReaderAppNormalizer extends EmailNormalizer {}
-
-abstract class ConfigReaderAbstractNormalizer implements EmailNormalizer {}
-
-describe('an implementation', function () {
-    it('is refused when it is the contract itself, which the container would resolve to itself again', function () {
-        expect(fn () => configReaderOf(ConfigKey::EmailNormalizer, EmailNormalizer::class)->implementation(ConfigKey::EmailNormalizer, EmailNormalizer::class))
-            ->toThrow(InvalidConfigurationException::class, 'The waitlist.email_normalizer config must name a class that implements '.EmailNormalizer::class.', not the contract itself.');
-    });
-
-    it('may be another interface or an abstract class, which an app can bind in the container', function (string $class) {
-        expect(configReaderOf(ConfigKey::EmailNormalizer, $class)->implementation(ConfigKey::EmailNormalizer, EmailNormalizer::class))->toBe($class);
-    })->with([ConfigReaderAppNormalizer::class, ConfigReaderAbstractNormalizer::class]);
-
-    it('is still refused when it does not implement the contract', function () {
-        expect(fn () => configReaderOf(ConfigKey::EmailNormalizer, stdClass::class)->implementation(ConfigKey::EmailNormalizer, EmailNormalizer::class))
-            ->toThrow(InvalidConfigurationException::class, 'must point to a '.EmailNormalizer::class.' implementation.');
-    });
-});
-
 describe('a class name', function () {
-    it('is refused unless it is a text naming a subclass or an implementation, an instance included', function (mixed $value) {
+    it('is refused unless it is a text naming a subclass, an instance included', function (mixed $value) {
         expect(fn () => configReaderOf(ConfigKey::ConsentModel, $value)->subclass(ConfigKey::ConsentModel, WaitlistConsent::class))
-            ->toThrow(InvalidConfigurationException::class, 'The waitlist.consent_model config must point to a '.WaitlistConsent::class.' subclass.')
-            ->and(fn () => configReaderOf(ConfigKey::EmailNormalizer, $value)->implementation(ConfigKey::EmailNormalizer, EmailNormalizer::class))
-            ->toThrow(InvalidConfigurationException::class, 'The waitlist.email_normalizer config must point to a '.EmailNormalizer::class.' implementation.');
+            ->toThrow(InvalidConfigurationException::class, 'The waitlist.consent_model config must point to a '.WaitlistConsent::class.' subclass.');
     })->with([
         'a class that does not exist' => ['Nope\\Nothing'],
         'an empty text' => [''],
         'null' => [null],
         'an int' => [5],
-        'a list holding the class' => [[WaitlistConsent::class, DefaultEmailNormalizer::class]],
+        'a list holding the class' => [[WaitlistConsent::class]],
         'an instance of the model' => [new WaitlistConsent],
-        'an instance of the implementation' => [new DefaultEmailNormalizer],
     ]);
 
     it('is refused for a sibling of the base', function () {
@@ -451,7 +426,6 @@ describe('a message', function () {
         'guards' => [fn () => configReaderOf(ConfigKey::AuthenticationGuards, [configReaderSecret(), 1])->guards(ConfigKey::AuthenticationGuards)],
         'columns' => [fn () => configReaderOf(ConfigKey::ExportColumns, [configReaderSecret(), 1])->columns(ConfigKey::ExportColumns, ['id'])],
         'a model' => [fn () => configReaderOf(ConfigKey::Model, configReaderSecret())->subclass(ConfigKey::Model, WaitlistEntry::class)],
-        'a binding' => [fn () => configReaderOf(ConfigKey::EmailNormalizer, configReaderSecret())->implementation(ConfigKey::EmailNormalizer, EmailNormalizer::class)],
         'a group' => [fn () => ConfigReader::of(['privacy' => configReaderSecret()])->boolean(ConfigKey::StoreIp)],
         'the whole config' => [fn () => ConfigReader::of(configReaderSecret())],
     ]);

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Taldres\Waitlist\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
-use Taldres\Waitlist\Contracts\SpamProtector;
 use Taldres\Waitlist\Enums\ApiError;
 use Taldres\Waitlist\Exceptions\InvalidEmailException;
 use Taldres\Waitlist\Exceptions\MissingConsentException;
@@ -23,11 +22,11 @@ class SubscribeController
      * addresses cannot be enumerated. Lists and wording are public (GET
      * /purposes), so a bad list or purpose is named in the 422.
      */
-    public function __invoke(SubscribeRequest $request, WaitlistManager $waitlist, SpamProtector $protector): JsonResponse
+    public function __invoke(SubscribeRequest $request, WaitlistManager $waitlist): JsonResponse
     {
         $project = $request->project();
 
-        if (! $protector->passes($request)) {
+        if (! $waitlist->spamProtector()->passes($request)) {
             return new JsonResponse(['message' => 'Spam check failed.', 'error' => ApiError::SpamCheckFailed->value], 422);
         }
 

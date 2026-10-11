@@ -301,12 +301,12 @@ stay in [`config/cors.php`](#cors), which lists the websites of all projects.
 The package registers its routes on boot, and only while `routes.enabled` is on;
 otherwise there are none, and every URL under the prefix is Laravel's plain
 `404`. A setting that does not read leaves routes out rather than registering
-routes that lack what it meant to add, such as a limiter:
+routes that lack what it meant to add, such as a check for your forms:
 
 - `enabled`, `prefix`, `name` or `middleware`, which place the routes, leave out
   all of them;
-- the `limiters` or `group_middleware` of one group leave out that group only,
-  so a broken signup limiter does not take the unsubscribe links with it.
+- the `group_middleware` of one group leaves out that group only, so broken
+  signup middleware does not take the unsubscribe links with it.
 
 The setting is reported to your logs once per boot, and `php artisan
 waitlist:check` names every setting that does not read.
@@ -347,7 +347,7 @@ Afterwards, call one endpoint of each group, for example the wording
 
 The routes fall into two groups, each throttled by its own named limiter:
 
-| Group | Routes | Default limiter | Keyed by |
+| Group | Routes | Limiter | Keyed by |
 | --- | --- | --- | --- |
 | `signup` | `POST /waitlist`, `GET /purposes`, `POST /manage-link` | `waitlist` | client IP and endpoint; for a [server calling for a project](#servers-calling-for-a-project), the server and endpoint |
 | `links` | everything with a `{token}`, including `POST /unsubscribe/{token}/manage-link` | `waitlist-links` | the token, plus a looser ceiling per IP, or per server |
@@ -357,7 +357,8 @@ providers' servers, many recipients behind a few addresses; a tight IP limit
 would turn them away. The ceiling per IP still bounds what one client can send
 with made-up tokens.
 
-There are three levels of control.
+The limits are on by default, and only code turns them off: no setting and no
+empty variable in `.env` does. There are three levels of control.
 
 **Tune the numbers:**
 
@@ -373,23 +374,10 @@ There are three levels of control.
 ],
 ```
 
-**Use a limiter of your own** for one group, without touching the other. Define
-it under a name of your own and point the group at it:
-
-```php
-// config/waitlist.php
-'routes' => [
-    'limiters' => [
-        'signup' => 'waitlist-signup',
-        'links' => 'waitlist-links',
-    ],
-],
-```
-
-Define it in a service provider's `boot()`, so it exists by the first request.
-A name that no `RateLimiter::for()` defines makes Laravel refuse the requests of
-the group with a `500`, token links included; `php artisan waitlist:check` names
-the config key.
+**Replace the limiter of one group**, without touching the other: define a
+limiter under its name, `waitlist` or `waitlist-links`, with `RateLimiter::for()`
+in a service provider's `boot()`. Yours takes the place of the package's,
+whichever provider boots first, and the other group keeps the package's.
 
 Your limiter then decides everything for that group, the way any Laravel
 [named rate limiter](https://laravel.com/docs/routing#rate-limiting) does; the
@@ -411,7 +399,7 @@ use Taldres\Waitlist\Contracts\ProjectResolver;
 
 public function boot(): void
 {
-    RateLimiter::for('waitlist-signup', function (Request $request) {
+    RateLimiter::for('waitlist', function (Request $request) {
         if ($request->ip() === config('services.bff.ip')) {
             return Limit::none();
         }
@@ -440,14 +428,67 @@ with `routes.group_middleware` or to every route with `routes.middleware`, or ke
 the package routes off and call the actions
 from routes of your own, each with any `throttle:` you like (pattern B above).
 
-Think twice before replacing `links`: a limiter keyed by IP alone brings back
-failed one-click unsubscribes.
+Think twice before replacing `waitlist-links`: a limiter keyed by IP alone brings
+back failed one-click unsubscribes.
 
-**Turn a group off** with `null`, for example when Cloudflare or a WAF limits
-already. The `waitlist` and `waitlist-links` limiters stay registered either way,
-so your own routes can use them too (`->middleware('throttle:waitlist')`). A
-limiter of one of these names that your app defines keeps its place, whichever
-provider boots first.
+**Different limits per project:** the numbers under `rate_limits` are the same for
+every project, and a project's definition has no setting for them: it describes
+lists, wording and retention, not traffic. A limit that differs per project is a
+limiter of your own for `waitlist` that asks which project the request is for.
+The `ProjectResolver` answers that for a public form, and the caller for a server
+that calls with a token:
+
+```php
+// app/Providers/AppServiceProvider.php
+use Taldres\Waitlist\Contracts\HasWaitlistProject;
+use Taldres\Waitlist\Facades\Waitlist;
+
+public function boot(): void
+{
+    $perMinute = ['acme' => 60, 'anvil' => 5];
+
+    RateLimiter::for('waitlist', function (Request $request) use ($perMinute) {
+        $caller = Waitlist::caller($request);
+
+        $project = $caller instanceof HasWaitlistProject
+            ? $caller->waitlistProject()
+            : app(ProjectResolver::class)->resolve($request);
+
+        $client = $caller?->getAuthIdentifier() ?? $request->ip();
+        $endpoint = (string) $request->route()?->uri();
+
+        return Limit::perMinute($perMinute[$project] ?? 10)
+            ->by("{$project}|{$client}|{$endpoint}");
+    });
+}
+```
+
+Keep in mind:
+
+- Your limiter replaces the package's for the whole group. The cap per server
+  (`caller_signup_per_minute`) and the limit per visitor (`client_ip_header`) are
+  part of the package's limiter, so build in what you still need. The example
+  counts a server as one source and a guest by IP. The endpoint is in the key, as
+  in the package's limiter, so loading the wording does not use up the budget of
+  the signup.
+- `ProjectResolver::resolve()` may refuse a request, as `AuthenticatedProjectResolver`
+  does for a guest. The `401` or `403` then comes from the limiter, before the gate.
+- The token routes belong to `waitlist-links` and name no project; the entry the
+  token belongs to does. A limit per project there would look the entry up on every
+  request, so leave that limiter as it is, which counts per token.
+- `waitlist:privacy` then writes "by your [waitlist] limiter" and no numbers.
+  State yours in your own records.
+
+**Turn a group off**, for example when Cloudflare or a WAF limits already, with a
+definition of its limiter that returns `Limit::none()`:
+
+```php
+// app/Providers/AppServiceProvider.php, in boot()
+RateLimiter::for('waitlist', fn () => Limit::none());
+```
+
+The package registers both limiters even with its routes off, so your own routes
+can use them too (`->middleware('throttle:waitlist')`).
 
 **Behind a proxy or load balancer:** `$request->ip()` only returns the real
 client IP when [trusted proxies](https://laravel.com/docs/requests#configuring-trusted-proxies)
@@ -502,8 +543,8 @@ either. There are two ways to plug in your own check.
 
 ### The quick path: a closure
 
-Register a closure in your `AppServiceProvider::boot()` — no class, no config
-change. This example verifies Cloudflare Turnstile using Laravel's own `Http`
+Register a closure in your `AppServiceProvider::boot()` — no class, no
+binding. This example verifies Cloudflare Turnstile using Laravel's own `Http`
 facade, so it needs no extra dependency:
 
 ```php
@@ -532,8 +573,11 @@ public function boot(): void
 }
 ```
 
-A registered closure always wins over the `waitlist.spam_protector` config
-key; pass `null` to remove it and fall back to the configured class again.
+On these two endpoints a registered closure always wins over the bound
+`SpamProtector`, a class of your own included, which is then not even built, so
+a test can bypass a protector that needs a secret it lacks. Pass `null` to remove
+the closure and fall back to the bound class again. The binding itself stays:
+`app(SpamProtector::class)` resolves the bound class either way.
 
 ### The class path: implement the contract
 
@@ -570,8 +614,8 @@ class TurnstileProtector implements SpamProtector
 ```
 
 ```php
-// config/waitlist.php
-'spam_protector' => App\Waitlist\TurnstileProtector::class,
+// app/Providers/WaitlistServiceProvider.php, in register()
+$this->app->bind(\Taldres\Waitlist\Contracts\SpamProtector::class, \App\Waitlist\TurnstileProtector::class);
 ```
 
 Either way, a failed check returns `422 {"message": "Spam check failed.", "error": "spam_check_failed"}`,
@@ -588,4 +632,6 @@ one that verifies it. Doing both refuses every signup with `Spam check failed.`.
 
 **Scope:** the protector guards only the package's HTTP endpoint. Actions and
 your own controllers are never affected. If you build your own controller
-(architecture B), inject and consult the protector yourself.
+(architecture B), consult the protector yourself with `Waitlist::spamProtector()`,
+which is the closure from `verifySpamUsing()` while one is set and the bound class
+otherwise; an injected `SpamProtector` is always the bound class.

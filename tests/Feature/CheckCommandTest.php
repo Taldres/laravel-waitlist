@@ -7,9 +7,11 @@ use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Exceptions;
-use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
+use Taldres\Waitlist\Config\PackageConfig;
 use Taldres\Waitlist\Config\WaitlistConfig;
+use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
+use Taldres\Waitlist\Contracts\EmailNormalizer;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Contracts\SpamProtector;
@@ -194,6 +196,81 @@ it('warns of settings in the config that the package does not read', function ()
     expect($strict)->toBe(1);
 });
 
+it('names the limiters of a config published before, which the routes no longer read', function () {
+    $published = require __DIR__.'/../../config/waitlist.php';
+    $published['routes']['limiters'] = ['signup' => 'waitlist', 'links' => 'waitlist-links'];
+    config()->set('waitlist', PackageConfig::merge($published));
+
+    [$exit, $output] = checkOutput();
+
+    expect(SetupAudit::unknownSettings())->toBe(['waitlist.routes.limiters'])
+        ->and($exit)->toBe(0)
+        ->and($output)->toContain('waitlist.routes.limiters is not a setting the package reads');
+});
+
+/**
+ * @return array<string, class-string>
+ */
+function checkContracts(): array
+{
+    return [
+        'the catalog' => ProjectCatalog::class,
+        'the URL generator' => ConfirmationUrlGenerator::class,
+        'the project resolver' => ProjectResolver::class,
+        'the email normalizer' => EmailNormalizer::class,
+        'the spam protector' => SpamProtector::class,
+    ];
+}
+
+describe('the bindings', function () {
+    it('pass the check as the package binds them', function () {
+        [$exit, $output] = checkOutput();
+
+        expect($exit)->toBe(0)
+            ->and(SetupAudit::bindingProblems())->toBe([])
+            ->and($output)->not->toContain('cannot be resolved');
+    });
+
+    it('fail the check when one cannot be resolved, naming the contract and why', function (string $contract, Closure $bind, string $reason) {
+        $bind($contract);
+
+        [$exit, $output] = checkOutput();
+
+        expect($exit)->toBe(1)
+            ->and($output)->toContain("{$contract} cannot be resolved: ")
+            ->and($output)->toContain($reason);
+    })->with(function () {
+        foreach (checkContracts() as $label => $contract) {
+            yield "{$label} / a binding that throws" => [$contract, fn (string $contract) => app()->bind($contract, fn () => throw new RuntimeException('The service is down.')), 'The service is down.'];
+            yield "{$label} / a class that does not exist" => [$contract, fn (string $contract) => app()->bind($contract, 'App\Waitlist\Typo'), 'Target class [App\Waitlist\Typo] does not exist.'];
+        }
+    });
+
+    it('fail the check when one resolves to something that does not implement its contract', function (string $contract) {
+        app()->bind($contract, fn () => new stdClass);
+
+        [$exit, $output] = checkOutput();
+
+        // The manager hands the endpoints only a protector, so its return type refuses the object first.
+        $expected = $contract === SpamProtector::class ? 'stdClass returned' : "{$contract} resolves to stdClass, which does not implement it.";
+
+        expect($exit)->toBe(1)
+            ->and($output)->toContain($contract)
+            ->and($output)->toContain($expected);
+    })->with(checkContracts());
+
+    it('check the spam protector the endpoints use, and never ask it', function () {
+        app()->bind(SpamProtector::class, fn () => throw new RuntimeException('The protector is down.'));
+        Waitlist::verifySpamUsing(fn (Request $request): never => throw new LogicException('The check must not run.'));
+
+        expect(SetupAudit::bindingProblems())->toBe([]);
+
+        Waitlist::verifySpamUsing(null);
+
+        expect(SetupAudit::bindingProblems())->toBe([SpamProtector::class.' cannot be resolved: The protector is down.']);
+    });
+});
+
 it('lists a group of unknown settings once, and leaves the settings of this version alone', function () {
     config()->set('waitlist.lists', ['beta' => ['purpose' => 'waitlist'], 'launch' => ['purpose' => 'waitlist']]);
 
@@ -335,12 +412,10 @@ it('tells a setting that does not read from an implementation that is unavailabl
 it('keeps every row apart, those that read no contract included', function () {
     app()->forgetInstance(Schedule::class);
     app()->bind(Schedule::class, fn () => throw new RuntimeException('The scheduler is down.'));
-    RateLimiter::shouldReceive('limiter')->andThrow(new RuntimeException('The limiters are down.'));
 
     $about = aboutSection();
 
-    expect($about['settings'])->toBe('unavailable')
-        ->and($about['prune_schedule'])->toBe('unavailable')
+    expect($about['prune_schedule'])->toBe('unavailable')
         ->and($about['projects'])->toBe('default')
         ->and($about['double_opt-in'])->toBe('on');
 });

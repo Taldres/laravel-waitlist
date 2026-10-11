@@ -92,10 +92,7 @@ were on still holds them: run `php artisan route:clear`, see
 A route setting that does not read is reported to your logs when the routes are
 registered, naming the config key, and leaves out the routes it belongs to: those
 requests are a plain `404`, not a `500`. That includes an empty
-`WAITLIST_ROUTES_ENABLED=`, which is no decision to turn the routes off. A
-limiter name that no `RateLimiter::for()` defines is different: the route exists
-and Laravel answers its requests with a `500`, "Rate limiter [name] is not
-defined"; `php artisan waitlist:check` names the config key. See
+`WAITLIST_ROUTES_ENABLED=`, which is no decision to turn the routes off. See
 [When the routes are registered](../securing-the-endpoints.md#when-the-routes-are-registered).
 
 ## GET never changes anything
@@ -175,8 +172,8 @@ the `422` names `list`. See [Fields](../projects.md#fields).
 ## Projects and who may call
 
 The signup, the wording and a manage link requested by address act for the
-project a `ProjectResolver` picks (`waitlist.project_resolver`). The default
-always picks `default`; with several projects, bind your own, see
+project the bound `ProjectResolver` picks. The default always picks `default`;
+with several projects, bind your own, see
 [Projects, lists and fields](../projects.md#over-http-tell-the-package-which-project-a-signup-is-for).
 Token links need none, since every token belongs to an entry.
 

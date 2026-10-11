@@ -7,6 +7,7 @@ use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Validation\Rule;
+use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Enums\ConfigKey;
@@ -156,7 +157,7 @@ describe('project fields', function () {
 
 describe('fields per project and list', function () {
     beforeEach(function () {
-        config()->set(ConfigKey::ProjectResolver->value, HeaderProjectResolver::class);
+        app()->bind(ProjectResolver::class, HeaderProjectResolver::class);
 
         defineFieldsTestProductProject();
 
@@ -269,13 +270,13 @@ describe('rules', function () {
 
 describe('the project comes first', function () {
     it('answers a refused request before validating it', function () {
-        config()->set(ConfigKey::ProjectResolver->value, HeaderProjectResolver::class);
+        app()->bind(ProjectResolver::class, HeaderProjectResolver::class);
 
         $this->postJson('/waitlist', ['metadata' => 'not even an object'])->assertStatus(401);
     });
 
     it('asks the resolver once per signup', function () {
-        config()->set(ConfigKey::ProjectResolver->value, FieldsTestCountingResolver::class);
+        app()->bind(ProjectResolver::class, FieldsTestCountingResolver::class);
         FieldsTestCountingResolver::$calls = 0;
 
         $this->postJson('/waitlist', ['email' => 'user@example.com', 'list' => 'beta', 'purposes' => waitlistConsent()])->assertStatus(202);
@@ -284,8 +285,8 @@ describe('the project comes first', function () {
     });
 
     it('reads the fields of a catalog of your own', function () {
-        config()->set(ConfigKey::Catalog->value, ArrayProjectCatalog::class);
-        config()->set(ConfigKey::ProjectResolver->value, HeaderProjectResolver::class);
+        app()->bind(ProjectCatalog::class, ArrayProjectCatalog::class);
+        app()->bind(ProjectResolver::class, HeaderProjectResolver::class);
 
         $signUp = fn (array $metadata) => $this->withHeader('X-Waitlist-Project', 'shop')
             ->postJson('/waitlist', ['email' => 'user@example.com', 'list' => 'restock', 'purposes' => ['restock' => 'v1'], 'metadata' => $metadata]);
