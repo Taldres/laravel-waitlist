@@ -8,3 +8,8 @@ parameters:
     tmpDir: build/phpstan
     configDirectories:
         - %currentWorkingDirectory%/config
+    # Every parallel worker boots Larastan's application, which deletes the
+    # skeleton's bootstrap/cache/packages.php while another worker reads it.
+    # The package is small enough that one process costs half a second.
+    parallel:
+        maximumNumberOfProcesses: 1
