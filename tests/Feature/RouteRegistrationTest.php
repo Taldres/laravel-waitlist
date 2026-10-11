@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Facade;
 use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\EntryStatus;
+use Taldres\Waitlist\Enums\WaitlistLimiter;
 use Taldres\Waitlist\Events\EntrySubscribed;
 use Taldres\Waitlist\Facades\Waitlist;
 use Taldres\Waitlist\Http\RouteRegistration;
@@ -94,10 +95,10 @@ describe('registering the routes', function () {
         registerRoutes();
 
         foreach (RouteRegistration::GROUPS as $group => $names) {
-            $limiter = $group === 'signup' ? WaitlistServiceProvider::SIGNUP_LIMITER : WaitlistServiceProvider::LINKS_LIMITER;
+            $limiter = $group === 'signup' ? WaitlistLimiter::Signup : WaitlistLimiter::Links;
 
             foreach ($names as $name) {
-                expect(app('router')->getRoutes()->getByName(WaitlistConfig::routeName().$name)?->gatherMiddleware())->toContain("throttle:{$limiter}");
+                expect(app('router')->getRoutes()->getByName(WaitlistConfig::routeName().$name)?->gatherMiddleware())->toContain($limiter->middleware());
             }
         }
     });

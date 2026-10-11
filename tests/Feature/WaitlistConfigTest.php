@@ -14,6 +14,7 @@ use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\EntryStatus;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Facades\Waitlist;
+use Taldres\Waitlist\Http\Limiters;
 use Taldres\Waitlist\Models\WaitlistActivity;
 use Taldres\Waitlist\Models\WaitlistConsent;
 use Taldres\Waitlist\Models\WaitlistEntry;
@@ -46,8 +47,8 @@ describe('the defaults', function () {
             ->and(WaitlistConfig::routesEnabled())->toBeFalse()
             ->and(WaitlistConfig::routeName())->toBe('waitlist.')
             ->and(WaitlistConfig::signupPerMinute())->toBe(10)
-            ->and(WaitlistConfig::linkPerMinute())->toBe(10)
-            ->and(WaitlistConfig::linksPerIpPerMinute())->toBe(600)
+            ->and(WaitlistConfig::linkPerMinute())->toBe(Limiters::LINK_PER_MINUTE)
+            ->and(WaitlistConfig::linksPerIpPerMinute())->toBe(Limiters::LINKS_PER_IP_PER_MINUTE)
             ->and(WaitlistConfig::callerSignupPerMinute())->toBe(120)
             ->and(WaitlistConfig::guards())->toBe([null])
             ->and(WaitlistConfig::authenticationRequired())->toBeFalse()

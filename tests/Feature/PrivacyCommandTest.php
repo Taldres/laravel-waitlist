@@ -16,6 +16,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Enums\ConfigKey;
+use Taldres\Waitlist\Enums\WaitlistLimiter;
 use Taldres\Waitlist\Events\EntryForgotten;
 use Taldres\Waitlist\Events\ManageLinkRequested;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
@@ -90,12 +91,12 @@ it('leaves out the limit of servers where the routes are off', function () {
 
 dataset('limiters the app may define', [
     'signups' => [
-        WaitlistServiceProvider::SIGNUP_LIMITER,
+        WaitlistLimiter::Signup->value,
         '- Rate limits: signups by your [waitlist] limiter, token links 10 per minute and token; GET never changes state',
         false,
     ],
     'links' => [
-        WaitlistServiceProvider::LINKS_LIMITER,
+        WaitlistLimiter::Links->value,
         '- Rate limits: signups 10 per minute and IP, token links by your [waitlist-links] limiter; GET never changes state',
         true,
     ],

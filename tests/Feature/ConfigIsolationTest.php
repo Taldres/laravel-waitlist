@@ -16,10 +16,10 @@ use Taldres\Waitlist\Events\EntrySubscribed;
 use Taldres\Waitlist\Events\ManageLinkRequested;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Facades\Waitlist;
+use Taldres\Waitlist\Http\Limiters;
 use Taldres\Waitlist\Models\WaitlistActivity;
 use Taldres\Waitlist\Models\WaitlistConsent;
 use Taldres\Waitlist\Models\WaitlistEntry;
-use Taldres\Waitlist\WaitlistServiceProvider;
 
 /*
  * Leaving, withdrawing, confirming an issued link, erasing and pruning must
@@ -439,15 +439,15 @@ describe('link limits that do not read', function () {
 
         config()->set(ConfigKey::LinkPerMinute->value, 'many');
 
-        $statuses = array_map(fn (): int => $this->getJson("/waitlist/unsubscribe/{$tokens['unsubscribe']}")->status(), range(1, WaitlistServiceProvider::LINK_PER_MINUTE + 1));
+        $statuses = array_map(fn (): int => $this->getJson("/waitlist/unsubscribe/{$tokens['unsubscribe']}")->status(), range(1, Limiters::LINK_PER_MINUTE + 1));
 
-        expect(array_count_values($statuses))->toBe([200 => WaitlistServiceProvider::LINK_PER_MINUTE, 429 => 1]);
+        expect(array_count_values($statuses))->toBe([200 => Limiters::LINK_PER_MINUTE, 429 => 1]);
     });
 
     it('fall back to the values config/waitlist.php ships', function () {
         $limits = (require __DIR__.'/../../config/waitlist.php')['routes']['rate_limits'];
 
         expect([$limits['link_per_minute'], $limits['links_per_ip_per_minute']])
-            ->toBe([WaitlistServiceProvider::LINK_PER_MINUTE, WaitlistServiceProvider::LINKS_PER_IP_PER_MINUTE]);
+            ->toBe([Limiters::LINK_PER_MINUTE, Limiters::LINKS_PER_IP_PER_MINUTE]);
     });
 });

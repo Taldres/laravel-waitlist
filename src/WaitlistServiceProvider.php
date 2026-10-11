@@ -6,19 +6,11 @@ namespace Taldres\Waitlist;
 
 use Closure;
 use Composer\InstalledVersions;
-use Illuminate\Cache\RateLimiter as CacheRateLimiter;
-use Illuminate\Cache\RateLimiting\Limit;
-use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Foundation\CachesConfiguration;
 use Illuminate\Foundation\Console\AboutCommand;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
-use ReflectionException;
-use ReflectionProperty;
-use Taldres\Waitlist\Auth\WaitlistCaller;
 use Taldres\Waitlist\Auth\WaitlistGate;
 use Taldres\Waitlist\Config\ConfigFallback;
 use Taldres\Waitlist\Config\PackageConfig;
@@ -32,11 +24,11 @@ use Taldres\Waitlist\Console\Commands\PruneCommand;
 use Taldres\Waitlist\Console\Commands\RekeyCommand;
 use Taldres\Waitlist\Console\Commands\ShowCommand;
 use Taldres\Waitlist\Console\Commands\WordingCommand;
-use Taldres\Waitlist\Contracts\HasWaitlistProject;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Definitions\ProjectDefinitions;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
+use Taldres\Waitlist\Http\Limiters;
 use Taldres\Waitlist\Http\RouteRegistration;
 use Taldres\Waitlist\Support\ReplacedBindings;
 use Taldres\Waitlist\Support\SetupAudit;
@@ -44,22 +36,6 @@ use Throwable;
 
 class WaitlistServiceProvider extends ServiceProvider
 {
-    public const string SIGNUP_LIMITER = 'waitlist';
-
-    public const string LINKS_LIMITER = 'waitlist-links';
-
-    /**
-     * The link limits config/waitlist.php ships, and what stands in for one
-     * that does not read: a typo must not take every link down, leaving
-     * included, nor leave the links without a limit.
-     */
-    public const int LINK_PER_MINUTE = 10;
-
-    public const int LINKS_PER_IP_PER_MINUTE = 600;
-
-    /** @var array<string, Closure> */
-    private static array $limiters = [];
-
     public function register(): void
     {
         if (! ($this->app instanceof CachesConfiguration && $this->app->configurationIsCached())) {
@@ -92,18 +68,7 @@ class WaitlistServiceProvider extends ServiceProvider
             Gate::define(WaitlistGate::ABILITY, WaitlistGate::default(...));
         }
 
-        // Registered even with the package routes off, for your own routes. A
-        // limiter of the same name that the app defines keeps its place, as the
-        // gate does.
-        self::defineLimiter(self::SIGNUP_LIMITER, self::signupLimits(...));
-
-        // Per token, not per IP: one-click requests share mail providers' IPs.
-        self::defineLimiter(self::LINKS_LIMITER, static fn (Request $request): array => [
-            Limit::perMinute(ConfigFallback::read(WaitlistConfig::linkPerMinute(...), fallback: self::LINK_PER_MINUTE))
-                ->by($request->route()?->uri().'|'.hash('sha256', (string) $request->route('token'))),
-            Limit::perMinute(ConfigFallback::read(WaitlistConfig::linksPerIpPerMinute(...), fallback: self::LINKS_PER_IP_PER_MINUTE))
-                ->by(self::linkSource($request).'|links'),
-        ]);
+        Limiters::register();
 
         if (RouteRegistration::wanted()) {
             $this->loadRoutesFrom(__DIR__.'/../routes/waitlist.php');
@@ -143,33 +108,6 @@ class WaitlistServiceProvider extends ServiceProvider
     }
 
     /**
-     * Whether the limiter now stored under the name is still the package's own:
-     * an app that defines the name after the package booted replaces it.
-     *
-     * @internal
-     */
-    public static function ownsLimiter(string $name): bool
-    {
-        // RateLimiter::limiter() wraps what it returns anew on every call, so
-        // only the stored closure can be compared with the one registered.
-        try {
-            $stored = (new ReflectionProperty(CacheRateLimiter::class, 'limiters'))->getValue(app(CacheRateLimiter::class));
-        } catch (ReflectionException) {
-            return false;
-        }
-
-        return isset(self::$limiters[$name]) && is_array($stored) && ($stored[$name] ?? null) === self::$limiters[$name];
-    }
-
-    private static function defineLimiter(string $name, Closure $limits): void
-    {
-        if (RateLimiter::limiter($name) === null) {
-            self::$limiters[$name] = $limits;
-            RateLimiter::for($name, $limits);
-        }
-    }
-
-    /**
      * The section of `php artisan about`. A row that cannot be read shows as
      * such instead of failing the command; waitlist:check says which setting.
      *
@@ -205,53 +143,5 @@ class WaitlistServiceProvider extends ServiceProvider
             static fn (Throwable $exception): string => $exception instanceof InvalidConfigurationException ? 'does not read' : 'unavailable',
             report: false,
         );
-    }
-
-    /**
-     * A server's visitors share its address, so the server is capped as a
-     * whole and limits them itself, unless it forwards their address.
-     *
-     * @return list<Limit>
-     */
-    private static function signupLimits(Request $request): array
-    {
-        $endpoint = (string) $request->route()?->uri();
-        // Guards that do not read limit the request as a guest's. Only the
-        // manage link by token gets past them: the signup and the request by
-        // address ask the gate next, which refuses them.
-        $caller = ConfigFallback::read(fn (): ?Authenticatable => WaitlistCaller::of($request), fallback: null);
-
-        if (! $caller instanceof HasWaitlistProject) {
-            return [Limit::perMinute(WaitlistConfig::signupPerMinute())->by($request->ip().'|'.$endpoint)];
-        }
-
-        $server = WaitlistCaller::key($caller);
-        $visitor = WaitlistCaller::forwardedIp($request);
-        $cap = Limit::perMinute(WaitlistConfig::callerSignupPerMinute())->by("{$server}|{$endpoint}");
-
-        return $visitor === null ? [$cap] : [
-            Limit::perMinute(WaitlistConfig::signupPerMinute())->by("{$server}|{$visitor}|{$endpoint}"),
-            $cap,
-        ];
-    }
-
-    /**
-     * Guards or a client IP header that do not read key the request by its
-     * address, as a guest's: a link must keep working, and a server then
-     * shares one key with all of its visitors, which only limits it more.
-     */
-    private static function linkSource(Request $request): string
-    {
-        return ConfigFallback::read(function () use ($request): string {
-            $caller = WaitlistCaller::of($request);
-
-            if (! $caller instanceof HasWaitlistProject) {
-                return (string) $request->ip();
-            }
-
-            $visitor = WaitlistCaller::forwardedIp($request);
-
-            return WaitlistCaller::key($caller).($visitor === null ? '' : "|{$visitor}");
-        }, fallback: (string) $request->ip());
     }
 }

@@ -4,7 +4,6 @@ use Taldres\Waitlist\Models\WaitlistActivity;
 use Taldres\Waitlist\Models\WaitlistConsent;
 use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Models\WaitlistSubscription;
-use Taldres\Waitlist\WaitlistServiceProvider;
 
 /*
 | Every setting is described in docs/reference/configuration.md, which is not
@@ -243,8 +242,8 @@ return [
             'signup_per_minute' => env('WAITLIST_RATE_LIMIT_SIGNUP', 10),           // per visitor and endpoint
             // The package's own link limits, 10 and 600, are also what stands in
             // for a value here that does not read.
-            'link_per_minute' => env('WAITLIST_RATE_LIMIT_LINK', WaitlistServiceProvider::LINK_PER_MINUTE), // per token
-            'links_per_ip_per_minute' => env('WAITLIST_RATE_LIMIT_LINKS_PER_IP', WaitlistServiceProvider::LINKS_PER_IP_PER_MINUTE), // bounds made-up tokens
+            'link_per_minute' => env('WAITLIST_RATE_LIMIT_LINK', 10), // per token
+            'links_per_ip_per_minute' => env('WAITLIST_RATE_LIMIT_LINKS_PER_IP', 600), // bounds made-up tokens
             'caller_signup_per_minute' => env('WAITLIST_RATE_LIMIT_CALLER_SIGNUP', 120), // per server with a project and endpoint
         ],
     ],
