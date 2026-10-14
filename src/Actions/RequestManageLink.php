@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Taldres\Waitlist\Actions;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Events\ManageLinkRequested;
@@ -33,7 +34,9 @@ class RequestManageLink
         // Before the claim below, like the TTL: a refused request must not start the cooldown.
         $this->issue->assertOffered($entry->project);
 
-        if ($entry->readableEmail() === null) {
+        $email = $entry->readableEmail();
+
+        if ($email === null) {
             return false;
         }
 
@@ -43,48 +46,64 @@ class RequestManageLink
         // Read before the claim below: a link that cannot be issued must not start the cooldown.
         IssueManageLink::ttl();
 
-        if ($cooldown !== null && $this->sentToAddressSince($entry, $now->copy()->subMinutes($cooldown))) {
-            return false;
-        }
+        // Found outside the transaction, locked in key order inside it, as a
+        // withdrawal does: requests for two lists of the address would
+        // otherwise both find the other list unsent and mail twice.
+        $keys = static::modelClass()::query()->inProject($entry->project)->forEmail($email)->pluck($entry->getKeyName())
+            ->push($entry->getKey())->unique()->values()->all();
 
-        // A conditional update, so two requests racing for the same entry
-        // send one mail.
-        $query = static::modelClass()::query()->whereKey($entry->getKey());
+        // On the waitlist connection, so the event waits for this commit and
+        // not for a transaction the application has open on another one; a
+        // link that cannot be built takes the claim back.
+        return static::waitlistConnection()->transaction(function () use ($entry, $keys, $cooldown, $now): bool {
+            // The cooldown is read from the locked rows: a plain read could
+            // see a snapshot the application's transaction took before.
+            $locked = static::modelClass()::query()->whereKey($keys)->orderBy($entry->getKeyName())->lockForUpdate()->get();
 
-        if ($cooldown !== null) {
-            $query->where(fn (Builder $query): Builder => $query
-                ->whereNull('manage_link_sent_at')
-                ->orWhere('manage_link_sent_at', '<=', $now->copy()->subMinutes($cooldown)));
-        }
+            if (! $locked->contains($entry)) {
+                return false;
+            }
 
-        $claimed = $query->update(['manage_link_sent_at' => $now]);
+            if ($cooldown !== null && $this->sentToAddressSince($entry, $locked, $now->copy()->subMinutes($cooldown))) {
+                return false;
+            }
 
-        if ($claimed !== 1) {
-            return false;
-        }
+            // A conditional update, so two requests racing for the same entry
+            // send one mail.
+            $query = static::modelClass()::query()->whereKey($entry->getKey());
 
-        $entry->forceFill(['manage_link_sent_at' => $now])->syncOriginalAttribute('manage_link_sent_at');
+            if ($cooldown !== null) {
+                $query->where(fn (Builder $query): Builder => $query
+                    ->whereNull('manage_link_sent_at')
+                    ->orWhere('manage_link_sent_at', '<=', $now->copy()->subMinutes($cooldown)));
+            }
 
-        $link = ($this->issue)($entry);
+            $claimed = $query->update(['manage_link_sent_at' => $now]);
 
-        ManageLinkRequested::dispatch($entry, $link->token, $link->url, $link->expiresAt);
+            if ($claimed !== 1) {
+                return false;
+            }
 
-        return true;
+            $link = ($this->issue)($entry);
+
+            $entry->forceFill(['manage_link_sent_at' => $now])->syncOriginalAttribute('manage_link_sent_at');
+
+            ManageLinkRequested::dispatch($entry, $link->token, $link->url, $link->expiresAt);
+
+            return true;
+        }, attempts: 3);
     }
 
     /**
      * The cooldown holds per address across the project's lists, or a request
      * per list would mail the same person once per list.
+     *
+     * @param  Collection<int, WaitlistEntry>  $entries  the address's entries, locked
      */
-    protected function sentToAddressSince(WaitlistEntry $entry, Carbon $since): bool
+    protected function sentToAddressSince(WaitlistEntry $entry, Collection $entries, Carbon $since): bool
     {
-        $email = $entry->readableEmail();
-
-        return $email !== null && static::modelClass()::query()
-            ->inProject($entry->project)
-            ->forEmail($email)
-            ->whereKeyNot($entry->getKey())
-            ->where('manage_link_sent_at', '>', $since)
-            ->exists();
+        return $entries->contains(fn (WaitlistEntry $other): bool => ! $other->is($entry)
+            && $other->manage_link_sent_at !== null
+            && $other->manage_link_sent_at->gt($since));
     }
 }

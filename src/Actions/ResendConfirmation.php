@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Actions;
 
+use Closure;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Models\WaitlistSubscription;
+use Taldres\Waitlist\Support\BlindIndex;
 use Taldres\Waitlist\Support\RequestContext;
 use Taldres\Waitlist\Support\ResolvesModel;
 use Taldres\Waitlist\Support\SubscriptionLifecycle;
@@ -57,15 +61,70 @@ class ResendConfirmation
             return false;
         }
 
-        /** @var WaitlistEntry $entry */
-        $entry = $subscription->entry()->firstOrFail();
-        $email = $entry->readableEmail();
+        $entry = $subscription->entry()->first();
 
-        if ($email !== null && $this->addressSaturated($entry->project, $email, except: $subscription)) {
+        // Erased meanwhile: nobody left to mail.
+        if ($entry === null) {
             return false;
         }
 
-        return $this->lifecycle->sendConfirmation($subscription, Str::random(64), $context ?? RequestContext::none());
+        $email = $entry->readableEmail();
+
+        if ($email === null) {
+            return $this->lifecycle->sendConfirmation($subscription, Str::random(64), $context ?? RequestContext::none());
+        }
+
+        return $this->countingFor($entry->project, $email, fn (bool $mayCount): bool => $mayCount
+            && ! $this->addressSaturated($entry->project, $email, except: $subscription)
+            && $this->lifecycle->sendConfirmation($subscription, Str::random(64), $context ?? RequestContext::none()));
+    }
+
+    /**
+     * Runs a step that counts with addressSaturated() and then sends, while
+     * no other request does the same for the address: parallel signups on
+     * different lists would otherwise all count below the cap and all send.
+     * The lock is held until the step has committed, so the next one counts
+     * it. Uses the application's cache store, which must support atomic locks
+     * shared by all servers.
+     *
+     * The step gets false when the lock stays taken; it must then send
+     * nothing, so a busy address answers like a saturated one. Inside a
+     * transaction the application holds on the waitlist connection, the lock
+     * would be gone before that commit and protect nothing, so none is taken.
+     *
+     * @internal
+     *
+     * @template TReturn
+     *
+     * @param  Closure(bool $mayCount): TReturn  $step
+     * @return TReturn
+     */
+    public function countingFor(string $project, string $email, Closure $step): mixed
+    {
+        if (static::maxPendingPerAddress() === null || static::waitlistConnection()->transactionLevel() > 0) {
+            return $step(true);
+        }
+
+        // Keyed by the blind index, so the cache never sees the address.
+        $key = 'waitlist:pending:'.hash('sha256', $project."\0".BlindIndex::hash($email));
+
+        // Long enough for a step whose database retries wait on other locks;
+        // a crashed holder only holds the address's mails back that long.
+        $lock = Cache::lock($key, 60);
+
+        // Only the wait is caught: a timeout of the application's own inside
+        // the step must not run a step that has committed a second time.
+        try {
+            $lock->block(5);
+        } catch (LockTimeoutException) {
+            return $step(false);
+        }
+
+        try {
+            return $step(true);
+        } finally {
+            $lock->release();
+        }
     }
 
     /**

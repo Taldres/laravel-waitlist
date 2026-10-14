@@ -48,6 +48,7 @@ class WordingCommand extends Command
         try {
             [$registered, $retired] = DB::connection(WaitlistEntry::waitlistConnection())->transaction(
                 fn (): array => $this->sync($register, $project, $wording),
+                attempts: 3,
             );
         } catch (WordingConflictException $exception) {
             $this->fail($exception->getMessage().' Nothing was registered.');

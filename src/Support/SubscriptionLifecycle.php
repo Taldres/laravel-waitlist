@@ -34,9 +34,17 @@ use Taldres\Waitlist\Models\WaitlistSubscription;
  * moves the entry's status projection and dispatches an event, so concurrent
  * callers see an event fire once.
  *
- * An event is built inside the transaction and dispatched after it: a link
- * that cannot be built undoes the step, rather than leaving it committed and
- * never announced.
+ * An event is built and dispatched inside the transaction: a link that
+ * cannot be built undoes the step, rather than leaving it committed and never
+ * announced. The events wait for the commit, and dispatched inside they wait
+ * for this connection's: dispatched after it, they would wait for whatever
+ * transaction the application has open on another connection, and vanish
+ * with its rollback.
+ *
+ * Every step locks the entry row before its cycle row, as an erasure does,
+ * so two steps on one address wait for each other instead of deadlocking.
+ * The transactions retry a deadlock where they are the outermost one; each
+ * attempt reads what it writes anew under the lock.
  */
 class SubscriptionLifecycle
 {
@@ -68,10 +76,19 @@ class SubscriptionLifecycle
         $now = Carbon::now();
         $expiresAt = $confirmToken !== null ? $this->confirmTokenExpiresAt($entry->project, $now) : null;
 
-        [$subscription, $events] = static::waitlistConnection()->transaction(function () use ($entry, $purposes, $context, $doubleOptIn, $confirmToken, $now, $expiresAt): array {
-            $last = static::subscriptionModelClass()::query()
-                ->where('waitlist_entry_id', $entry->getKey())
-                ->max('sequence');
+        return static::waitlistConnection()->transaction(function () use ($entry, $purposes, $context, $doubleOptIn, $confirmToken, $now, $expiresAt): WaitlistSubscription {
+            // From the locked row, so a retried attempt does not take the
+            // values a rolled-back one left in the model for unchanged.
+            $locked = static::modelClass()::query()->whereKey($entry->getKey())->lockForUpdate()->firstOrFail();
+            $entry->setRawAttributes($locked->getAttributes(), sync: true);
+
+            // The latest cycle by its key: a range read for the highest
+            // sequence would lock the index gap after it on InnoDB, which
+            // holds up the first cycles of other addresses too.
+            $last = $locked->latest_subscription_id === null ? null : static::subscriptionModelClass()::query()
+                ->whereKey($locked->latest_subscription_id)
+                ->lockForUpdate()
+                ->value('sequence');
             $sequence = (is_numeric($last) ? (int) $last : 0) + 1;
 
             /** @var WaitlistSubscription $subscription */
@@ -116,19 +133,19 @@ class SubscriptionLifecycle
                 ($this->activity)($entry, ActivityType::ConfirmationRequested, $subscription, $context);
             }
 
-            return [$subscription, [
+            $events = [
                 ...(! $doubleOptIn || $confirmToken !== null ? [$this->subscribed($entry, $subscription, $confirmToken, $doubleOptIn, isNewCycle: true)] : []),
                 // Without double opt-in the cycle starts confirmed;
                 // confirmation listeners must hear about it too.
                 ...(! $doubleOptIn ? [$this->confirmed($entry, $subscription)] : []),
-            ]];
-        });
+            ];
 
-        foreach ($events as $event) {
-            event($event);
-        }
+            foreach ($events as $event) {
+                event($event);
+            }
 
-        return $subscription;
+            return $subscription;
+        }, attempts: 3);
     }
 
     /**
@@ -206,13 +223,22 @@ class SubscriptionLifecycle
     }
 
     /**
-     * False when the cycle was already confirmed or has ended.
+     * False when the cycle was already confirmed or has ended, or when the
+     * confirm link it was read with has since been rotated or has expired: a
+     * resend between the lookup and this update must leave only the newest
+     * link working.
      */
     public function confirm(WaitlistSubscription $subscription, RequestContext $context): bool
     {
-        return $this->transition($subscription, ['confirmed_at' => Carbon::now()], fn (Builder $query): Builder => $query
+        $now = Carbon::now();
+
+        return $this->transition($subscription, ['confirmed_at' => $now], fn (Builder $query): Builder => $query
             ->whereNull('confirmed_at')
-            ->whereNull('ended_at'), ActivityType::Confirmed, $context,
+            ->whereNull('ended_at')
+            ->where('confirm_token_hash', $subscription->confirm_token_hash)
+            ->where(fn (Builder $query): Builder => $query
+                ->whereNull('confirm_token_expires_at')
+                ->orWhere('confirm_token_expires_at', '>=', $now)), ActivityType::Confirmed, $context,
             fn (WaitlistEntry $entry): EntryConfirmed => $this->confirmed($entry, $subscription));
     }
 
@@ -259,7 +285,14 @@ class SubscriptionLifecycle
     {
         $expected = $subscription->confirmation_count;
         $now = Carbon::now();
-        $expiresAt = $this->confirmTokenExpiresAt($subscription->entry()->firstOrFail()->project, $now);
+        $entry = $subscription->entry()->first();
+
+        // Erased meanwhile: nobody left to mail.
+        if ($entry === null) {
+            return false;
+        }
+
+        $expiresAt = $this->confirmTokenExpiresAt($entry->project, $now);
 
         return $this->transition($subscription, [
             'confirm_token_hash' => static::modelClass()::hashToken($confirmToken),
@@ -281,11 +314,11 @@ class SubscriptionLifecycle
     public function grant(WaitlistSubscription $subscription, PurposeWording $wording, RequestContext $context): bool
     {
         try {
-            $granted = static::waitlistConnection()->transaction(function () use ($subscription, $wording, $context): ?array {
+            return static::waitlistConnection()->transaction(function () use ($subscription, $wording, $context): bool {
                 $entry = $this->lockOpenCycle($subscription);
 
                 if ($entry === null) {
-                    return null;
+                    return false;
                 }
 
                 /** @var WaitlistConsent $consent */
@@ -301,20 +334,14 @@ class SubscriptionLifecycle
 
                 ($this->activity)($entry, ActivityType::ConsentGranted, $subscription, $context, $wording->purpose);
 
-                return [$entry, $consent];
-            });
+                ConsentGranted::dispatch($entry, $subscription, $consent);
+
+                return true;
+            }, attempts: 3);
         } catch (UniqueConstraintViolationException) {
             // Caught outside the transaction: Postgres aborts it on the violation.
             return false;
         }
-
-        if ($granted === null) {
-            return false;
-        }
-
-        ConsentGranted::dispatch($granted[0], $subscription, $granted[1]);
-
-        return true;
     }
 
     /**
@@ -327,14 +354,18 @@ class SubscriptionLifecycle
             return false;
         }
 
-        /** @var WaitlistSubscription $subscription */
-        $subscription = $consent->subscription()->firstOrFail();
+        /** @var WaitlistSubscription|null $subscription */
+        $subscription = $consent->subscription()->first();
 
-        $entry = static::waitlistConnection()->transaction(function () use ($consent, $subscription, $context): ?WaitlistEntry {
+        if ($subscription === null) {
+            return false;
+        }
+
+        return static::waitlistConnection()->transaction(function () use ($consent, $subscription, $context): bool {
             $entry = $this->lockOpenCycle($subscription);
 
             if ($entry === null) {
-                return null;
+                return false;
             }
 
             $affected = static::consentModelClass()::query()
@@ -343,36 +374,47 @@ class SubscriptionLifecycle
                 ->update(['withdrawn_at' => Carbon::now(), 'active' => null]);
 
             if ($affected !== 1) {
-                return null;
+                return false;
             }
 
             ($this->activity)($entry, ActivityType::ConsentWithdrawn, $subscription, $context, $consent->purpose);
 
-            return $entry;
-        });
+            ConsentWithdrawn::dispatch($entry, $subscription, $consent->refresh());
 
-        if ($entry === null) {
-            return false;
-        }
-
-        ConsentWithdrawn::dispatch($entry, $subscription, $consent->refresh());
-
-        return true;
+            return true;
+        }, attempts: 3);
     }
 
     /**
-     * end() updates the same row, so a grant or withdrawal and an unsubscribe
-     * cannot interleave.
+     * end() updates the same cycle row, so a grant or withdrawal and an
+     * unsubscribe cannot interleave. The entry first, like every step.
      */
     protected function lockOpenCycle(WaitlistSubscription $subscription): ?WaitlistEntry
     {
+        $entry = $this->lockEntry($subscription);
+
+        if ($entry === null) {
+            return null;
+        }
+
         $open = static::subscriptionModelClass()::query()
             ->whereKey($subscription->getKey())
             ->whereNull('ended_at')
             ->lockForUpdate()
-            ->value('waitlist_entry_id');
+            ->value($subscription->getKeyName());
 
-        return $open === null ? null : static::modelClass()::query()->whereKey($open)->firstOrFail();
+        return $open === null ? null : $entry;
+    }
+
+    /**
+     * Null once the entry was erased.
+     */
+    protected function lockEntry(WaitlistSubscription $subscription): ?WaitlistEntry
+    {
+        return static::modelClass()::query()
+            ->whereKey($subscription->waitlist_entry_id)
+            ->lockForUpdate()
+            ->first();
     }
 
     /**
@@ -391,36 +433,33 @@ class SubscriptionLifecycle
         ?Closure $event = null,
         ?string $reference = null,
     ): bool {
-        $announce = static::waitlistConnection()->transaction(function () use ($subscription, $attributes, $condition, $type, $context, $event, $reference): ?array {
+        return static::waitlistConnection()->transaction(function () use ($subscription, $attributes, $condition, $type, $context, $event, $reference): bool {
+            $entry = $this->lockEntry($subscription);
+
+            if ($entry === null) {
+                return false;
+            }
+
             $affected = $condition(
                 static::subscriptionModelClass()::query()->whereKey($subscription->getKey()),
             )->update($attributes + ['updated_at' => Carbon::now()]);
 
             if ($affected !== 1) {
-                return null;
+                return false;
             }
 
             $subscription->refresh();
-
-            /** @var WaitlistEntry $entry */
-            $entry = $subscription->entry()->firstOrFail();
 
             // Read before project() moves it: the status this step leaves.
             ($this->activity)($entry, $type, $subscription, $context, reference: $reference, previousStatus: $type->isDeparture() ? $entry->status : null);
             $this->project($entry, $subscription);
 
-            return [$event?->__invoke($entry)];
-        });
+            if ($event !== null) {
+                event($event($entry));
+            }
 
-        if ($announce === null) {
-            return false;
-        }
-
-        if ($announce[0] !== null) {
-            event($announce[0]);
-        }
-
-        return true;
+            return true;
+        }, attempts: 3);
     }
 
     /**

@@ -15,7 +15,7 @@ you out of the box:
 | Threat | Protection |
 | --- | --- |
 | Spam / flooding | [Rate limits](#rate-limits) per group (signups per IP and endpoint, token links per token; replaceable) plus the `SpamProtector` hook (below) |
-| Mail-bombing one address | A repeat signup is a resend, capped by `resend_cooldown` and `max_confirmations`; across lists, `max_pending_per_address` caps the confirmation requests per day; manage links by address only go to confirmed addresses, once per `manage.request_cooldown` |
+| Mail-bombing one address | A repeat signup is a resend, capped by `resend_cooldown` and `max_confirmations`; across lists, `max_pending_per_address` caps the confirmation requests per day, also for signups that arrive together, under a lock from your cache store, which must support locks shared by all servers (see [Lifecycle](lifecycle.md#what-a-signup-does)); manage links by address only go to confirmed addresses, once per `manage.request_cooldown` |
 | Overwriting someone's data | A signup for an address with a running cycle never changes its metadata or consents; that takes the mailbox. After someone has left, a new signup starts a new cycle that again needs the confirmation |
 | Email enumeration | Subscribe and manage-link requests always answer `202` with an identical body (a project without manage links refuses every request alike); queue the listeners that send mail, so response times do not tell either |
 | Subscribing someone else's email | Double opt-in; foreign addresses never reach `confirmed` |

@@ -156,9 +156,10 @@ example; classes it creates with `new`, such as the fluent API objects, the
 reports and the events, cannot be swapped that way.
 
 If you replace `SubscriptionLifecycle`, keep what it guarantees: every
-transition is a conditional update inside a transaction, the activity row and
-the status move only when exactly one row changed, and each event is dispatched
-once, after the commit.
+transition is a conditional update inside a transaction that locks the entry row
+before the cycle row, the activity row and the status move only when exactly one
+row changed, and each event is dispatched once, inside the transaction, so it
+waits for its commit.
 
 Value objects and classes marked `@internal` are `final` and not meant to be
 extended.

@@ -30,6 +30,23 @@ same `202`, so the form reveals nobody.
   (`max_pending_per_address`, 5) hold, even with made-up list names on a `'*'`
   list. Once the last link has expired, one more confirmation may go out, so
   nobody can lock an address out of confirming.
+- **The cap per address holds for signups that arrive together.** Counting and
+  sending run under an atomic lock per project and address from your default
+  cache store, held until the step has committed, so the next request counts
+  the one before it. That store must support locks and be shared by all your
+  servers (redis, memcached, database, dynamodb); the `array` store locks only
+  inside one process, `file` only on one server. A request that waits more
+  than five seconds for the lock sends nothing, as at the cap: a signup starts
+  its cycle without a confirmation request and a resend is suppressed. A
+  process that dies holding the lock holds the address's mails back for a
+  minute at most. Sync listeners of `EntrySubscribed` run while the lock is
+  held, one more reason to queue the mail.
+- **Inside your own transaction the cap is yours to keep.** Called while your
+  application holds a transaction on `waitlist.connection`, the package takes
+  no lock, as it would be released before your commit. With the `database`
+  cache store, keep its locks off a connection you call the package in a
+  transaction on (`DB_CACHE_LOCK_CONNECTION`), or a waiting lock can break
+  that transaction on Postgres.
 
 ## States
 
@@ -60,6 +77,40 @@ projection and dispatches an event. So:
   produce one event, whichever wins.
 - **A confirm cannot overwrite an unsubscribe** that landed a moment earlier, and
   an expiry loses to a confirmation that landed first.
+- **Events wait for the waitlist's own commit.** They are dispatched inside the
+  package's transaction on `waitlist.connection`, so a transaction your
+  application has open on another connection does not discard them. Inside
+  your own transaction on the same connection, they wait for yours. What your
+  listeners defer themselves (`ShouldHandleEventsAfterCommit`,
+  `ShouldQueueAfterCommit`, a queue with `after_commit`) waits for whatever
+  transaction your application has open, as Laravel decides.
+- **Only the newest confirm link confirms.** The confirm condition also names the
+  link it was looked up with and its expiry, so a link that a resend replaced or
+  that expired after the lookup changes nothing.
+
+Every step locks the entry row before it touches a cycle, and a withdrawal or a
+preference change locks all entries of the address in the project in key
+order, so steps on one address wait for each other rather than deadlock, an
+erasure included. Where the package opens the outermost transaction of a
+signup, a transition, a withdrawal or an erasure, it retries a deadlock or lock
+wait timeout up to three times with fresh data. Inside your
+own transaction it cannot: Laravel then throws a `DeadlockException` to you, and
+the retry is yours (`DB::transaction($callback, attempts: 3)`, with models
+loaded inside it). MariaDB's snapshot isolation reports a row another request
+changed after your transaction's first read the same way. A signup or confirmation
+that loses a race inside your transaction reads the winner's rows with a
+locking read, which holds those rows, and on MySQL and MariaDB the index gap
+of an address not found, until you commit: keep such transactions short. On SQLite with several workers, give the connection a
+`busy_timeout` and WAL, and on PHP 8.4 `'transaction_mode' => 'IMMEDIATE'`, or a
+write that waits fails with "database is locked".
+
+These guarantees assume that `waitlist.connection` reads what was just
+committed. Read replicas are your infrastructure, and the package does not
+route around them: a replica that lags can let a signup miss the one before it,
+so the cap per address or the recovery of a lost race may fail by that lag.
+Point `waitlist.connection` at the primary; `'sticky' => true` covers only
+what the same request wrote, not lag between requests. Reads inside a
+transaction and locking reads always go to the primary.
 
 The resend condition matches the expected `confirmation_count` rather than a
 timestamp. Two resends inside the same second would both pass a timestamp
@@ -102,9 +153,9 @@ withdrawn. That is what `recipients()`, `$entry->hasConsentFor()` and
 `whereConsentedTo()` check, so ask them before you send.
 
 Within an open cycle, a manage token can add an optional purpose, and the
-unsubscribe token or a manage token can withdraw one. Both first lock the cycle
-row, which ending the cycle updates too, so a grant can never land after an
-unsubscribe it crossed.
+unsubscribe token or a manage token can withdraw one. Both first lock the entry
+and then the cycle row, which ending the cycle updates too, so a grant can
+never land after an unsubscribe it crossed.
 
 ## What a withdrawal reaches
 

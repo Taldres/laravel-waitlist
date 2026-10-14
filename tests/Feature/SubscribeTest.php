@@ -2,7 +2,14 @@
 
 declare(strict_types=1);
 
+use Illuminate\Contracts\Cache\LockTimeoutException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Database\Events\TransactionCommitted;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Sleep;
+use Illuminate\Support\Str;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Enums\ActivityType;
 use Taldres\Waitlist\Enums\ConfigKey;
@@ -166,6 +173,130 @@ it('caps how many lists an address can be waiting on, so made-up list names cann
     Event::assertDispatchedTimes(EntrySubscribed::class, 4);
     // The held-back request is the cycle's first, not a reminder.
     Event::assertDispatched(EntrySubscribed::class, fn (EntrySubscribed $event) => $event->entry->is($third->entry) && $event->isNewCycle);
+    assertWaitlistInvariants();
+});
+
+it('keeps the cap on lists an address is waiting on when signups arrive together', function () {
+    config()->set(ConfigKey::MaxPendingPerAddress->value, 1);
+    // The second signup runs inside the first one, so its wait for the lock cannot end.
+    Sleep::fake(syncWithCarbon: true);
+    Event::fake([EntrySubscribed::class]);
+
+    $second = null;
+    // Right after the first one counted, before it started its cycle.
+    DB::listen(function (QueryExecuted $query) use (&$second) {
+        if ($second === null && preg_match('/^select count\(\*\)/i', $query->sql) === 1) {
+            $second = false;
+            $second = Waitlist::subscribe('two', 'user@example.com', waitlistConsent());
+        }
+    });
+
+    $first = Waitlist::subscribe('one', 'user@example.com', waitlistConsent());
+
+    // A busy address answers like a saturated one: the cycle starts, no mail.
+    expect($first->outcome)->toBe(SubscribeOutcome::Started)
+        ->and($second?->outcome)->toBe(SubscribeOutcome::ConfirmationDeferred)
+        ->and($second?->subscription->confirmation_count)->toBe(0);
+
+    Event::assertDispatchedTimes(EntrySubscribed::class, 1);
+    expect(Waitlist::subscribe('two', 'user@example.com', waitlistConsent())->outcome)->toBe(SubscribeOutcome::ResendSuppressed);
+    Event::assertDispatchedTimes(EntrySubscribed::class, 1);
+    assertWaitlistInvariants();
+});
+
+it('holds a resend back while another request counts for the address', function () {
+    config()->set(ConfigKey::MaxPendingPerAddress->value, 1);
+    config()->set(ConfigKey::ResendCooldown->value, null);
+    Waitlist::subscribe('one', 'user@example.com', waitlistConsent());
+    Sleep::fake(syncWithCarbon: true);
+    Event::fake([EntrySubscribed::class]);
+
+    $resent = false;
+    DB::listen(function (QueryExecuted $query) use (&$resent) {
+        if ($resent === false && preg_match('/^select count\(\*\)/i', $query->sql) === 1) {
+            $resent = null;
+            $resent = Waitlist::resendConfirmation('one', 'user@example.com');
+        }
+    });
+
+    expect(Waitlist::subscribe('two', 'user@example.com', waitlistConsent())->outcome)->toBe(SubscribeOutcome::ConfirmationDeferred)
+        ->and($resent)->toBeNull();
+
+    Event::assertNotDispatched(EntrySubscribed::class);
+    assertWaitlistInvariants();
+});
+
+it('holds the lock until the signup has committed', function () {
+    config()->set(ConfigKey::MaxPendingPerAddress->value, 1);
+    Sleep::fake(syncWithCarbon: true);
+    $waited = false;
+    Sleep::whenFakingSleep(function () use (&$waited) {
+        $waited = true;
+    });
+
+    $second = null;
+    $started = false;
+    DB::listen(function (QueryExecuted $query) use (&$started) {
+        $started = $started || preg_match('/^insert into \W?waitlist_subscriptions/i', $query->sql) === 1;
+    });
+    Event::listen(TransactionCommitted::class, function () use (&$second, &$started) {
+        // The outer commit: the nested one fires this too.
+        if ($started && $second === null && DB::connection()->transactionLevel() === 0) {
+            $second = false;
+            $second = Waitlist::subscribe('two', 'user@example.com', waitlistConsent());
+        }
+    });
+
+    Waitlist::subscribe('one', 'user@example.com', waitlistConsent());
+
+    // The committed cycle would defer it anyway; that it waited shows the lock was still held.
+    expect($second?->outcome)->toBe(SubscribeOutcome::ConfirmationDeferred);
+    expect($waited)->toBeTrue();
+});
+
+it('lets a lock timeout of the application escape from a signup that went through', function () {
+    config()->set(ConfigKey::MaxPendingPerAddress->value, 1);
+    config()->set(ConfigKey::ResendCooldown->value, null);
+    $mails = 0;
+    Event::listen(EntrySubscribed::class, function () use (&$mails) {
+        $mails++;
+
+        throw new LockTimeoutException;
+    });
+
+    expect(fn () => Waitlist::subscribe('one', 'user@example.com', waitlistConsent()))->toThrow(LockTimeoutException::class)
+        ->and($mails)->toBe(1)
+        ->and(WaitlistEntry::query()->firstOrFail()->currentSubscription()->firstOrFail()->confirmation_count)->toBe(1);
+});
+
+it('takes no lock while the cap is off or inside a transaction of the application', function (string $case) {
+    config()->set(ConfigKey::MaxPendingPerAddress->value, $case === 'cap off' ? null : 1);
+    Sleep::fake();
+
+    $second = null;
+    DB::listen(function (QueryExecuted $query) use (&$second) {
+        if ($second === null && preg_match('/^insert into \W?waitlist_activity/i', $query->sql) === 1) {
+            $second = false;
+            $second = Waitlist::subscribe('two', 'user@example.com', waitlistConsent());
+        }
+    });
+
+    $case === 'cap off'
+        ? Waitlist::subscribe('one', 'user@example.com', waitlistConsent())
+        : DB::transaction(fn () => Waitlist::subscribe('one', 'user@example.com', waitlistConsent()));
+
+    expect($second)->not->toBeFalse();
+    Sleep::assertNeverSlept();
+})->with(['cap off', 'own transaction']);
+
+it('lets a listener\'s missing model escape from a resubscribe instead of starting another entry', function () {
+    $tokens = subscribeAndCapture('beta', 'user@example.com');
+    Waitlist::unsubscribe($tokens['unsubscribe']);
+    Event::listen(EntrySubscribed::class, fn () => WaitlistEntry::query()->whereKey((string) Str::uuid())->firstOrFail());
+
+    expect(fn () => Waitlist::subscribe('beta', 'user@example.com', waitlistConsent()))->toThrow(ModelNotFoundException::class)
+        ->and(WaitlistEntry::query()->count())->toBe(1);
+
     assertWaitlistInvariants();
 });
 

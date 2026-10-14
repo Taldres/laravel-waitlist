@@ -34,6 +34,8 @@ class UnsubscribeEntry
      * Leaving a list withdraws its primary purpose: the list ends, and where
      * that purpose is an add-on elsewhere it goes too, so leaving a list that
      * exists for the newsletter stops the newsletter everywhere. Idempotent.
+     *
+     * @throws InvalidTokenException when the entry was erased meanwhile
      */
     public function unsubscribe(WaitlistEntry $entry, ?RequestContext $context = null): WaitlistEntry
     {
@@ -49,6 +51,7 @@ class UnsubscribeEntry
             $this->lifecycle->end($current, EndReason::Unsubscribed, $context ?? RequestContext::none());
         }
 
-        return $entry->refresh();
+        // Erased meanwhile: the token names nothing any more.
+        return $entry->fresh() ?? throw InvalidTokenException::make();
     }
 }
