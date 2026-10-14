@@ -11,6 +11,7 @@ php artisan waitlist:prune [--list=] [--project=]          # apply the retention
 php artisan waitlist:export {list} [--project=] [--status=] [--path=]  # streaming CSV export
 php artisan waitlist:rekey                                 # move everything onto the current key
 php artisan waitlist:wording {file} | --from-definitions [--project=] [--retire-missing]  # register wording, e.g. on deploy
+php artisan waitlist:import {file} --source= --with-consent|--request-confirmation [--list=] [--project=] [--limit=] [--from-line=]  # import existing subscribers
 ```
 
 ## Which project a command covers
@@ -21,8 +22,8 @@ cover **every** project. A `--list` without `--project` means that list of the
 default project; `waitlist:forget`, and `waitlist:show` when it finds nothing,
 say where they looked.
 
-`waitlist:forget --all`, `waitlist:export` and `waitlist:wording` act on the
-**default** project unless `--project` is given.
+`waitlist:forget --all`, `waitlist:export`, `waitlist:wording` and
+`waitlist:import` act on the **default** project unless `--project` is given.
 
 ## Notes
 
@@ -61,6 +62,22 @@ say where they looked.
 - **`waitlist:wording`** registers wording from a file or, with
   `--from-definitions`, the purposes a project's definition holds, see
   [Purposes and wording](../purposes-and-wording.md#registering-wording-where-it-is-written).
+- **`waitlist:import`** reads a CSV with a header row and the columns `email`,
+  `purposes` (`purpose:version`, several separated by commas or spaces), and
+  optionally `list`, `locale` and `consented_at`; any other column is refused.
+  Pass `--with-consent` to put every address on its list without a mail, at the
+  time in `consented_at`, or `--request-confirmation` to let each wait for the
+  confirmation mail. An address already on its list is skipped. `--limit` stops
+  after that many imports and prints the command that resumes with
+  `--from-line`; resume with it, as running the file from the start again brings
+  back every address erased since, and keep the file unchanged until the import is finished. A setup
+  error, such as a list without wording, stops the run and prints the same
+  resume command. `consented_at` is a date, optionally with a
+  time and an offset (`2026-10-01`, `2026-10-01 12:00:00`,
+  `2026-10-01T12:00:00+02:00`); anything else, a date that rolls over included,
+  is refused. A row that fails is reported by its line, the column and a fixed
+  reason, never a value from the file, and the exit code is then 1; retry those
+  rows with a file that holds only them. See [Importing existing subscribers](../gdpr.md#importing-existing-subscribers).
 - **`waitlist:check`** reads every setting and reports all that do not read at
   once, by key and never by value, so a typo in `.env` is found on deploy and not
   by the first request that needs it. It also warns of settings in a published
@@ -88,8 +105,8 @@ say where they looked.
   Laravel Waitlist section with the same state.
 - **`waitlist:privacy`** describes the configured package storage, the fields
   and purposes of every list, retention, the rate limits (including those of
-  servers calling for a project) and the listeners registered for package
-  events. It also warns, on stderr so a redirected record stays clean, about
+  servers calling for a project), the sources of imported entries still held
+  and the listeners registered for package events. It also warns, on stderr so a redirected record stays clean, about
   what a launch trips over: a mail link that is not https or points at
   localhost (a page's URL, or `APP_URL` for a page left on the package routes),
   `APP_DEBUG` on while the routes are enabled, and `authentication.guards` set

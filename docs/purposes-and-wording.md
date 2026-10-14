@@ -19,7 +19,9 @@ text and where it is written:
 | on each site that shows it | `wordingFromCallers()` on the project, see [Wording sent by your servers](#wording-sent-by-your-servers) | the table, filled by the first signup of a version | a central API whose sites own their text |
 
 Whichever way, the text of a version never changes after it is registered; a
-change is a new version. The hash (`waitlist.wording.require_hash`) and the locales
+change is a new version. An [import](gdpr.md#importing-existing-subscribers)
+takes these registered versions too, never text: register what the source
+showed before you import. The hash (`waitlist.wording.require_hash`) and the locales
 work the same for all four: a form posts the version, optionally the locale and the
 hash of the text it showed, and the package refuses a text that drifted from the
 registered one.
@@ -129,7 +131,9 @@ instead of recorded:
 in lowercase hex; uppercase is accepted too.
 `WAITLIST_REQUIRE_WORDING_HASH=true` refuses a consent that is newly recorded
 without one, except one that brings its [text](#wording-sent-by-your-servers);
-keeping or withdrawing a purpose needs none.
+keeping or withdrawing a purpose needs none. Neither does an
+[import](gdpr.md#importing-existing-subscribers): there was no form whose copy of
+the text a hash could prove. A hash `import()` is given is checked all the same.
 
 ## Who owns the wording
 

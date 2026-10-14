@@ -1,0 +1,27 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Taldres\Waitlist\Events;
+
+use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
+use Illuminate\Foundation\Events\Dispatchable;
+use Taldres\Waitlist\Models\WaitlistEntry;
+use Taldres\Waitlist\Models\WaitlistSubscription;
+
+/**
+ * An address was imported with the time it consented elsewhere and is on the
+ * list now. Fired instead of EntrySubscribed and EntryConfirmed, so that
+ * confirmation and welcome mails stay out of an import.
+ */
+class EntryImported implements ShouldDispatchAfterCommit
+{
+    use Dispatchable;
+
+    public function __construct(
+        public WaitlistEntry $entry,
+        public WaitlistSubscription $subscription,
+        /** Where the address came from, as the import named it. */
+        public string $source,
+    ) {}
+}

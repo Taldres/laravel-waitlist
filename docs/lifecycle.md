@@ -194,10 +194,16 @@ Waitlist::listUnsubscribeHeaders($entry, 'newsletter');  // RFC 8058 one-click, 
 | unsubscribed, or primary purpose withdrawn | `unsubscribed` | `EntryUnsubscribed` |
 | confirmation abandoned (retention) | `expired` | `SubscriptionExpired` |
 | erased | `erased` | `EntryForgotten` |
+| imported with the time of consent | `subscribed`, `imported` (with source), `confirmed` | `EntryImported` |
+| imported without it | `subscribed`, `confirmation_requested`, `imported` (with source) | `EntrySubscribed` (`isNewCycle: true`) |
 
 With double opt-in disabled a cycle starts confirmed: `subscribed` and
 `confirmed` are logged together, no confirm token is issued, and both
 `EntrySubscribed` and `EntryConfirmed` fire.
+
+An import adds only addresses the list does not hold, in any status, so it
+never brings back someone who left; see
+[Importing existing subscribers](gdpr.md#importing-existing-subscribers).
 
 When the address already got `max_pending_per_address` confirmation requests
 for unconfirmed lists of the project within the last day, a new cycle starts

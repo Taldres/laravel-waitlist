@@ -99,6 +99,7 @@ class ShowCommand extends Command
             foreach ($subscription->consents as $consent) {
                 $shown = $consent->locale !== null ? "{$consent->version}, {$consent->locale}" : $consent->version;
                 $this->raw("  Consent to {$consent->purpose} ({$shown}): {$consent->text}");
+                $this->raw('    Granted: '.$consent->grantedAt->format('Y-m-d H:i:s'));
 
                 if ($consent->withdrawnAt !== null) {
                     $this->raw('    Withdrawn: '.$consent->withdrawnAt->format('Y-m-d H:i:s'));

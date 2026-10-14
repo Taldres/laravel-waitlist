@@ -17,6 +17,7 @@ completed erasure.
 | Event | Sync action |
 | --- | --- |
 | `EntryConfirmed` | Add the contact, with a list or tag per purpose in force |
+| `EntryImported` | The same, for an address imported with the time it consented |
 | `ConsentGranted` | Add the contact to that purpose's list |
 | `ConsentWithdrawn` | Remove the contact from that purpose's list, unless another list still holds it |
 | `EntryUnsubscribed` | Remove the contact from the list of every purpose the cycle held, unless another list still holds it |
@@ -64,12 +65,13 @@ use Taldres\Waitlist\Events\ConsentGranted;
 use Taldres\Waitlist\Events\ConsentWithdrawn;
 use Taldres\Waitlist\Events\EntryConfirmed;
 use Taldres\Waitlist\Events\EntryForgotten;
+use Taldres\Waitlist\Events\EntryImported;
 use Taldres\Waitlist\Events\EntryUnsubscribed;
 use Taldres\Waitlist\Models\WaitlistEntry;
 
 class SyncWaitlistToBrevo implements ShouldQueue, ShouldBeEncrypted
 {
-    public function onConfirmed(EntryConfirmed $event): void
+    public function onConfirmed(EntryConfirmed|EntryImported $event): void
     {
         $this->brevo()->post('contacts', [
             'email' => $event->entry->email,
@@ -166,11 +168,13 @@ use Taldres\Waitlist\Events\ConsentGranted;
 use Taldres\Waitlist\Events\ConsentWithdrawn;
 use Taldres\Waitlist\Events\EntryConfirmed;
 use Taldres\Waitlist\Events\EntryForgotten;
+use Taldres\Waitlist\Events\EntryImported;
 use Taldres\Waitlist\Events\EntryUnsubscribed;
 
 public function boot(): void
 {
     Event::listen(EntryConfirmed::class, [SyncWaitlistToBrevo::class, 'onConfirmed']);
+    Event::listen(EntryImported::class, [SyncWaitlistToBrevo::class, 'onConfirmed']);
     Event::listen(ConsentGranted::class, [SyncWaitlistToBrevo::class, 'onGranted']);
     Event::listen(ConsentWithdrawn::class, [SyncWaitlistToBrevo::class, 'onWithdrawn']);
     Event::listen(EntryUnsubscribed::class, [SyncWaitlistToBrevo::class, 'onUnsubscribed']);
@@ -226,6 +230,16 @@ may find nothing left to do.
 Prefer it the other way round? Put the waitlist's own link, `unsubscribeUrl($entry,
 'newsletter')`, into a contact attribute and use it in your campaign template.
 Many providers insist on their own link as well, so keep the webhook either way.
+
+## Moving your subscribers in
+
+Taking over the contacts a provider already holds is an import, not a sync:
+export them with the time each one consented and run `waitlist:import
+--with-consent`, see [Importing existing subscribers](gdpr.md#importing-existing-subscribers).
+Each address then fires `EntryImported`, which the listener above sends back to
+the provider; a provider that already holds the contact changes nothing, as
+`updateEnabled` says. Leave that listener out during the import if you would
+rather not have the calls.
 
 ## Your record of processing
 

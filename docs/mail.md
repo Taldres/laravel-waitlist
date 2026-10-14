@@ -286,6 +286,8 @@ privacy notice, and `waitlist:export` and `waitlist:forget` answer them.
 
 Optional: a mail once the double opt-in is completed. Check the rules that apply
 to your messages; this example is no statement that sending them is lawful.
+An address [imported](gdpr.md#importing-existing-subscribers) with its time of
+consent fires `EntryImported` instead, so it gets no welcome mail.
 
 ```php
 // app/Listeners/SendWaitlistWelcomeMail.php

@@ -21,6 +21,7 @@ use Taldres\Waitlist\Enums\EntryStatus;
 use Taldres\Waitlist\Events\ConsentGranted;
 use Taldres\Waitlist\Events\ConsentWithdrawn;
 use Taldres\Waitlist\Events\EntryConfirmed;
+use Taldres\Waitlist\Events\EntryImported;
 use Taldres\Waitlist\Events\EntrySubscribed;
 use Taldres\Waitlist\Events\EntryUnsubscribed;
 use Taldres\Waitlist\Events\SubscriptionExpired;
@@ -77,55 +78,9 @@ class SubscriptionLifecycle
         $expiresAt = $confirmToken !== null ? $this->confirmTokenExpiresAt($entry->project, $now) : null;
 
         return static::waitlistConnection()->transaction(function () use ($entry, $purposes, $context, $doubleOptIn, $confirmToken, $now, $expiresAt): WaitlistSubscription {
-            // From the locked row, so a retried attempt does not take the
-            // values a rolled-back one left in the model for unchanged.
-            $locked = static::modelClass()::query()->whereKey($entry->getKey())->lockForUpdate()->firstOrFail();
-            $entry->setRawAttributes($locked->getAttributes(), sync: true);
+            $subscription = $this->openCycle($entry, $purposes, $now, $now, confirmed: ! $doubleOptIn, confirmToken: $confirmToken, expiresAt: $expiresAt);
 
-            // The latest cycle by its key: a range read for the highest
-            // sequence would lock the index gap after it on InnoDB, which
-            // holds up the first cycles of other addresses too.
-            $last = $locked->latest_subscription_id === null ? null : static::subscriptionModelClass()::query()
-                ->whereKey($locked->latest_subscription_id)
-                ->lockForUpdate()
-                ->value('sequence');
-            $sequence = (is_numeric($last) ? (int) $last : 0) + 1;
-
-            /** @var WaitlistSubscription $subscription */
-            $subscription = $entry->subscriptions()->create([
-                'sequence' => $sequence,
-                'active' => 1,
-                'confirm_token_hash' => $confirmToken !== null ? $entry::hashToken($confirmToken) : null,
-                'confirm_token_expires_at' => $expiresAt,
-                'started_at' => $now,
-                'confirmation_sent_at' => $confirmToken !== null ? $now : null,
-                'confirmation_count' => $confirmToken !== null ? 1 : 0,
-                'confirmed_at' => $doubleOptIn ? null : $now,
-            ]);
-
-            foreach ($purposes as $wording) {
-                $subscription->consents()->create([
-                    'purpose' => $wording->purpose,
-                    'version' => $wording->version,
-                    'locale' => $wording->locale,
-                    'text' => $wording->text,
-                    'required' => $wording->required,
-                    'granted_at' => $now,
-                    'active' => 1,
-                ]);
-            }
-
-            $entry->forceFill([
-                'latest_subscription_id' => $subscription->getKey(),
-                'status' => $subscription->projectedStatus(),
-            ])->save();
-
-            // A returning address arrives with its ended cycle loaded; the
-            // events and the caller must see the new one.
-            $entry->setRelation('latestSubscription', $subscription)
-                ->setRelation('currentSubscription', $subscription);
-
-            ($this->activity)($entry, $sequence === 1 ? ActivityType::Subscribed : ActivityType::Resubscribed, $subscription, $context);
+            ($this->activity)($entry, $subscription->sequence === 1 ? ActivityType::Subscribed : ActivityType::Resubscribed, $subscription, $context);
 
             if (! $doubleOptIn) {
                 ($this->activity)($entry, ActivityType::Confirmed, $subscription, $context);
@@ -146,6 +101,116 @@ class SubscriptionLifecycle
 
             return $subscription;
         }, attempts: 3);
+    }
+
+    /**
+     * The first cycle of an imported address. With the time the person
+     * consented elsewhere, the cycle starts confirmed on the source's word,
+     * its consents keep that time, and EntryImported fires instead of
+     * EntrySubscribed and EntryConfirmed, so no confirmation or welcome mail
+     * goes out. Without it, the cycle starts as a signup with double opt-in
+     * would, and EntrySubscribed asks for the confirmation mail. Either way the
+     * log records the source with the `imported` step.
+     *
+     * @param  list<PurposeWording>  $purposes
+     */
+    public function import(
+        WaitlistEntry $entry,
+        array $purposes,
+        RequestContext $context,
+        string $source,
+        ?Carbon $consentedAt,
+        ?string $confirmToken,
+    ): WaitlistSubscription {
+        if ($consentedAt === null) {
+            return static::waitlistConnection()->transaction(function () use ($entry, $purposes, $context, $source, $confirmToken): WaitlistSubscription {
+                $subscription = $this->start($entry, $purposes, $context, doubleOptIn: true, confirmToken: $confirmToken);
+
+                ($this->activity)($entry, ActivityType::Imported, $subscription, $context, reference: $source);
+
+                return $subscription;
+            }, attempts: 3);
+        }
+
+        $now = Carbon::now();
+
+        return static::waitlistConnection()->transaction(function () use ($entry, $purposes, $context, $source, $consentedAt, $now): WaitlistSubscription {
+            $subscription = $this->openCycle($entry, $purposes, $now, $consentedAt, confirmed: true, confirmToken: null, expiresAt: null);
+
+            ($this->activity)($entry, $subscription->sequence === 1 ? ActivityType::Subscribed : ActivityType::Resubscribed, $subscription, $context);
+            ($this->activity)($entry, ActivityType::Imported, $subscription, $context, reference: $source);
+            ($this->activity)($entry, ActivityType::Confirmed, $subscription, $context);
+
+            event(new EntryImported($entry, $subscription, $source));
+
+            return $subscription;
+        }, attempts: 3);
+    }
+
+    /**
+     * Inside the caller's transaction: locks the entry, creates the cycle and
+     * its consents and moves the projection onto it.
+     *
+     * @param  list<PurposeWording>  $purposes
+     */
+    protected function openCycle(
+        WaitlistEntry $entry,
+        array $purposes,
+        Carbon $now,
+        Carbon $grantedAt,
+        bool $confirmed,
+        ?string $confirmToken,
+        ?Carbon $expiresAt,
+    ): WaitlistSubscription {
+        // From the locked row, so a retried attempt does not take the
+        // values a rolled-back one left in the model for unchanged.
+        $locked = static::modelClass()::query()->whereKey($entry->getKey())->lockForUpdate()->firstOrFail();
+        $entry->setRawAttributes($locked->getAttributes(), sync: true);
+
+        // The latest cycle by its key: a range read for the highest
+        // sequence would lock the index gap after it on InnoDB, which
+        // holds up the first cycles of other addresses too.
+        $last = $locked->latest_subscription_id === null ? null : static::subscriptionModelClass()::query()
+            ->whereKey($locked->latest_subscription_id)
+            ->lockForUpdate()
+            ->value('sequence');
+        $sequence = (is_numeric($last) ? (int) $last : 0) + 1;
+
+        /** @var WaitlistSubscription $subscription */
+        $subscription = $entry->subscriptions()->create([
+            'sequence' => $sequence,
+            'active' => 1,
+            'confirm_token_hash' => $confirmToken !== null ? $entry::hashToken($confirmToken) : null,
+            'confirm_token_expires_at' => $expiresAt,
+            'started_at' => $now,
+            'confirmation_sent_at' => $confirmToken !== null ? $now : null,
+            'confirmation_count' => $confirmToken !== null ? 1 : 0,
+            'confirmed_at' => $confirmed ? $now : null,
+        ]);
+
+        foreach ($purposes as $wording) {
+            $subscription->consents()->create([
+                'purpose' => $wording->purpose,
+                'version' => $wording->version,
+                'locale' => $wording->locale,
+                'text' => $wording->text,
+                'required' => $wording->required,
+                'granted_at' => $grantedAt,
+                'active' => 1,
+            ]);
+        }
+
+        $entry->forceFill([
+            'latest_subscription_id' => $subscription->getKey(),
+            'status' => $subscription->projectedStatus(),
+        ])->save();
+
+        // A returning address arrives with its ended cycle loaded; the
+        // events and the caller must see the new one.
+        $entry->setRelation('latestSubscription', $subscription)
+            ->setRelation('currentSubscription', $subscription);
+
+        return $subscription;
     }
 
     /**

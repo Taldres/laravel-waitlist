@@ -42,6 +42,9 @@ enum ActivityType: string
     /** An optional purpose was withdrawn; the cycle continues. */
     case ConsentWithdrawn = 'consent_withdrawn';
 
+    /** The cycle came from an import; the reference names its source. */
+    case Imported = 'imported';
+
     /**
      * A step that ends the entry's place on its list. The log keeps the
      * status it left, so a later erasure of someone who had left already
