@@ -322,7 +322,8 @@ provider, see [Sync to your email provider](email-provider-sync.md).
 
 ## 8. Let people see, change and erase their data
 
-The link in every mail can only remove. For the preference page, with the
+The link in every mail can only remove (and, where a list publishes positions,
+read the place in line). For the preference page, with the
 person's data, purposes and erasure, your unsubscribe page offers to mail a
 short-lived manage link:
 

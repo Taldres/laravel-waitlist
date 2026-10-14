@@ -20,7 +20,8 @@ you out of the box:
 | Email enumeration | Subscribe and manage-link requests always answer `202` with an identical body (a project without manage links refuses every request alike); queue the listeners that send mail, so response times do not tell either |
 | Subscribing someone else's email | Double opt-in; foreign addresses never reach `confirmed` |
 | Token guessing | 64-char random tokens, looked up via SHA-256 hash, optional TTL |
-| Forwarded mails, providers reading headers | The token in every mail can only remove; the data and erasure need a manage link that is mailed to the address on request and expires |
+| Reading the size of a list | Off unless a list opts in; the [count](reference/http-api.md#count-and-position) is rounded down to a multiple of 10, withheld below 10 and cached, and a position needs the person's unsubscribe token, never an address |
+| Forwarded mails, providers reading headers | The token in every mail can only remove, and on a list that publishes positions read the place in line; the data and erasure need a manage link that is mailed to the address on request and expires |
 | Link scanners acting for the user | `GET` and `HEAD` never change state and never return the address; confirming, unsubscribing, exporting and erasing need `POST` |
 | Tokens sent to another host | Links to the package routes are built from `APP_URL`, never from the Host header of the request that triggered the mail; without an absolute `APP_URL` they are refused, not rooted at the request |
 | Forged consent wording | Clients send purpose versions only; the stored text comes from the catalog, or, for a project that takes it from its servers, from those servers alone ([C](#the-three-architectures)) |
@@ -185,7 +186,7 @@ included: the browser reports a CORS failure instead.
 `routes.middleware` applies to every package route, including the links in your
 mails and one-click requests from mail providers, which carry no credentials.
 Never put authentication there. Decide in the `useWaitlist` gate instead: it runs
-for the signup, the wording and manage links requested by address, after the
+for the signup, the wording, the count and manage links requested by address, after the
 project is resolved and before the body is validated. Checks that only your
 forms have to pass go into `routes.group_middleware.signup`, see
 [Checks for your forms only](#checks-for-your-forms-only).
@@ -249,7 +250,7 @@ never face them.
 // config/waitlist.php
 'routes' => [
     'group_middleware' => [
-        'signup' => ['web'], // sessions and CSRF for the signup, the wording and manage links by address
+        'signup' => ['web'], // sessions and CSRF for the signup, the wording, the count and manage links by address
         'links' => [],
     ],
 ],
@@ -303,8 +304,8 @@ keeps out other websites, not bots.
 ## Websites that may use a project
 
 `$project->origins([...])` lists the websites from which a browser may use the
-project's endpoints as a guest: the signup, the wording and a manage link by
-address. A request that names another origin is refused with `403`
+project's endpoints as a guest: the signup, the wording, the count and a manage
+link by address. A request that names another origin is refused with `403`
 ("This website may not use the waitlist."), before the `useWaitlist` gate, so a
 gate that lets everyone through does not undo it. It sets no CORS headers: those
 stay in [`config/cors.php`](#cors), which lists the websites of all projects.
@@ -375,8 +376,8 @@ The routes fall into two groups, each throttled by its own named limiter:
 
 | Group | Routes | Limiter | Keyed by |
 | --- | --- | --- | --- |
-| `signup` | `POST /waitlist`, `GET /purposes`, `POST /manage-link` | `waitlist` | client IP and endpoint; for a [server calling for a project](#servers-calling-for-a-project), the server and endpoint |
-| `links` | everything with a `{token}`, including `POST /unsubscribe/{token}/manage-link` | `waitlist-links` | the token, plus a looser ceiling per IP, or per server |
+| `signup` | `POST /waitlist`, `GET /purposes`, `GET /count`, `POST /manage-link` | `waitlist` | client IP and endpoint; for a [server calling for a project](#servers-calling-for-a-project), the server and endpoint |
+| `links` | everything with a `{token}`, including `POST /unsubscribe/{token}/manage-link` and `GET /unsubscribe/{token}/position` | `waitlist-links` | the token, plus a looser ceiling per IP, or per server |
 
 Token links are limited per token because one-click unsubscribes arrive from mail
 providers' servers, many recipients behind a few addresses; a tight IP limit
@@ -531,7 +532,7 @@ A caller acting for a project (`HasWaitlistProject`, see
 every one of its visitors arrives from its address. The default limiters treat
 it as one source:
 
-- signups, wording and manage links by address are capped per server and
+- signups, wording, the count and manage links by address are capped per server and
   endpoint at `caller_signup_per_minute`, 120 by default. That cap is a ceiling
   against a leaked token, not a limit per visitor;
 - the ceiling on token requests counts the server once, not each of its

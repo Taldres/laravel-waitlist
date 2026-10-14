@@ -15,6 +15,9 @@ enum WaitlistAction: string
     /** The wording a form shows. */
     case ViewPurposes = 'view-purposes';
 
+    /** The count of a list that publishes it. */
+    case ViewCount = 'view-count';
+
     /** A manage link requested by address; by unsubscribe token it needs no gate. */
     case RequestManageLink = 'request-manage-link';
 

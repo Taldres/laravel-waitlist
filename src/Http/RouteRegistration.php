@@ -31,8 +31,8 @@ final class RouteRegistration
      * routes/waitlist.php; a test keeps the lists in step with the file.
      */
     public const array GROUPS = [
-        'signup' => ['subscribe', 'purposes', 'manage-link'],
-        'links' => [Page::Confirm->value, Page::Unsubscribe->value, 'unsubscribe.manage-link', Page::Manage->value, 'manage.data', 'manage.purposes', 'manage.unsubscribe', 'manage.erase'],
+        'signup' => ['subscribe', 'purposes', 'count', 'manage-link'],
+        'links' => [Page::Confirm->value, Page::Unsubscribe->value, 'unsubscribe.manage-link', 'unsubscribe.position', Page::Manage->value, 'manage.data', 'manage.purposes', 'manage.unsubscribe', 'manage.erase'],
     ];
 
     /**
@@ -68,7 +68,7 @@ final class RouteRegistration
     }
 
     /**
-     * The middleware of the signup, the wording and manage links by address;
+     * The middleware of the signup, the wording, the count and manage links by address;
      * null when the group's settings do not read.
      *
      * @return list<string>|null

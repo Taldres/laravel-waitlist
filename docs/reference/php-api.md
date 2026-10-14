@@ -44,6 +44,8 @@ $project->urls(?string $confirm = null, ?string $unsubscribe = null, ?string $ma
 $list->optional(string ...$purposes): static
 $list->doubleOptIn(bool $enabled = true): static                    // overrides waitlist.double_opt_in.enabled
 $list->fields(Closure|array $rules): static                         // on top of the project's; same names replace them
+$list->publicCount(bool $enabled = true): static                    // GET /waitlist/count for this list
+$list->publicPosition(bool $enabled = true): static                 // GET /waitlist/unsubscribe/{token}/position for this list
 ```
 
 ## Manager: `Waitlist::`
@@ -98,6 +100,8 @@ Waitlist::for('beta')->recipients(?string $purpose = null): LazyCollection     /
 Waitlist::for('beta')->has(string $email): bool
 Waitlist::for('beta')->find(string $email): ?WaitlistEntry
 Waitlist::for('beta')->count(): int
+Waitlist::for('beta')->publicCount(): ?int                                    // confirmed, rounded down to a multiple of 10, null below 10, cached 60 seconds
+Waitlist::for('beta')->position(WaitlistEntry $entry): ?int                   // place among the confirmed, 1 first; null when not confirmed on this list
 Waitlist::for('beta')->entries(): Builder
 Waitlist::for('beta')->report(): WaitlistReport
 Waitlist::for('beta')->snapshot(): ListSnapshot
@@ -109,7 +113,18 @@ Waitlist::for('beta')->personalData(string $email): Collection
 
 `find()`, `has()`, `count()` and `entries()` include addresses that left; use the
 entry's status or `hasConsentFor()` for current membership, `snapshot()` for
-counts by status.
+counts by status. `publicCount()` and `position()` are the figures of
+[Count and position](http-api.md#count-and-position); they answer whether or not
+the list publishes them, as the switches are for the routes. For a person who
+holds a token, ask the entry's own project and list:
+
+```php
+$entry = Waitlist::findByUnsubscribeToken($token);
+
+$position = $entry === null
+    ? null
+    : Waitlist::project($entry->project)->for($entry->list)->position($entry);
+```
 
 `add()` returns a `SubscribeResult`:
 

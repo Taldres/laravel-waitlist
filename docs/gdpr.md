@@ -174,7 +174,10 @@ request that reaches you another way is answered across all of them with
 the exception: they apply to every list of the project.
 
 Every mail carries the unsubscribe link; it can only remove, so forwarding a mail
-or a provider reading its headers exposes nothing. The preference page opens with
+or a provider reading its headers exposes no data. On a list that
+[publishes positions](reference/http-api.md#count-and-position), whoever holds the
+link can also read the person's place in line for as long as the entry exists,
+and so see people ahead of them leave, though never who. The preference page opens with
 a manage link that is mailed to the address on request (`ManageLinkRequested`)
 and expires after an hour. It only reaches the person through their mailbox,
 which is what lets it stand in for a login. Offer the request on your unsubscribe

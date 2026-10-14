@@ -195,7 +195,8 @@ Laravel discovers the listener in `app/Listeners` by itself.
 
 ## The preference page link
 
-The link in every mail can only remove someone. To change purposes, download or
+The link in every mail can only remove someone, and read their place in line
+where a list [publishes it](reference/http-api.md#count-and-position). To change purposes, download or
 erase their data, people use the preference page, which opens with a short-lived
 manage link. It is mailed to the address on request, so it stands in for a login:
 whoever asks for it never sees it.

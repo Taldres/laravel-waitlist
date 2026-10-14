@@ -20,6 +20,10 @@ final class ListDefinition
 
     private ?bool $doubleOptIn = null;
 
+    private bool $publicCount = false;
+
+    private bool $publicPosition = false;
+
     /**
      * @var (Closure(): array<string, mixed>)|array<string, mixed>
      */
@@ -66,6 +70,29 @@ final class ListDefinition
     }
 
     /**
+     * Answers GET /count for this list: the confirmed addresses, rounded down
+     * to a multiple of 10 and withheld below 10. Only with double opt-in.
+     */
+    public function publicCount(bool $enabled = true): static
+    {
+        $this->publicCount = $enabled;
+
+        return $this;
+    }
+
+    /**
+     * Lets the unsubscribe token read the person's place among the confirmed
+     * addresses of this list. A position is exact, so whoever just confirmed
+     * learns how many are on the list. Only with double opt-in.
+     */
+    public function publicPosition(bool $enabled = true): static
+    {
+        $this->publicPosition = $enabled;
+
+        return $this;
+    }
+
+    /**
      * Fields a signup on this list may send under "metadata", on top of the
      * project's: field => validation rules. A field named here replaces the
      * project's field of the same name. Pass a closure to build rule objects
@@ -94,6 +121,16 @@ final class ListDefinition
     public function getDoubleOptIn(): ?bool
     {
         return $this->doubleOptIn;
+    }
+
+    public function getPublicCount(): bool
+    {
+        return $this->publicCount;
+    }
+
+    public function getPublicPosition(): bool
+    {
+        return $this->publicPosition;
     }
 
     /**

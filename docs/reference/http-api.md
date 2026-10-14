@@ -18,11 +18,13 @@ Leave the routes off and call the facade from your controllers;
 | Method | URI | Behavior |
 | --- | --- | --- |
 | GET | `/waitlist/purposes?list=&locale=` | Current wording per purpose, for the signup form, with the locale it is in. With [`TimeTrapSpamProtector`](../securing-the-endpoints.md#built-in-a-hidden-field-and-a-time-trap) bound, also a `challenge` that the signup or manage link sends back in `X-Waitlist-Challenge`, with `Cache-Control: no-store`; the JS client does not expose it yet |
+| GET | `/waitlist/count?list=` | How many people are on a list that [publishes its count](#count-and-position), rounded. `404` with `count_disabled` for a list that does not, `unknown_list` for one the project does not have, `422` naming `list` for a name no signup could post; the project resolver, the origins and the `useWaitlist` gate decide first, as for the wording. |
 | POST | `/waitlist` | Subscribe with `email`, `purposes` (`{purpose: version}` or `{purpose: {version, locale, hash}}`; a project's own servers may add `text`, see [Wording sent by your servers](../purposes-and-wording.md#wording-sent-by-your-servers)), optional `list` (`waitlist.default_list` when missing, null or empty) and `metadata` (only the [fields](#metadata) the project and list define). `202` with an identical body for new and known addresses; `422` names the field (`email`, `list`, `purposes`, `metadata`, `metadata.{field}`), always as JSON, or says `Spam check failed.`; the project resolver and the [`useWaitlist` gate](#projects-and-who-may-call) may answer first, e.g. `401`, `403` or `404`. |
 | GET | `/waitlist/confirm/{token}` | Reports the token's state. `404` invalid, `410` expired. |
 | POST | `/waitlist/confirm/{token}` | Confirm. |
 | GET | `/waitlist/unsubscribe/{token}` | Reports the entry. `404` invalid. |
 | POST | `/waitlist/unsubscribe/{token}[?purpose=]` | Unsubscribe, or withdraw one purpose; including [RFC 8058](https://www.rfc-editor.org/rfc/rfc8058) one-click. |
+| GET | `/waitlist/unsubscribe/{token}/position` | The person's [place in line](#count-and-position) on a list that publishes positions. `404` invalid, `404` with `position_disabled` for a list that does not. |
 | POST | `/waitlist/unsubscribe/{token}/manage-link` | Mail a manage link to the address behind the unsubscribe token. `202` with an identical body whether or not anything was sent, also for a token that belongs to nobody. A token needs no resolver, gate or spam check, and the route is in the `links` group. `404` with `manage_links_disabled` for a project [without manage links](../projects.md#pages). |
 | POST | `/waitlist/manage-link` | Mail a manage link to an `email`, with an optional `list`. `202` with an identical body whether or not anything was sent. The project resolver and the `useWaitlist` gate decide first, then the spam check applies. `404` with `manage_links_disabled` for a project without manage links. |
 | GET | `/waitlist/manage/{token}` | Status and purposes in force, for the preference page. `404` invalid, `410` expired. |
@@ -34,12 +36,74 @@ Leave the routes off and call the facade from your controllers;
 `/manage/…` takes the manage token, `/unsubscribe/…` the unsubscribe token, `/confirm/…` the confirm token. The token routes answer
 `{"data": {project, list, status, purposes, confirmed_at, unsubscribed_at,
 created_at}}`, never the address, also in an app that calls
-`JsonResource::withoutWrapping()`; `/manage/{token}/data` answers the copy itself.
+`JsonResource::withoutWrapping()`; `/manage/{token}/data` answers the copy itself,
+and `/unsubscribe/{token}/position` its own shape, see
+[Count and position](#count-and-position).
 Validation errors are always `422` JSON, also for a plain form post.
 
 Nothing looks up data by address over HTTP: access and erasure by address exist
 only as commands and PHP APIs. A person reaches their own data only through a
 manage link mailed to their address, unless the project turns manage links off.
+
+## Count and position
+
+Two figures for a waitlist page, both off until a list turns them on in its
+project's definition, and only on a list with double opt-in:
+
+```php
+$project->list('beta', purpose: 'waitlist')
+    ->publicCount()      // GET /waitlist/count?list=beta
+    ->publicPosition();  // GET /waitlist/unsubscribe/{token}/position
+```
+
+**The count** is the number of addresses on the list that confirmed and have not
+left, the `confirmed` status, rounded down to a multiple of 10. Below 10 it is
+`null`, so a small list does not show each signup, and a frontend shows its own
+wording instead of a number. It is cached for 60 seconds in your application's
+default cache store, so a page polling it does not reach the database on every
+request and does not see a signup the moment it lands:
+
+```json
+{"data": {"list": "beta", "count": 1230}}
+```
+
+It is a request like the wording: the project resolver picks the project, the
+project's [origins](../securing-the-endpoints.md#websites-that-may-use-a-project)
+and the `useWaitlist` gate (`WaitlistAction::ViewCount`) decide, and it is in the
+`signup` group with its limiter and middleware. Pending addresses are not
+counted: anyone can type someone else's address into a form.
+
+**The position** is the person's place among the confirmed addresses of their
+list, in the order their current cycles were confirmed: `1` for the earliest; within
+the same second, the cycle that started first comes first. People
+who left are not counted, so a position moves up when someone ahead leaves, and
+someone who leaves and comes back joins at the end. A position is cached for a
+minute in the default cache store, so it can lag behind someone ahead leaving by
+that long; leaving or coming back shows at once. It is `null` while the person
+has not confirmed, or after they left:
+
+```json
+{"data": {"project": "default", "list": "beta", "status": "confirmed", "position": 42}}
+```
+
+Both stay off on a list without double opt-in, whatever its definition says: an
+address typed into the form counts at once there, so a figure that moves with it
+would tell whether that address was on the list already. Such a list answers
+`count_disabled` and `position_disabled`.
+
+It is read only with the unsubscribe token the person got in every mail, never
+by address, so it cannot be used to look anyone up, and it is in the `links`
+group, limited per token. The entry's own project and list apply. Neither figure
+names anyone, but a position is exact: whoever just confirmed learns how many
+are on the list, and someone who checks again learns that people ahead of them
+left. Someone who leaves and signs up again with their own address can read the
+exact size whenever they like, so on a list that publishes positions the
+rounding of the count hides nothing. Turn it on only for a list where that is
+fine.
+
+PHP callers get both without the switches, through
+`Waitlist::for('beta')->publicCount()` and `->position($entry)`, see the
+[PHP API](php-api.md#one-list-scopedwaitlist).
 
 ## Errors
 
@@ -49,7 +113,9 @@ A refusal the package answers itself names it in `error`, next to the
 | Status | `error` | When |
 | --- | --- | --- |
 | `404` | `invalid_token` | The token belongs to no entry. |
-| `404` | `unknown_list` | `GET /purposes` for a list the project does not have. |
+| `404` | `unknown_list` | `GET /purposes` or `GET /count` for a list the project does not have. |
+| `404` | `count_disabled` | `GET /count` for a list that does not publish its count. |
+| `404` | `position_disabled` | `GET /unsubscribe/{token}/position` for an entry whose list does not publish positions. |
 | `409` | `not_subscribed` | `PUT /manage/{token}/purposes` once the address has left. |
 | `404` | `manage_links_disabled` | `POST /manage-link` or `POST /unsubscribe/{token}/manage-link` for a project without manage links; by address, the same for every address. |
 | `409` | `list_unavailable` | `PUT /manage/{token}/purposes` for a list removed since. |
@@ -188,7 +254,7 @@ of your own answers with whatever status it returns. See
 
 ## Rate limits, CORS, bots
 
-Each route group has its own named limiter: `signup` (signup, wording, manage
+Each route group has its own named limiter: `signup` (signup, wording, count, manage
 links by address; `waitlist`, per IP, or per server for one calling for a project) and
 `links` (everything with a token; `waitlist-links`, per token, so one-click
 unsubscribes from a mail provider's servers get through). CORS for a frontend on another origin, trusted proxies and

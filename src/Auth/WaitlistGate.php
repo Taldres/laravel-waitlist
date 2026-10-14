@@ -15,7 +15,7 @@ use Taldres\Waitlist\Support\OriginPolicy;
 
 /**
  * The useWaitlist gate: whether the caller may sign up, read the wording or
- * request a manage link by address for a project and list. The package defines
+ * the count, or request a manage link by address for a project and list. The package defines
  * a default; define the ability yourself to replace it, with any of Laravel's
  * gate responses, such as Response::denyWithStatus(401) or denyAsNotFound().
  */
