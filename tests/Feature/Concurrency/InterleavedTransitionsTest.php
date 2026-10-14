@@ -336,6 +336,37 @@ it('signs up again when a prune expires the cycle it is resending for before era
     assertWaitlistInvariants();
 });
 
+it('starts afresh when a prune erases the entry between the retry and its new cycle', function () {
+    config()->set(ConfigKey::ResendCooldown->value, null);
+
+    subscribeAndCapture('beta', 'user@example.com');
+    WaitlistSubscription::query()->update(['started_at' => now()->subDays(40)]);
+    $stale = WaitlistEntry::query()->sole();
+    $cycle = $this->as('a', fn () => WaitlistSubscription::query()->sole());
+    $onA = $this->as('a', fn () => WaitlistEntry::query()->sole());
+
+    $steps = [];
+    // The resend's transition locks first, the retry's new cycle second.
+    DB::connection('waitlist_b')->beforeExecuting(function (string $query) use (&$steps, $cycle, $onA) {
+        if (count($steps) < 2 && preg_match('/^select .*waitlist_entries.* for update/i', $query) === 1) {
+            $steps[] = count($steps) === 0
+                ? $this->as('a', fn () => app(SubscriptionLifecycle::class)->end($cycle, EndReason::Expired, RequestContext::none()))
+                : $this->as('a', fn () => app(EraseEntry::class)($onA));
+        }
+    });
+
+    Event::fake([EntrySubscribed::class]);
+
+    $outcome = $this->as('b', fn () => Waitlist::subscribe('beta', 'user@example.com', waitlistConsent())->outcome);
+
+    expect($steps)->toBe([true, true])
+        ->and($outcome)->toBe(SubscribeOutcome::Started)
+        ->and(WaitlistEntry::query()->sole()->isNot($stale))->toBeTrue();
+
+    Event::assertDispatchedTimes(EntrySubscribed::class, 1);
+    assertWaitlistInvariants();
+});
+
 /**
  * The event as a listener on the given connection holds it.
  */

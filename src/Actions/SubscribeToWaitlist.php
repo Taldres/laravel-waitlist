@@ -190,11 +190,18 @@ class SubscribeToWaitlist
                 throw $exception;
             }
 
-            if ($retried) {
-                throw new UnknownWaitlistException('The waitlist entry could not get a new cycle.');
+            if (! $retried) {
+                return $this->findAndAct($policy, $doubleOptIn, $email, $metadata, $wordings, $context, retried: true);
             }
 
-            return $this->findAndAct($policy, $doubleOptIn, $email, $metadata, $wordings, $context, retried: true);
+            // A retry that found the entry ended, by a prune's expiry for
+            // example, saw it erased before its cycle: only a new entry is
+            // left, and the unique index keeps that to one.
+            try {
+                return $this->createWithCycle($policy, $doubleOptIn, $email, $metadata, $wordings, $context);
+            } catch (UniqueConstraintViolationException) {
+                throw new UnknownWaitlistException('The waitlist entry could not get a new cycle.');
+            }
         } catch (UniqueConstraintViolationException) {
             // A concurrent request opened the new cycle first; act on theirs,
             // once: a violation that persists is no race.
