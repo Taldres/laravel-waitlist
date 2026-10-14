@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Models;
 
-use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Attributes\Table;
+use Illuminate\Database\Eloquent\Attributes\UseFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,6 +18,8 @@ use Taldres\ImmutableAttributes\Concerns\GuardsImmutableAttributes;
 use Taldres\Waitlist\Database\Factories\WaitlistActivityFactory;
 use Taldres\Waitlist\Enums\ActivityType;
 use Taldres\Waitlist\Enums\EntryStatus;
+use Taldres\Waitlist\Models\Concerns\ScopesToProject;
+use Taldres\Waitlist\Models\Concerns\UsesWaitlistConnection;
 use Taldres\Waitlist\Models\Concerns\UsesWaitlistEncrypter;
 use Taldres\Waitlist\Support\ResolvesModel;
 
@@ -39,6 +44,27 @@ use Taldres\Waitlist\Support\ResolvesModel;
  * @property string $occurred_on Y-m-d, the reporting day this row belongs to
  */
 #[ImmutableModel]
+#[Table('waitlist_activity', timestamps: false)]
+#[Fillable([
+    'waitlist_entry_id',
+    'waitlist_subscription_id',
+    'project',
+    'list',
+    'type',
+    'previous_status',
+    'purpose',
+    'reference',
+    'ip',
+    'user_agent',
+    'occurred_at',
+    'occurred_on',
+])]
+#[Hidden([
+    'ip',
+    'user_agent',
+    'reference',
+])]
+#[UseFactory(WaitlistActivityFactory::class)]
 class WaitlistActivity extends Model
 {
     use GuardsImmutableAttributes;
@@ -47,37 +73,9 @@ class WaitlistActivity extends Model
     use HasFactory;
 
     use ResolvesModel;
+    use ScopesToProject;
+    use UsesWaitlistConnection;
     use UsesWaitlistEncrypter;
-
-    public $timestamps = false;
-
-    protected $table = 'waitlist_activity';
-
-    protected $fillable = [
-        'waitlist_entry_id',
-        'waitlist_subscription_id',
-        'project',
-        'list',
-        'type',
-        'previous_status',
-        'purpose',
-        'reference',
-        'ip',
-        'user_agent',
-        'occurred_at',
-        'occurred_on',
-    ];
-
-    protected $hidden = [
-        'ip',
-        'user_agent',
-        'reference',
-    ];
-
-    public function getConnectionName(): ?string
-    {
-        return WaitlistEntry::waitlistConnection() ?? parent::getConnectionName();
-    }
 
     protected function casts(): array
     {
@@ -115,43 +113,5 @@ class WaitlistActivity extends Model
     public function subscription(): BelongsTo
     {
         return $this->belongsTo(static::subscriptionModelClass(), 'waitlist_subscription_id');
-    }
-
-    /**
-     * @param  Builder<self>  $query
-     * @return Builder<self>
-     */
-    public function scopeOnList(Builder $query, string $list, string $project = WaitlistEntry::DEFAULT_PROJECT): Builder
-    {
-        return $query->where('project', $project)->where('list', $list);
-    }
-
-    /**
-     * @param  Builder<self>  $query
-     * @return Builder<self>
-     */
-    public function scopeInProject(Builder $query, string $project): Builder
-    {
-        return $query->where('project', $project);
-    }
-
-    /**
-     * A list without a project is the default project's list.
-     *
-     * @param  Builder<self>  $query
-     * @return Builder<self>
-     */
-    public function scopeWithin(Builder $query, ?string $list = null, ?string $project = null): Builder
-    {
-        return match (true) {
-            $list !== null => $query->onList($list, $project ?? WaitlistEntry::DEFAULT_PROJECT),
-            $project !== null => $query->inProject($project),
-            default => $query,
-        };
-    }
-
-    protected static function newFactory(): WaitlistActivityFactory
-    {
-        return WaitlistActivityFactory::new();
     }
 }

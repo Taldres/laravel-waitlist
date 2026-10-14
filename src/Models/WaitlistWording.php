@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Models;
 
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Taldres\ImmutableAttributes\Attributes\Immutable;
 use Taldres\ImmutableAttributes\Concerns\GuardsImmutableAttributes;
+use Taldres\Waitlist\Models\Concerns\UsesWaitlistConnection;
 
 /**
  * Only a retirement is ever written after the registration.
@@ -23,20 +26,12 @@ use Taldres\ImmutableAttributes\Concerns\GuardsImmutableAttributes;
  * @property Carbon|null $retired_at
  */
 #[Immutable('project', 'purpose', 'version', 'locale', 'text', 'registered_by', 'registered_at')]
+#[Table('waitlist_wordings', timestamps: false)]
+#[Fillable(['project', 'purpose', 'version', 'locale', 'text', 'registered_by', 'registered_at', 'retired_at'])]
 class WaitlistWording extends Model
 {
     use GuardsImmutableAttributes;
-
-    public $timestamps = false;
-
-    protected $table = 'waitlist_wordings';
-
-    protected $fillable = ['project', 'purpose', 'version', 'locale', 'text', 'registered_by', 'registered_at', 'retired_at'];
-
-    public function getConnectionName(): ?string
-    {
-        return WaitlistEntry::waitlistConnection() ?? parent::getConnectionName();
-    }
+    use UsesWaitlistConnection;
 
     protected function casts(): array
     {

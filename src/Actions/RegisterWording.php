@@ -63,7 +63,7 @@ class RegisterWording
     {
         // Two deploys registering a new version at once deadlock on MySQL and
         // MariaDB (gap locks) and violate the unique index on PostgreSQL.
-        return static::waitlistConnection()->transaction(function () use ($project, $purpose, $version, $texts): int {
+        return static::waitlistTransaction(function () use ($project, $purpose, $version, $texts): int {
             $registered = WaitlistWording::query()
                 ->where('project', $project)
                 ->where('purpose', $purpose)
@@ -100,7 +100,7 @@ class RegisterWording
             }
 
             return $written;
-        }, attempts: 3);
+        });
     }
 
     /**
@@ -153,7 +153,7 @@ class RegisterWording
     {
         // Concurrent first signups of a version deadlock on MySQL and MariaDB
         // (gap locks) and violate the unique index on PostgreSQL.
-        return static::waitlistConnection()->transaction(function () use ($project, $purpose, $version, $locale, $text, $caller): bool {
+        return static::waitlistTransaction(function () use ($project, $purpose, $version, $locale, $text, $caller): bool {
             $registered = WaitlistWording::query()
                 ->where('project', $project)
                 ->where('purpose', $purpose)
@@ -187,6 +187,6 @@ class RegisterWording
             ]));
 
             return true;
-        }, attempts: 3);
+        });
     }
 }

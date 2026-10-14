@@ -58,7 +58,7 @@ class RekeyEntries
     protected function rekeyEntry(WaitlistEntry $entry): string
     {
         try {
-            return static::waitlistConnection()->transaction(function () use ($entry): string {
+            return static::waitlistTransaction(function () use ($entry): string {
                 $raw = static::modelClass()::query()->whereKey($entry->getKey())->lockForUpdate()->first()?->getAttributes();
 
                 if ($raw === null) {

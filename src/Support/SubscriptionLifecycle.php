@@ -79,7 +79,7 @@ class SubscriptionLifecycle
         $now = Carbon::now();
         $expiresAt = $confirmToken !== null ? $this->confirmTokenExpiresAt($entry->project, $now) : null;
 
-        return static::waitlistConnection()->transaction(function () use ($entry, $purposes, $context, $doubleOptIn, $confirmToken, $now, $expiresAt): WaitlistSubscription {
+        return static::waitlistTransaction(function () use ($entry, $purposes, $context, $doubleOptIn, $confirmToken, $now, $expiresAt): WaitlistSubscription {
             $subscription = $this->openCycle($entry, $purposes, $now, $now, confirmed: ! $doubleOptIn, confirmToken: $confirmToken, expiresAt: $expiresAt);
 
             ($this->activity)($entry, $subscription->sequence === 1 ? ActivityType::Subscribed : ActivityType::Resubscribed, $subscription, $context);
@@ -102,7 +102,7 @@ class SubscriptionLifecycle
             }
 
             return $subscription;
-        }, attempts: 3);
+        });
     }
 
     /**
@@ -125,18 +125,18 @@ class SubscriptionLifecycle
         ?string $confirmToken,
     ): WaitlistSubscription {
         if ($consentedAt === null) {
-            return static::waitlistConnection()->transaction(function () use ($entry, $purposes, $context, $source, $confirmToken): WaitlistSubscription {
+            return static::waitlistTransaction(function () use ($entry, $purposes, $context, $source, $confirmToken): WaitlistSubscription {
                 $subscription = $this->start($entry, $purposes, $context, doubleOptIn: true, confirmToken: $confirmToken);
 
                 ($this->activity)($entry, ActivityType::Imported, $subscription, $context, reference: $source);
 
                 return $subscription;
-            }, attempts: 3);
+            });
         }
 
         $now = Carbon::now();
 
-        return static::waitlistConnection()->transaction(function () use ($entry, $purposes, $context, $source, $consentedAt, $now): WaitlistSubscription {
+        return static::waitlistTransaction(function () use ($entry, $purposes, $context, $source, $consentedAt, $now): WaitlistSubscription {
             $subscription = $this->openCycle($entry, $purposes, $now, $consentedAt, confirmed: true, confirmToken: null, expiresAt: null);
 
             ($this->activity)($entry, $subscription->sequence === 1 ? ActivityType::Subscribed : ActivityType::Resubscribed, $subscription, $context);
@@ -146,7 +146,7 @@ class SubscriptionLifecycle
             event(new EntryImported($entry, $subscription, $source));
 
             return $subscription;
-        }, attempts: 3);
+        });
     }
 
     /**
@@ -472,7 +472,7 @@ class SubscriptionLifecycle
     public function grant(WaitlistSubscription $subscription, PurposeWording $wording, RequestContext $context): bool
     {
         try {
-            return static::waitlistConnection()->transaction(function () use ($subscription, $wording, $context): bool {
+            return static::waitlistTransaction(function () use ($subscription, $wording, $context): bool {
                 $entry = $this->lockOpenCycle($subscription);
 
                 if ($entry === null) {
@@ -495,7 +495,7 @@ class SubscriptionLifecycle
                 ConsentGranted::dispatch($entry, $subscription, $consent);
 
                 return true;
-            }, attempts: 3);
+            });
         } catch (UniqueConstraintViolationException) {
             // Caught outside the transaction: Postgres aborts it on the violation.
             return false;
@@ -519,7 +519,7 @@ class SubscriptionLifecycle
             return false;
         }
 
-        return static::waitlistConnection()->transaction(function () use ($consent, $subscription, $context): bool {
+        return static::waitlistTransaction(function () use ($consent, $subscription, $context): bool {
             $entry = $this->lockOpenCycle($subscription);
 
             if ($entry === null) {
@@ -540,7 +540,7 @@ class SubscriptionLifecycle
             ConsentWithdrawn::dispatch($entry, $subscription, $consent->refresh());
 
             return true;
-        }, attempts: 3);
+        });
     }
 
     /**
@@ -591,7 +591,7 @@ class SubscriptionLifecycle
         ?Closure $event = null,
         ?string $reference = null,
     ): bool {
-        return static::waitlistConnection()->transaction(function () use ($subscription, $attributes, $condition, $type, $context, $event, $reference): bool {
+        return static::waitlistTransaction(function () use ($subscription, $attributes, $condition, $type, $context, $event, $reference): bool {
             $entry = $this->lockEntry($subscription);
 
             if ($entry === null) {
@@ -600,7 +600,7 @@ class SubscriptionLifecycle
 
             $affected = $condition(
                 static::subscriptionModelClass()::query()->whereKey($subscription->getKey()),
-            )->update($attributes + ['updated_at' => Carbon::now()]);
+            )->update($attributes);
 
             if ($affected !== 1) {
                 return false;
@@ -617,7 +617,7 @@ class SubscriptionLifecycle
             }
 
             return true;
-        }, attempts: 3);
+        });
     }
 
     /**
@@ -631,7 +631,7 @@ class SubscriptionLifecycle
         $applied = static::modelClass()::query()
             ->whereKey($entry->getKey())
             ->where('latest_subscription_id', $subscription->getKey())
-            ->update(['status' => $status->value, 'updated_at' => Carbon::now()]);
+            ->update(['status' => $status->value]);
 
         if ($applied === 1) {
             $entry->setAttribute('status', $status);

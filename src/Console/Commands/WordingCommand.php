@@ -4,10 +4,15 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Console\Commands;
 
+use Illuminate\Console\Attributes\Description;
+use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Illuminate\Contracts\Console\Isolatable;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Taldres\Waitlist\Actions\RegisterWording;
+use Taldres\Waitlist\Config\WaitlistConfig;
+use Taldres\Waitlist\Console\Concerns\ReadsStringOptions;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Definitions\ProjectDefinitions;
 use Taldres\Waitlist\Exceptions\WordingConflictException;
@@ -15,15 +20,15 @@ use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Models\WaitlistWording;
 use Taldres\Waitlist\Support\StoredWordingCatalog;
 
-class WordingCommand extends Command
-{
-    protected $signature = 'waitlist:wording
+#[Signature('waitlist:wording
         {file? : JSON of purpose => version => wording, or => locale => wording}
         {--from-definitions : Register the wording the project definition holds, e.g. once when switching to the stored catalog}
         {--project=default : The project the wording belongs to}
-        {--retire-missing : Retire the versions of the listed purposes that the file no longer has}';
-
-    protected $description = 'Register the wording your frontend or CMS shows, e.g. on deploy';
+        {--retire-missing : Retire the versions of the listed purposes that the file no longer has}')]
+#[Description('Register the wording your frontend or CMS shows, e.g. on deploy')]
+class WordingCommand extends Command implements Isolatable
+{
+    use ReadsStringOptions;
 
     public function handle(RegisterWording $register): int
     {
@@ -31,8 +36,7 @@ class WordingCommand extends Command
             $this->warn('The catalog bound to '.ProjectCatalog::class.' does not read registered wording; bind '.StoredWordingCatalog::class.' or a catalog of your own that does.');
         }
 
-        $project = $this->option('project');
-        $project = is_string($project) && $project !== '' ? $project : WaitlistEntry::DEFAULT_PROJECT;
+        $project = $this->stringOption('project') ?? WaitlistEntry::DEFAULT_PROJECT;
         $file = $this->argument('file');
 
         if (is_string($file) === (bool) $this->option('from-definitions')) {
@@ -46,7 +50,7 @@ class WordingCommand extends Command
         }
 
         try {
-            [$registered, $retired] = DB::connection(WaitlistEntry::waitlistConnection())->transaction(
+            [$registered, $retired] = DB::connection(WaitlistConfig::connection())->transaction(
                 fn (): array => $this->sync($register, $project, $wording),
                 attempts: 3,
             );

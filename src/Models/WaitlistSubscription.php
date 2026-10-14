@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Models;
 
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Attributes\Table;
+use Illuminate\Database\Eloquent\Attributes\UseFactory;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -17,6 +21,7 @@ use Taldres\Waitlist\Database\Factories\WaitlistSubscriptionFactory;
 use Taldres\Waitlist\Enums\ConfirmationOutcome;
 use Taldres\Waitlist\Enums\EndReason;
 use Taldres\Waitlist\Enums\EntryStatus;
+use Taldres\Waitlist\Models\Concerns\UsesWaitlistConnection;
 use Taldres\Waitlist\Support\ResolvesModel;
 
 /**
@@ -45,6 +50,25 @@ use Taldres\Waitlist\Support\ResolvesModel;
  * @property-read Collection<int, WaitlistConsent> $consents
  */
 #[Immutable('waitlist_entry_id', 'sequence', 'started_at')]
+#[Table('waitlist_subscriptions')]
+#[Fillable([
+    'waitlist_entry_id',
+    'sequence',
+    'active',
+    'confirm_token_hash',
+    'confirm_token_expires_at',
+    'started_at',
+    'confirmation_sent_at',
+    'confirmation_count',
+    'confirmation_outcome',
+    'confirmed_at',
+    'ended_at',
+    'end_reason',
+    'reconfirmation_requested_at',
+    'reconfirmed_at',
+])]
+#[Hidden(['confirm_token_hash'])]
+#[UseFactory(WaitlistSubscriptionFactory::class)]
 class WaitlistSubscription extends Model
 {
     use GuardsImmutableAttributes;
@@ -53,34 +77,7 @@ class WaitlistSubscription extends Model
     use HasFactory;
 
     use ResolvesModel;
-
-    protected $table = 'waitlist_subscriptions';
-
-    protected $fillable = [
-        'waitlist_entry_id',
-        'sequence',
-        'active',
-        'confirm_token_hash',
-        'confirm_token_expires_at',
-        'started_at',
-        'confirmation_sent_at',
-        'confirmation_count',
-        'confirmation_outcome',
-        'confirmed_at',
-        'ended_at',
-        'end_reason',
-        'reconfirmation_requested_at',
-        'reconfirmed_at',
-    ];
-
-    protected $hidden = [
-        'confirm_token_hash',
-    ];
-
-    public function getConnectionName(): ?string
-    {
-        return WaitlistEntry::waitlistConnection() ?? parent::getConnectionName();
-    }
+    use UsesWaitlistConnection;
 
     protected function casts(): array
     {
@@ -172,10 +169,5 @@ class WaitlistSubscription extends Model
             $this->isConfirmed() => EntryStatus::Confirmed,
             default => EntryStatus::Pending,
         };
-    }
-
-    protected static function newFactory(): WaitlistSubscriptionFactory
-    {
-        return WaitlistSubscriptionFactory::new();
     }
 }
