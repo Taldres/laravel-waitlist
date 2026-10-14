@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Taldres\Waitlist\Console\Commands;
 
 use Closure;
+use Illuminate\Console\Attributes\Description;
+use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Arr;
@@ -15,6 +17,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Taldres\Waitlist\Actions\IssueManageLink;
 use Taldres\Waitlist\Actions\ResendConfirmation;
 use Taldres\Waitlist\Config\WaitlistConfig;
+use Taldres\Waitlist\Console\Concerns\ReadsStringOptions;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Definitions\ProjectDefinitions;
@@ -44,14 +47,13 @@ use Taldres\Waitlist\Support\ResolvesModel;
 use Taldres\Waitlist\Support\SetupAudit;
 use Taldres\Waitlist\WaitlistManager;
 
+#[Signature('waitlist:privacy
+        {--project= : Only describe this project}')]
+#[Description('Describe what the waitlist stores, why, for how long, and where it flows (input for your record of processing, GDPR Art. 30)')]
 class PrivacyCommand extends Command
 {
+    use ReadsStringOptions;
     use ResolvesModel;
-
-    protected $signature = 'waitlist:privacy
-        {--project= : Only describe this project}';
-
-    protected $description = 'Describe what the waitlist stores, why, for how long, and where it flows (input for your record of processing, GDPR Art. 30)';
 
     protected const array EVENTS = [
         EntrySubscribed::class,
@@ -69,8 +71,8 @@ class PrivacyCommand extends Command
 
     public function handle(PurposeRegistry $registry, ProjectCatalog $catalog): int
     {
-        $project = $this->option('project');
-        $projects = is_string($project) && $project !== '' ? [$project] : $catalog->projects();
+        $project = $this->stringOption('project');
+        $projects = $project !== null ? [$project] : $catalog->projects();
 
         $lines = [
             '# Waitlist processing record',

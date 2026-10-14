@@ -4,15 +4,16 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Console\Commands;
 
+use Illuminate\Console\Attributes\Description;
+use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Illuminate\Contracts\Console\Isolatable;
 use Taldres\Waitlist\Actions\RekeyEntries;
 
-class RekeyCommand extends Command
+#[Signature('waitlist:rekey')]
+#[Description('Re-encrypt stored values and rebuild the lookup hash under the current key, so earlier keys can be retired')]
+class RekeyCommand extends Command implements Isolatable
 {
-    protected $signature = 'waitlist:rekey';
-
-    protected $description = 'Re-encrypt stored values and rebuild the lookup hash under the current key, so earlier keys can be retired';
-
     public function handle(RekeyEntries $rekey): int
     {
         $result = $rekey();

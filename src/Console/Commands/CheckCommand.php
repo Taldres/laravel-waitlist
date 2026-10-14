@@ -4,18 +4,18 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Console\Commands;
 
+use Illuminate\Console\Attributes\Description;
+use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Support\SetupAudit;
 use Throwable;
 
+#[Signature('waitlist:check
+        {--strict : Fail on warnings too}')]
+#[Description('Check the settings and the tables, for a deploy')]
 class CheckCommand extends Command
 {
-    protected $signature = 'waitlist:check
-        {--strict : Fail on warnings too}';
-
-    protected $description = 'Check the settings and the tables, for a deploy';
-
     public function handle(): int
     {
         $failed = false;
