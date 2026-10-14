@@ -13,6 +13,10 @@
         "consent"
     ],
     "homepage": "https://github.com/taldres/laravel-waitlist",
+    "support": {
+        "issues": "https://github.com/taldres/laravel-waitlist/issues",
+        "source": "https://github.com/taldres/laravel-waitlist"
+    },
     "license": "MIT",
     "authors": [
         {
@@ -44,9 +48,7 @@
     "autoload-dev": {
         "psr-4": {
             "Taldres\\Waitlist\\Tests\\": "tests/",
-            "Workbench\\App\\": "workbench/app/",
-            "Workbench\\Database\\Factories\\": "workbench/database/factories/",
-            "Workbench\\Database\\Seeders\\": "workbench/database/seeders/"
+            "Workbench\\App\\": "workbench/app/"
         }
     },
     "scripts": {
