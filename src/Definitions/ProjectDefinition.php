@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Taldres\Waitlist\Definitions;
 
 use Closure;
+use Illuminate\Support\Str;
 use Taldres\Waitlist\Enums\Page;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Support\OriginPolicy;
@@ -235,21 +236,25 @@ final class ProjectDefinition
      * The key PublishableKeyResolver maps to this project, sent by a page in the
      * X-Waitlist-Key header. It is public, as every page that sends it shows
      * it: it picks the project and authorizes nothing, so who may call stays
-     * with the useWaitlist gate, authentication.required and origins(). Null or
-     * an empty string changes nothing, so an unset environment value leaves
-     * the project without a key, unreachable by key rather than reachable
-     * without one; another key replaces the earlier one.
+     * with the useWaitlist gate, authentication.required and origins(). Null,
+     * an empty or a blank string changes nothing, so an unset environment
+     * value leaves the project without a key, unreachable by key rather than
+     * reachable without one; another key replaces the earlier one.
      *
      * @throws InvalidConfigurationException
      */
     public function publishableKey(?string $key): static
     {
-        if ($key === null || $key === '') {
+        // Whitespace around the value, such as the line break a secret file
+        // ends with, is not part of the key: a header never carries it.
+        $key = Str::trim((string) $key);
+
+        if ($key === '') {
             return $this;
         }
 
-        // Sent as a header value: a stray space or line break from the
-        // environment would never match.
+        // Printable ASCII without a space is what a header value carries
+        // unchanged; /D keeps $ from also matching before a final line break.
         if (preg_match('/^[\x21-\x7E]{1,255}$/D', $key) !== 1) {
             throw new InvalidConfigurationException("The publishable key of the project [{$this->name}] must be 1 to 255 visible ASCII characters without spaces.");
         }

@@ -521,9 +521,10 @@ job. Never use a secret, such as an API token, as a publishable key.
   a database outage in its callback, so that `403` can mean "try again later" too; while it is broken, a key it shares with another project goes
   to that one. `waitlist:check` names both, a definition that cannot be built
   and projects that share a key, by project, never by key.
-- A key is 1 to 255 visible ASCII characters without spaces. Null or an empty
-  value sets none, so a project whose environment variable is unset is not
-  reachable by key. To change a key, deploy the pages with the new one as you
+- A key is 1 to 255 visible ASCII characters without spaces; whitespace around
+  it, such as the line break a secret file ends with, is dropped. Null, an
+  empty or a blank value sets none, so a project whose environment variable is
+  unset is not reachable by key. To change a key, deploy the pages with the new one as you
   switch it: a project has one key at a time.
 - A server that calls with credentials of its own and acts for a project
   (`HasWaitlistProject`) sends the key too: the key picks the project, and the

@@ -56,12 +56,17 @@ describe('a definition', function () {
             ->and((new ProjectDefinition('shop'))->publishableKey('pk_shop')->publishableKey(null)->getPublishableKey())->toBe('pk_shop');
     });
 
+    it('drops whitespace around the key and treats a blank value as unset', function () {
+        expect((new ProjectDefinition('shop'))->publishableKey("  pk_shop\n")->getPublishableKey())->toBe('pk_shop')
+            ->and((new ProjectDefinition('shop'))->publishableKey(" \n ")->getPublishableKey())->toBeNull();
+    });
+
     it('refuses a key no header can carry as it is', function (string $key) {
         expect(fn () => (new ProjectDefinition('shop'))->publishableKey($key))
             ->toThrow(InvalidConfigurationException::class, 'The publishable key of the project [shop] must be 1 to 255 visible ASCII characters without spaces.');
     })->with([
         'a space' => ['pk shop'],
-        'a line break' => ["pk_shop\n"],
+        'a line break inside' => ["pk\nshop"],
         'not ASCII' => ['pk_shöp'],
         'too long' => [str_repeat('k', 256)],
     ]);
