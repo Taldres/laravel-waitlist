@@ -267,6 +267,8 @@ describe('the position', function () {
     });
 
     it('breaks a tie within one second by the cycle that started first', function () {
+        $this->freezeSecond();
+
         $a = subscribeAndCapture('beta', 'a@example.com');
         $b = subscribeAndCapture('beta', 'b@example.com');
         Waitlist::confirm($b['confirm']);
