@@ -118,3 +118,19 @@ it('ends no other list when the entry a withdrawal names is erased on its way', 
 
     assertWaitlistInvariants();
 });
+
+it('answers an unsubscribe by address whose entry was erased on its way as not on the list', function () {
+    $tokens = subscribeAndCapture('alpha', 'user@example.com');
+
+    $erased = false;
+    DB::connection()->beforeExecuting(function (string $query) use (&$erased, $tokens) {
+        if (! $erased && preg_match('/^select .*waitlist_entries.* in \(.*\) order by/i', $query) === 1) {
+            $erased = true;
+            app(EraseEntry::class)($tokens['entry']);
+        }
+    });
+
+    expect(Waitlist::for('alpha')->unsubscribe('user@example.com'))->toBeNull()
+        ->and($erased)->toBeTrue()
+        ->and(WaitlistEntry::query()->count())->toBe(0);
+});

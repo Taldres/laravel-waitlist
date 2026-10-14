@@ -56,7 +56,6 @@ it('makes an erasure wait at the entry while a confirm holds it', function () {
 });
 
 it('makes a second resubscribe wait at the entry instead of crossing the first', function () {
-    config()->set(ConfigKey::MaxPendingPerAddress->value, null);
     config()->set(ConfigKey::ResendCooldown->value, null);
     $tokens = subscribeAndCapture('beta', 'user@example.com');
     Waitlist::unsubscribe($tokens['unsubscribe']);
@@ -83,8 +82,6 @@ it('makes a second resubscribe wait at the entry instead of crossing the first',
 });
 
 it('lets signups of different addresses run side by side', function () {
-    config()->set(ConfigKey::MaxPendingPerAddress->value, null);
-
     $other = null;
     DB::connection('waitlist_b')->beforeExecuting(function (string $query) use (&$other) {
         if ($other === null && preg_match('/^insert into \W?waitlist_subscriptions/i', $query) === 1) {
@@ -177,9 +174,6 @@ it('makes an unsubscribe wait at the entry while a grant holds its cycle', funct
 });
 
 it('acts on the entry a concurrent first signup created between lookup and insert', function () {
-    // In one process the per-address lock would hold the other client back.
-    config()->set(ConfigKey::MaxPendingPerAddress->value, null);
-
     $created = null;
     DB::connection('waitlist_a')->beforeExecuting(function (string $query) use (&$created) {
         if ($created === null && preg_match('/^insert into \W?waitlist_entries/i', $query) === 1) {

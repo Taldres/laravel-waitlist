@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Actions;
 
-use Closure;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Str;
@@ -118,29 +117,27 @@ class SubscribeToWaitlist
      */
     protected function createWithCycle(ListPolicy $policy, bool $doubleOptIn, string $email, array $metadata, array $wordings, RequestContext $context): SubscribeResult
     {
-        return $this->countingFor($policy, $doubleOptIn, $email, function (bool $mayCount) use ($policy, $doubleOptIn, $email, $metadata, $wordings, $context): SubscribeResult {
-            $model = static::modelClass();
-            $deferred = $doubleOptIn && (! $mayCount || $this->resend->addressSaturated($policy->project, $email));
-            $confirmToken = $doubleOptIn && ! $deferred ? Str::random(64) : null;
-            $unsubscribeToken = Str::random(64);
+        $model = static::modelClass();
+        $deferred = $doubleOptIn && $this->resend->addressSaturated($policy->project, $email);
+        $confirmToken = $doubleOptIn && ! $deferred ? Str::random(64) : null;
+        $unsubscribeToken = Str::random(64);
 
-            [$entry, $subscription] = static::waitlistConnection()->transaction(function () use ($model, $policy, $doubleOptIn, $email, $metadata, $wordings, $context, $confirmToken, $unsubscribeToken): array {
-                /** @var WaitlistEntry $entry */
-                $entry = $model::query()->create([
-                    'project' => $policy->project,
-                    'list' => $policy->list,
-                    'email' => $email,
-                    'status' => SubscriptionLifecycle::initialStatus(),
-                    'metadata' => $metadata,
-                    'unsubscribe_token_hash' => $model::hashToken($unsubscribeToken),
-                    'unsubscribe_token' => $unsubscribeToken,
-                ]);
+        [$entry, $subscription] = static::waitlistConnection()->transaction(function () use ($model, $policy, $doubleOptIn, $email, $metadata, $wordings, $context, $confirmToken, $unsubscribeToken): array {
+            /** @var WaitlistEntry $entry */
+            $entry = $model::query()->create([
+                'project' => $policy->project,
+                'list' => $policy->list,
+                'email' => $email,
+                'status' => SubscriptionLifecycle::initialStatus(),
+                'metadata' => $metadata,
+                'unsubscribe_token_hash' => $model::hashToken($unsubscribeToken),
+                'unsubscribe_token' => $unsubscribeToken,
+            ]);
 
-                return [$entry, $this->lifecycle->start($entry, $wordings, $context, $doubleOptIn, $confirmToken)];
-            }, attempts: 3);
+            return [$entry, $this->lifecycle->start($entry, $wordings, $context, $doubleOptIn, $confirmToken)];
+        }, attempts: 3);
 
-            return new SubscribeResult($entry, $subscription, $deferred ? SubscribeOutcome::ConfirmationDeferred : SubscribeOutcome::Started);
-        });
+        return new SubscribeResult($entry, $subscription, $deferred ? SubscribeOutcome::ConfirmationDeferred : SubscribeOutcome::Started);
     }
 
     /**
@@ -159,24 +156,22 @@ class SubscribeToWaitlist
                     : SubscribeOutcome::ResendSuppressed);
         }
 
+        $deferred = $doubleOptIn && $this->resend->addressSaturated($policy->project, $email);
+        $confirmToken = $doubleOptIn && ! $deferred ? Str::random(64) : null;
+
         try {
-            [$subscription, $deferred] = $this->countingFor($policy, $doubleOptIn, $email, function (bool $mayCount) use ($policy, $doubleOptIn, $entry, $email, $metadata, $wordings, $context): array {
-                $deferred = $doubleOptIn && (! $mayCount || $this->resend->addressSaturated($policy->project, $email));
-                $confirmToken = $doubleOptIn && ! $deferred ? Str::random(64) : null;
+            $subscription = static::waitlistConnection()->transaction(function () use ($doubleOptIn, $entry, $metadata, $wordings, $context, $confirmToken): WaitlistSubscription {
+                $subscription = $this->lifecycle->start($entry, $wordings, $context, $doubleOptIn, $confirmToken);
 
-                return [static::waitlistConnection()->transaction(function () use ($doubleOptIn, $entry, $metadata, $wordings, $context, $confirmToken): WaitlistSubscription {
-                    $subscription = $this->lifecycle->start($entry, $wordings, $context, $doubleOptIn, $confirmToken);
+                // Only a new opt-in brings metadata: a repeat on a running cycle
+                // comes from anyone who knows the address and proves nothing.
+                // Written before the commit, so the cycle's events carry it.
+                if ($metadata !== []) {
+                    $entry->forceFill(['metadata' => array_merge($entry->metadata ?? [], $metadata)])->save();
+                }
 
-                    // Only a new opt-in brings metadata: a repeat on a running cycle
-                    // comes from anyone who knows the address and proves nothing.
-                    // Written before the commit, so the cycle's events carry it.
-                    if ($metadata !== []) {
-                        $entry->forceFill(['metadata' => array_merge($entry->metadata ?? [], $metadata)])->save();
-                    }
-
-                    return $subscription;
-                }, attempts: 3), $deferred];
-            });
+                return $subscription;
+            }, attempts: 3);
         } catch (ModelNotFoundException $exception) {
             // Erased while this request was on its way: the address is new
             // again. Anything else, such as a listener's lookup, is not ours.
@@ -200,21 +195,6 @@ class SubscribeToWaitlist
         }
 
         return new SubscribeResult($entry, $subscription, $deferred ? SubscribeOutcome::ConfirmationDeferred : SubscribeOutcome::Resubscribed);
-    }
-
-    /**
-     * Without double opt-in nothing is counted, so nothing waits. A step that
-     * may not count starts its cycle without a confirmation request, which a
-     * later signup or resend sends.
-     *
-     * @template TReturn
-     *
-     * @param  Closure(bool $mayCount): TReturn  $step
-     * @return TReturn
-     */
-    protected function countingFor(ListPolicy $policy, bool $doubleOptIn, string $email, Closure $step): mixed
-    {
-        return $doubleOptIn ? $this->resend->countingFor($policy->project, $email, $step) : $step(true);
     }
 
     /**

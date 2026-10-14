@@ -24,29 +24,21 @@ same `202`, so the form reveals nobody.
   knows the address and never changes what is stored.
 - **A signup on a running cycle never adds purposes.** That needs proof of the
   mailbox, which the preference page provides.
-- **Nobody can be mailed repeatedly through a public form.** A cooldown per cycle
-  (`resend_cooldown`, 5 minutes), a cap per cycle (`max_confirmations`, 5) and a
-  cap on unconfirmed lists of a project per address and day
-  (`max_pending_per_address`, 5) hold, even with made-up list names on a `'*'`
-  list. Once the last link has expired, one more confirmation may go out, so
-  nobody can lock an address out of confirming.
-- **The cap per address holds for signups that arrive together.** Counting and
-  sending run under an atomic lock per project and address from your default
-  cache store, held until the step has committed, so the next request counts
-  the one before it. That store must support locks and be shared by all your
-  servers (redis, memcached, database, dynamodb); the `array` store locks only
-  inside one process, `file` only on one server. A request that waits more
-  than five seconds for the lock sends nothing, as at the cap: a signup starts
-  its cycle without a confirmation request and a resend is suppressed. A
-  process that dies holding the lock holds the address's mails back for a
-  minute at most. Sync listeners of `EntrySubscribed` run while the lock is
-  held, one more reason to queue the mail.
-- **Inside your own transaction the cap is yours to keep.** Called while your
-  application holds a transaction on `waitlist.connection`, the package takes
-  no lock, as it would be released before your commit. With the `database`
-  cache store, keep its locks off a connection you call the package in a
-  transaction on (`DB_CACHE_LOCK_CONNECTION`), or a waiting lock can break
-  that transaction on Postgres.
+- **Nobody can be mailed repeatedly through a public form.** A cooldown per
+  cycle (`resend_cooldown`, 5 minutes) and a cap per cycle
+  (`max_confirmations`, 5) hold, also for requests that arrive together. Once
+  the last link has expired, one more confirmation may go out, so nobody can
+  lock an address out of confirming.
+- **The cap per address is checked request by request.** A cap on unconfirmed
+  lists of a project per address and day (`max_pending_per_address`, 5) stops
+  made-up list names on a `'*'` list. Each signup or resend counts what was
+  committed before it (inside your own transaction, as of its snapshot), so
+  requests for different lists that arrive at the same moment can each pass
+  the check, and the cap can be exceeded by as many as arrive together. The
+  rate limits bound how many one source can send at once, not how many reach
+  one address. An application that needs the cap strict serializes its own
+  calls per address until the package's step has committed, or its own
+  transaction around it.
 
 ## States
 
@@ -89,18 +81,19 @@ projection and dispatches an event. So:
   that expired after the lookup changes nothing.
 
 Every step locks the entry row before it touches a cycle, and a withdrawal or a
-preference change locks all entries of the address in the project in key
-order, so steps on one address wait for each other rather than deadlock, an
-erasure included. Where the package opens the outermost transaction of a
-signup, a transition, a withdrawal or an erasure, it retries a deadlock or lock
-wait timeout up to three times with fresh data. Inside your
-own transaction it cannot: Laravel then throws a `DeadlockException` to you, and
-the retry is yours (`DB::transaction($callback, attempts: 3)`, with models
-loaded inside it). MariaDB's snapshot isolation reports a row another request
-changed after your transaction's first read the same way. A signup or confirmation
-that loses a race inside your transaction reads the winner's rows with a
-locking read, which holds those rows, and on MySQL and MariaDB the index gap
-of an address not found, until you commit: keep such transactions short. On SQLite with several workers, give the connection a
+preference change locks all entries of the address in the project in key order,
+so steps on one address wait for each other rather than deadlock, an erasure
+included. Where the package opens the outermost transaction of a signup, a
+transition, a withdrawal or an erasure, it tries up to three times, with fresh
+data, when the database reports a deadlock or (MySQL, MariaDB) a lock wait
+timeout. Inside your own transaction it cannot: Laravel then throws a
+`DeadlockException` to you, and the retry is yours (`DB::transaction($callback,
+attempts: 3)`, with models loaded inside it). MariaDB's snapshot isolation
+reports a row another request changed after your transaction's first read the
+same way. A signup or confirmation that loses a race inside your transaction
+reads the winner's rows with a locking read, which holds those rows, and on
+MySQL and MariaDB the index gap of an address not found, until you commit: keep
+such transactions short. On SQLite with several workers, give the connection a
 `busy_timeout` and WAL, and on PHP 8.4 `'transaction_mode' => 'IMMEDIATE'`, or a
 write that waits fails with "database is locked".
 
