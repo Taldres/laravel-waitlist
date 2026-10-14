@@ -44,6 +44,10 @@ use Taldres\Waitlist\WaitlistManager;
  * @method static \Taldres\Waitlist\WaitlistManager encryptUsing(?\Illuminate\Contracts\Encryption\Encrypter $encrypter)
  * @method static \Illuminate\Contracts\Encryption\Encrypter encrypter()
  * @method static \Illuminate\Contracts\Encryption\Encrypter|null customEncrypter()
+ * @method static void macro(string $name, object|callable $macro)
+ * @method static void mixin(object $mixin, bool $replace = true)
+ * @method static bool hasMacro(string $name)
+ * @method static void flushMacros()
  *
  * @see WaitlistManager
  */

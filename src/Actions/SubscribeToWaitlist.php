@@ -71,7 +71,7 @@ class SubscribeToWaitlist
         $policy = $this->registry->policy($project, $list);
         // Decided before anything is registered or looked up: a setting that
         // does not read must refuse every signup alike, a known address too.
-        $doubleOptIn = $policy->doubleOptIn;
+        $doubleOptIn = $policy->doubleOptIn();
         $wordings = $this->registry->resolve($policy, $purposes, acceptWording: true, caller: $context->caller);
 
         $email = $this->normalizer->normalize($email);

@@ -219,11 +219,11 @@ describe('lists', function () {
     it('follows the configured double opt-in when the list does not say, read on every use', function () {
         $catalog = app(ProjectCatalog::class);
 
-        expect($catalog->policy('default', 'beta')->doubleOptIn)->toBeTrue();
+        expect($catalog->policy('default', 'beta')->doubleOptIn())->toBeTrue();
 
         config()->set(ConfigKey::DoubleOptIn->value, false);
 
-        expect($catalog->policy('default', 'beta')->doubleOptIn)->toBeFalse();
+        expect($catalog->policy('default', 'beta')->doubleOptIn())->toBeFalse();
     });
 
     it('lets an explicit double opt-in win over a global switch that is off', function () {

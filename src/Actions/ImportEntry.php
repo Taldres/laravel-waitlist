@@ -88,7 +88,7 @@ class ImportEntry
 
         $policy = $this->registry->policy($project, $list);
 
-        if ($consentedAt === null && ! $policy->doubleOptIn) {
+        if ($consentedAt === null && ! $policy->doubleOptIn()) {
             throw new InvalidArgumentException("The list [{$list}] has no double opt-in, so an import needs the time each address consented.");
         }
 

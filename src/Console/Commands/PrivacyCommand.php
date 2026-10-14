@@ -184,7 +184,7 @@ class PrivacyCommand extends Command
                             $wording->required ? 'yes' : 'no',
                             $locale === '' ? $wording->version : "{$wording->version} ({$locale})",
                             str_replace(["\r\n", "\n", "\r", '|'], [' ', ' ', ' ', '\|'], $text),
-                            $policy->doubleOptIn ? 'yes' : 'no',
+                            $policy->doubleOptIn() ? 'yes' : 'no',
                         );
                     }
                 }
@@ -199,7 +199,7 @@ class PrivacyCommand extends Command
                         $purpose,
                         $purpose === $policy->primary ? 'yes' : 'no',
                         "None yet: the project's servers send it with the first signup.",
-                        $policy->doubleOptIn ? 'yes' : 'no',
+                        $policy->doubleOptIn() ? 'yes' : 'no',
                     );
                 }
             }

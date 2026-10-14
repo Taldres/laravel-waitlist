@@ -222,9 +222,9 @@ describe('a list policy', function () {
             ->and($policy->purposes())->toBe(['waitlist', 'newsletter'])
             ->and($policy->withOptional([])->optional)->toBe([])
             ->and($reads)->toBe(0)
-            ->and($policy->doubleOptIn)->toBeTrue()
+            ->and($policy->doubleOptIn())->toBeTrue()
             ->and($reads)->toBe(1)
-            ->and($policy->withOptional([])->doubleOptIn)->toBeTrue();
+            ->and($policy->withOptional([])->doubleOptIn())->toBeTrue();
     });
 
     it('reports a deferred decision that does not read where it is asked for', function () {
@@ -232,16 +232,15 @@ describe('a list policy', function () {
             throw new InvalidConfigurationException('Unreadable.');
         });
 
-        expect(fn () => $policy->doubleOptIn)->toThrow(InvalidConfigurationException::class, 'Unreadable.')
-            ->and(fn () => $policy->doubleOptIn)->toThrow(InvalidConfigurationException::class, 'Unreadable.')
-            ->and(fn () => $policy->withOptional([])->doubleOptIn)->toThrow(InvalidConfigurationException::class, 'Unreadable.');
+        expect(fn () => $policy->doubleOptIn())->toThrow(InvalidConfigurationException::class, 'Unreadable.')
+            ->and(fn () => $policy->doubleOptIn())->toThrow(InvalidConfigurationException::class, 'Unreadable.')
+            ->and(fn () => $policy->withOptional([])->doubleOptIn())->toThrow(InvalidConfigurationException::class, 'Unreadable.');
     });
 
     it('still takes the decision as a plain bool', function (bool $decision) {
         $policy = new ListPolicy('default', 'beta', 'waitlist', [], $decision);
 
-        expect($policy->doubleOptIn)->toBe($decision)
-            ->and(isset($policy->doubleOptIn))->toBeTrue()
+        expect($policy->doubleOptIn())->toBe($decision)
             ->and($policy->withOptional(['newsletter']))->toEqual(new ListPolicy('default', 'beta', 'waitlist', ['newsletter'], $decision));
     })->with([true, false]);
 
@@ -254,19 +253,13 @@ describe('a list policy', function () {
         'a deferred decision' => fn () => fn (): bool => true,
     ]);
 
-    it('knows no other property', function () {
-        $policy = new ListPolicy('default', 'beta', 'waitlist', [], fn (): bool => true);
-
-        expect(fn () => $policy->unknown)->toThrow(Error::class, 'Undefined property');
-    });
-
     it('is built from the catalog although the default does not read', function () {
         config()->set(ConfigKey::DoubleOptIn->value, 'maybe');
 
         $policy = app(ProjectCatalog::class)->policy('default', 'beta');
 
         expect($policy)->toBeInstanceOf(ListPolicy::class)
-            ->and(fn () => $policy->doubleOptIn)->toThrow(InvalidConfigurationException::class, 'The waitlist.double_opt_in.enabled config must be true or false, got a text it does not read.');
+            ->and(fn () => $policy->doubleOptIn())->toThrow(InvalidConfigurationException::class, 'The waitlist.double_opt_in.enabled config must be true or false, got a text it does not read.');
     });
 
     it('takes the default as it is when it reads', function (bool $default) {
@@ -283,6 +276,6 @@ describe('a list policy', function () {
         $policy = app(PurposeRegistry::class)->policy('default', 'beta');
 
         expect($policy->optional)->toBe(['newsletter'])
-            ->and(fn () => $policy->doubleOptIn)->toThrow(InvalidConfigurationException::class, 'double_opt_in.enabled');
+            ->and(fn () => $policy->doubleOptIn())->toThrow(InvalidConfigurationException::class, 'double_opt_in.enabled');
     });
 });

@@ -19,7 +19,7 @@ class WaitlistServiceProvider extends ServiceProvider
         // projects' servers, instead of the purpose() texts below; everything
         // else still comes from the definitions. A catalog of your own, over a
         // database for example, also decides double opt-in per list
-        // (ListPolicy::$doubleOptIn) instead of double_opt_in.enabled.
+        // (ListPolicy::doubleOptIn()) instead of double_opt_in.enabled.
         // $this->app->bind(\Taldres\Waitlist\Contracts\ProjectCatalog::class, \Taldres\Waitlist\Support\StoredWordingCatalog::class);
     }
 
