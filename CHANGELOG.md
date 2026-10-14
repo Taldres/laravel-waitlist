@@ -1,6 +1,6 @@
 # Release Notes
 
-## [Unreleased](https://github.com/taldres/laravel-waitlist/commits/main/compare/v0.1.0...HEAD)
+## [Unreleased](https://github.com/taldres/laravel-waitlist/commits/main/compare/v0.1.1...HEAD)
 
 - Requires PHP 8.3+ and Laravel 13
 - Subscription cycles with exactly-once state changes
@@ -47,6 +47,33 @@
 - Manage links by address are sent once per cooldown across the address's lists also when requested on two lists at once, two requests minting a lost unsubscribe token at once hand out the same one, and `waitlist:wording` or `Waitlist::registerWording()` on two deploys at once retry instead of failing on a deadlock or a unique violation
 - Lifecycle events and `ManageLinkRequested` wait for the commit on `waitlist.connection`, so a transaction the application rolls back on another connection no longer discards what the package deferred; a manage link that cannot be built no longer starts the request cooldown
 - Bundled Laravel Boost skills: the integration as a whole, plus focused skills for the frontend, mail, provider sync, projects, reporting, the launch, privacy operations and testing
+
+## [v0.1.1](https://github.com/taldres/laravel-waitlist/commits/main/compare/v0.1.0...v0.1.1) - 2026-10-14
+
+Requests that arrive together for the same address (double submits, several open tabs, a one-click unsubscribe crossing an erasure) no longer deadlock, act twice or answer with a server error.
+
+### What changes
+
+- **Steps on one address wait for each other.** Every step locks the entry before its cycle, as an erasure does. Withdrawals, preference changes and manage links by address lock the address's entries in a fixed order. Where the package opens the outermost transaction, it retries a deadlock up to three times.
+- **Events are no longer lost.** Lifecycle events and `ManageLinkRequested` wait for the commit on `waitlist.connection`, so a rollback on another connection no longer discards them.
+- **Only the newest confirm link confirms**, also when a resend or the expiry lands between looking the link up and confirming it.
+- **Preference changes from two tabs** no longer mix their submissions.
+- **Manage links by address** go out once per cooldown across the address's lists, also when requested on two lists at once. A link that cannot be built no longer starts the cooldown.
+- **Requests racing an erasure** answer as if the address were gone: a signup starts afresh, a resend sends nothing, token links answer `invalid_token`, and `Waitlist::for($list)->unsubscribe()` / `->withdraw()` return `null`.
+- **Inside your own transaction**, a signup or confirmation that loses a race acts on what the other request committed, instead of failing on MySQL and MariaDB.
+- Two requests minting a lost unsubscribe token hand out the same one, and `waitlist:wording` or `Waitlist::registerWording()` on two deploys at once retry instead of failing.
+
+### Worth knowing
+
+- **`max_pending_per_address` is checked per request.** Signups or resends for different lists that arrive at the same moment can each pass it. The per-cycle cooldown and `max_confirmations` hold for concurrent requests.
+- **Read replicas:** `waitlist.connection` must read what was just committed. Point it at the primary.
+- **Your own transactions:** when you call the package inside one, retrying a deadlock is up to you (`DB::transaction($callback, attempts: 3)`).
+- **SQLite with several workers:** set a `busy_timeout`, WAL and, on PHP 8.4, `'transaction_mode' => 'IMMEDIATE'`.
+- **Extending:** a replaced `SubscriptionLifecycle` must lock the entry row before the cycle row. Subclasses that override `SubscribeToWaitlist::find()`, `GetUnsubscribeToken::mint()` or `RequestManageLink::sentToAddressSince()` need the new signatures.
+
+No new migrations and no config changes. Details are in [docs/lifecycle.md](https://github.com/Taldres/laravel-waitlist/blob/v0.1.1/docs/lifecycle.md).
+
+**Full Changelog**: https://github.com/Taldres/laravel-waitlist/compare/v0.1.0...v0.1.1
 
 ## [v0.1.0](https://github.com/taldres/laravel-waitlist/commits/main/compare/main...v0.1.0) - 2026-10-11
 
