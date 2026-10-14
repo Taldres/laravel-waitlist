@@ -54,6 +54,8 @@ final class ProjectDefinition
      */
     private array $origins = [];
 
+    private ?string $publishableKey = null;
+
     /**
      * @internal Created by ProjectDefinitions when the project is first needed.
      */
@@ -230,6 +232,34 @@ final class ProjectDefinition
     }
 
     /**
+     * The key PublishableKeyResolver maps to this project, sent by a page in the
+     * X-Waitlist-Key header. It is public, as every page that sends it shows
+     * it: it picks the project and authorizes nothing, so who may call stays
+     * with the useWaitlist gate, authentication.required and origins(). Null or
+     * an empty string changes nothing, so an unset environment value leaves
+     * the project without a key, unreachable by key rather than reachable
+     * without one; another key replaces the earlier one.
+     *
+     * @throws InvalidConfigurationException
+     */
+    public function publishableKey(?string $key): static
+    {
+        if ($key === null || $key === '') {
+            return $this;
+        }
+
+        // Sent as a header value: a stray space or line break from the
+        // environment would never match.
+        if (preg_match('/^[\x21-\x7E]{1,255}$/D', $key) !== 1) {
+            throw new InvalidConfigurationException("The publishable key of the project [{$this->name}] must be 1 to 255 visible ASCII characters without spaces.");
+        }
+
+        $this->publishableKey = $key;
+
+        return $this;
+    }
+
+    /**
      * The retention periods this project promises in its privacy notice, in
      * days, where they differ from waitlist.retention: how long an address may
      * stay unconfirmed, how long one is kept after it left, and how long the IP
@@ -326,6 +356,11 @@ final class ProjectDefinition
     public function getOrigins(): array
     {
         return $this->origins;
+    }
+
+    public function getPublishableKey(): ?string
+    {
+        return $this->publishableKey;
     }
 
     public function getPeriods(): ProjectPeriods

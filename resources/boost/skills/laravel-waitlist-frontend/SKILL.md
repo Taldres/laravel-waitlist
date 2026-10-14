@@ -188,6 +188,11 @@ keeping or dropping one does not.
   additionally refuses other websites' browsers with `403` for that project (a
   request without an `Origin` header, as from a server, is not affected; it keeps
   other websites out, not bots).
+- Several projects called from the browser: with `PublishableKeyResolver` bound,
+  the page sends its project's `publishableKey()` in `X-Waitlist-Key` (add it to
+  `allowed_headers` in `config/cors.php`); a missing or unknown key answers `403`.
+  The key is public and only picks the project: pair it with `origins()`, and
+  never put a secret token in a page.
 - Behind a proxy or CDN: configure trusted proxies, or all visitors share one rate
   limit bucket.
 - Routes that are off (the default) are not registered: every URL under the prefix
