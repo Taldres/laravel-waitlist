@@ -306,6 +306,36 @@ it('starts afresh when a prune expires and erases the signup it is resending for
     assertWaitlistInvariants();
 });
 
+it('signs up again when a prune expires the cycle it is resending for before erasing it', function () {
+    config()->set(ConfigKey::ResendCooldown->value, null);
+
+    subscribeAndCapture('beta', 'user@example.com');
+    WaitlistSubscription::query()->update(['started_at' => now()->subDays(40)]);
+    $stale = WaitlistEntry::query()->sole();
+    $cycle = $this->as('a', fn () => WaitlistSubscription::query()->sole());
+
+    $expired = null;
+    // The resend is about to lock the entry for its transition.
+    DB::connection('waitlist_b')->beforeExecuting(function (string $query) use (&$expired, $cycle) {
+        if ($expired === null && preg_match('/^select .*waitlist_entries.* for update/i', $query) === 1) {
+            $expired = $this->as('a', fn () => app(SubscriptionLifecycle::class)->end($cycle, EndReason::Expired, RequestContext::none()));
+        }
+    });
+
+    $outcome = $this->as('b', fn () => Waitlist::subscribe('beta', 'user@example.com', waitlistConsent())->outcome);
+    $erased = $this->as('a', fn () => app(PruneEntries::class)->expirePending(30));
+
+    $entry = WaitlistEntry::query()->sole();
+
+    expect($expired)->toBeTrue()
+        ->and($outcome)->toBe(SubscribeOutcome::Resubscribed)
+        ->and($erased)->toBe(0)
+        ->and($entry->is($stale))->toBeTrue()
+        ->and($entry->status)->toBe(EntryStatus::Pending);
+
+    assertWaitlistInvariants();
+});
+
 /**
  * The event as a listener on the given connection holds it.
  */

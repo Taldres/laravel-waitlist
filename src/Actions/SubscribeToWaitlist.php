@@ -155,9 +155,10 @@ class SubscribeToWaitlist
 
             $resent = $this->resend->resend($current, $context);
 
-            // Erased on the way, by a prune for example: the address is new
-            // again, rather than suppressed with nothing left to confirm.
-            if (! $resent && ! $retried && ! $this->stillStored($entry)) {
+            // Ended or erased on the way, by a prune's expiry for example: the
+            // address has nothing left to confirm, so it signs up again
+            // rather than being suppressed.
+            if (! $resent && ! $retried && ! $this->stillOpen($entry, $current)) {
                 return $this->findAndAct($policy, $doubleOptIn, $email, $metadata, $wordings, $context, retried: true);
             }
 
@@ -205,6 +206,20 @@ class SubscribeToWaitlist
         }
 
         return new SubscribeResult($entry, $subscription, $deferred ? SubscribeOutcome::ConfirmationDeferred : SubscribeOutcome::Resubscribed);
+    }
+
+    /**
+     * The entry first, as every step locks it before its cycle.
+     */
+    protected function stillOpen(WaitlistEntry $entry, WaitlistSubscription $cycle): bool
+    {
+        if (! $this->stillStored($entry)) {
+            return false;
+        }
+
+        $query = static::subscriptionModelClass()::query()->whereKey($cycle->getKey())->whereNull('ended_at');
+
+        return (static::waitlistConnection()->transactionLevel() > 0 ? $query->lockForUpdate() : $query)->value($cycle->getKeyName()) !== null;
     }
 
     /**
