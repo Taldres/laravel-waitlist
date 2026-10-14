@@ -12,7 +12,7 @@ use Taldres\Waitlist\Models\WaitlistEntry;
  * the project has no pattern for the action. The events then carry null, and
  * the link is yours to build from the plain token.
  */
-interface ConfirmationUrlGenerator
+interface LinkGenerator
 {
     public function confirmUrl(WaitlistEntry $entry, string $plainToken): ?string;
 

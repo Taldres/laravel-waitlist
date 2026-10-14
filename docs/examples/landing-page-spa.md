@@ -84,10 +84,10 @@ Need more logic (locale, list-specific landing pages)? Bind your own generator:
 // app/Waitlist/SpaUrlGenerator.php
 namespace App\Waitlist;
 
-use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
+use Taldres\Waitlist\Contracts\LinkGenerator;
 use Taldres\Waitlist\Models\WaitlistEntry;
 
-class SpaUrlGenerator implements ConfirmationUrlGenerator
+class SpaUrlGenerator implements LinkGenerator
 {
     public function confirmUrl(WaitlistEntry $entry, string $plainToken): ?string
     {
@@ -108,7 +108,7 @@ class SpaUrlGenerator implements ConfirmationUrlGenerator
 
 ```php
 // app/Providers/WaitlistServiceProvider.php, in register()
-$this->app->bind(\Taldres\Waitlist\Contracts\ConfirmationUrlGenerator::class, \App\Waitlist\SpaUrlGenerator::class);
+$this->app->bind(\Taldres\Waitlist\Contracts\LinkGenerator::class, \App\Waitlist\SpaUrlGenerator::class);
 ```
 
 The package endpoints work the same way if you would rather not write this one:

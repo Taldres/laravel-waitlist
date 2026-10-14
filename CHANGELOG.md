@@ -58,6 +58,7 @@
 - `waitlist:prune`, `waitlist:rekey` and `waitlist:wording` take `--isolated` and run under a cache lock; `waitlist:show`, `waitlist:export` and `waitlist:import` ask for a missing argument in a terminal
 - The routes validate and authorize with form requests, which ask the project resolver and the `useWaitlist` gate before the rules, as Laravel orders them; the answers are unchanged, and a honeypot or captcha field in the body is no error where the app calls `FormRequest::failOnUnknownFields()`
 - The confirm and unsubscribe links have a route for GET, which only reports, and a route for POST (`confirm.store`, `unsubscribe.store`), which acts; the URLs and answers are unchanged, so run `php artisan route:cache` again if you cache routes
+- Breaking: `Waitlist::verifySpamUsing()` and `Waitlist::spamProtector()` are gone, bind a `SpamProtector` (`ClosureSpamProtector` wraps a closure); the `ConfirmationUrlGenerator` contract is now `LinkGenerator` and `DefaultConfirmationUrlGenerator` is `DefaultLinkGenerator`; `ListPolicy::doubleOptIn` is a method, `doubleOptIn()`
 
 ## [v0.1.1](https://github.com/taldres/laravel-waitlist/commits/main/compare/v0.1.0...v0.1.1) - 2026-10-14
 

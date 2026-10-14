@@ -183,7 +183,7 @@ container, and a `bind()` in a provider of yours replaces them, see
 
 | Contract | Default | Decides |
 | --- | --- | --- |
-| `ConfirmationUrlGenerator` | `DefaultConfirmationUrlGenerator` | the confirm, unsubscribe and manage URLs in mails |
+| `LinkGenerator` | `DefaultLinkGenerator` | the confirm, unsubscribe and manage URLs in mails |
 | `ProjectResolver` | `DefaultProjectResolver`, always `default` | which project an HTTP signup is for; `PublishableKeyResolver` takes it from the `X-Waitlist-Key` header, `AuthenticatedProjectResolver` from the caller |
 | `EmailNormalizer` | `DefaultEmailNormalizer`, lowercase and trim | which spellings are the same address; part of the lookup hash |
 | `SpamProtector` | `NullSpamProtector`, accepts all | the bot check on the signup and manage links by address; `TimeTrapSpamProtector` is a built-in one to bind, and `ClosureSpamProtector` wraps a closure |

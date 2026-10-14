@@ -233,7 +233,7 @@ $entry->hasConsentFor('newsletter');
   `Waitlist::encryptUsing($encrypter)` with any `Illuminate\Contracts\Encryption\Encrypter`.
   Its keys also make the lookup hash, so they must stay stable.
 - Supported extension points: your own models, the contracts with their container
-  bindings (`ProjectCatalog`, `ConfirmationUrlGenerator`, `ProjectResolver`,
+  bindings (`ProjectCatalog`, `LinkGenerator`, `ProjectResolver`,
   `EmailNormalizer`, `SpamProtector`), the `useWaitlist` gate, events and macros.
   Bind a contract with `$this->app->bind()` in a provider's `register()`: the
   package binds its defaults with `bindIf()` first, so a `bindIf()` of yours is

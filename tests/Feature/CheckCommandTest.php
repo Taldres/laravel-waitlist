@@ -10,8 +10,8 @@ use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Schema;
 use Taldres\Waitlist\Config\PackageConfig;
 use Taldres\Waitlist\Config\WaitlistConfig;
-use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
 use Taldres\Waitlist\Contracts\EmailNormalizer;
+use Taldres\Waitlist\Contracts\LinkGenerator;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Contracts\SpamProtector;
@@ -217,7 +217,7 @@ function checkContracts(): array
 {
     return [
         'the catalog' => ProjectCatalog::class,
-        'the URL generator' => ConfirmationUrlGenerator::class,
+        'the URL generator' => LinkGenerator::class,
         'the project resolver' => ProjectResolver::class,
         'the email normalizer' => EmailNormalizer::class,
         'the spam protector' => SpamProtector::class,

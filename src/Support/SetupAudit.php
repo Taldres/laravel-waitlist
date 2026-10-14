@@ -13,8 +13,8 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Taldres\Waitlist\Config\WaitlistConfig;
-use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
 use Taldres\Waitlist\Contracts\EmailNormalizer;
+use Taldres\Waitlist\Contracts\LinkGenerator;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Contracts\SpamProtector;
@@ -36,7 +36,7 @@ final class SetupAudit
 {
     private const array CONTRACTS = [
         ProjectCatalog::class,
-        ConfirmationUrlGenerator::class,
+        LinkGenerator::class,
         ProjectResolver::class,
         EmailNormalizer::class,
         SpamProtector::class,

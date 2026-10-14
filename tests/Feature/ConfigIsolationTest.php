@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Exceptions;
 use Taldres\Waitlist\Config\ConfigFallback;
-use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
+use Taldres\Waitlist\Contracts\LinkGenerator;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Enums\ActivityType;
 use Taldres\Waitlist\Enums\ConfigKey;
@@ -252,7 +252,7 @@ describe('a URL generator or catalog that does not resolve', function () {
         $act();
     })->with(function () {
         foreach (['unsubscribe by token', 'withdraw one purpose', 'one-click unsubscribe', 'leave from the manage page', 'waitlist:prune an abandoned signup'] as $flow) {
-            yield "{$flow} / the URL generator" => [$flow, ConfirmationUrlGenerator::class];
+            yield "{$flow} / the URL generator" => [$flow, LinkGenerator::class];
         }
 
         foreach (['unsubscribe by token', 'withdraw one purpose', 'one-click unsubscribe', 'leave from the manage page'] as $flow) {
@@ -260,7 +260,7 @@ describe('a URL generator or catalog that does not resolve', function () {
         }
 
         // Saving purposes reads the wording from the catalog, but no link.
-        yield 'update purposes on the manage page / the URL generator' => ['update purposes on the manage page', ConfirmationUrlGenerator::class];
+        yield 'update purposes on the manage page / the URL generator' => ['update purposes on the manage page', LinkGenerator::class];
     });
 });
 

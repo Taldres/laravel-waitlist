@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Event;
-use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
 use Taldres\Waitlist\Contracts\EmailNormalizer;
+use Taldres\Waitlist\Contracts\LinkGenerator;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Contracts\SpamProtector;
@@ -88,7 +88,7 @@ function edgeCaseUnrelated(array $needs): array
  */
 function edgeCaseUnusedContracts(array $needs): array
 {
-    $contracts = [ConfirmationUrlGenerator::class, EmailNormalizer::class, ProjectCatalog::class, ProjectResolver::class, SpamProtector::class];
+    $contracts = [LinkGenerator::class, EmailNormalizer::class, ProjectCatalog::class, ProjectResolver::class, SpamProtector::class];
 
     return array_values(array_diff($contracts, array_filter($needs, is_string(...))));
 }
@@ -105,7 +105,7 @@ function edgeCaseFlows(): array
     // The limits of the links fall back to the shipped ones when they do not read.
     $links = [ConfigKey::RoutesEnabled, ConfigKey::RoutesPrefix, ConfigKey::RoutesName, ConfigKey::RoutesMiddleware, ConfigKey::LinksMiddleware];
     $signup = [ConfigKey::RoutesEnabled, ConfigKey::RoutesPrefix, ConfigKey::RoutesName, ConfigKey::RoutesMiddleware, ConfigKey::SignupMiddleware, ConfigKey::SignupPerMinute];
-    $manageLink = [ConfigKey::ManageTokenTtl, ConfigKey::ManageRequestCooldown, ConfigKey::RoutesEnabled, EmailNormalizer::class, ConfirmationUrlGenerator::class, ProjectCatalog::class];
+    $manageLink = [ConfigKey::ManageTokenTtl, ConfigKey::ManageRequestCooldown, ConfigKey::RoutesEnabled, EmailNormalizer::class, LinkGenerator::class, ProjectCatalog::class];
     $erasure = [ConfigKey::Model, ConfigKey::ActivityModel, ConfigKey::Connection, EmailNormalizer::class];
     $retention = [ConfigKey::RetentionPendingDays, ConfigKey::RetentionUnsubscribedDays, ConfigKey::RetentionRequestMetadataDays, ConfigKey::RetentionReconfirmAfterDays, ConfigKey::RetentionReconfirmWithinDays];
 
@@ -148,7 +148,7 @@ function edgeCaseFlows(): array
                 $test->getJson("/waitlist/unsubscribe/{$tokens['unsubscribe']}")->assertOk()->assertJsonPath('data.status', EntryStatus::Confirmed->value);
             };
         }],
-        'confirm an issued link' => [[...$store, ConfirmationUrlGenerator::class, ProjectCatalog::class, ConfigKey::RoutesEnabled], false, function ($test): Closure {
+        'confirm an issued link' => [[...$store, LinkGenerator::class, ProjectCatalog::class, ConfigKey::RoutesEnabled], false, function ($test): Closure {
             $tokens = edgeCaseSubscribe(confirm: false);
 
             return function () use ($tokens): void {
@@ -156,7 +156,7 @@ function edgeCaseFlows(): array
                     ->and(edgeCaseEntry()->status)->toBe(EntryStatus::Confirmed);
             };
         }],
-        'confirm an issued link over HTTP' => [[...$store, ...$links, ConfirmationUrlGenerator::class, ProjectCatalog::class], true, function ($test): Closure {
+        'confirm an issued link over HTTP' => [[...$store, ...$links, LinkGenerator::class, ProjectCatalog::class], true, function ($test): Closure {
             $tokens = edgeCaseSubscribe(confirm: false);
 
             return function () use ($test, $tokens): void {
@@ -210,7 +210,7 @@ function edgeCaseFlows(): array
                 Event::assertDispatched(ManageLinkRequested::class);
             };
         }],
-        'manage link issued for an identified person' => [[ConfigKey::Model, ConfigKey::Connection, ConfigKey::ManageTokenTtl, ConfigKey::RoutesEnabled, ConfirmationUrlGenerator::class, ProjectCatalog::class], false, function ($test): Closure {
+        'manage link issued for an identified person' => [[ConfigKey::Model, ConfigKey::Connection, ConfigKey::ManageTokenTtl, ConfigKey::RoutesEnabled, LinkGenerator::class, ProjectCatalog::class], false, function ($test): Closure {
             edgeCaseSubscribe();
 
             return function (): void {

@@ -12,7 +12,7 @@ use Illuminate\Support\Carbon;
 use Taldres\Waitlist\Actions\GetUnsubscribeToken;
 use Taldres\Waitlist\Actions\RecordActivity;
 use Taldres\Waitlist\Config\WaitlistConfig;
-use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
+use Taldres\Waitlist\Contracts\LinkGenerator;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Enums\ActivityType;
 use Taldres\Waitlist\Enums\ConfirmationOutcome;
@@ -660,7 +660,7 @@ class SubscriptionLifecycle
             entry: $entry,
             subscription: $subscription,
             confirmToken: $confirmToken,
-            confirmUrl: app(ConfirmationUrlGenerator::class)->confirmUrl($entry, $confirmToken),
+            confirmUrl: app(LinkGenerator::class)->confirmUrl($entry, $confirmToken),
             unsubscribeToken: $unsubscribe->token,
             unsubscribeUrl: $unsubscribe->url,
             answerBy: $answerBy,
@@ -681,7 +681,7 @@ class SubscriptionLifecycle
             subscription: $subscription,
             confirmToken: $confirmToken,
             unsubscribeToken: $unsubscribe->token,
-            confirmUrl: $confirmToken !== null ? app(ConfirmationUrlGenerator::class)->confirmUrl($entry, $confirmToken) : null,
+            confirmUrl: $confirmToken !== null ? app(LinkGenerator::class)->confirmUrl($entry, $confirmToken) : null,
             unsubscribeUrl: $unsubscribe->url,
             requiresConfirmation: $doubleOptIn,
             isNewCycle: $isNewCycle,

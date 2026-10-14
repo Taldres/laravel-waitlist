@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Routing\RouteCollection;
 use Illuminate\Support\Facades\Event;
-use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
+use Taldres\Waitlist\Contracts\LinkGenerator;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\EntryStatus;
@@ -461,7 +461,7 @@ it('serves the routes and builds the mail links under any prefix and name', func
 
     expect($confirmUrl)->toBe("{$root}{$base}/confirm/{$confirm}")
         ->and($unsubscribeUrl)->toBe("{$root}{$base}/unsubscribe/{$unsubscribe}")
-        ->and(app(ConfirmationUrlGenerator::class)->manageUrl(WaitlistEntry::query()->firstOrFail(), 'token'))->toBe("{$root}{$base}/manage/token");
+        ->and(app(LinkGenerator::class)->manageUrl(WaitlistEntry::query()->firstOrFail(), 'token'))->toBe("{$root}{$base}/manage/token");
 
     $this->post("{$base}/unsubscribe/{$unsubscribe}", ['List-Unsubscribe' => 'One-Click'])->assertOk();
 

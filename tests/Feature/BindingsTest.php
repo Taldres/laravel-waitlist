@@ -6,16 +6,16 @@ use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\ServiceProvider;
-use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
 use Taldres\Waitlist\Contracts\EmailNormalizer;
+use Taldres\Waitlist\Contracts\LinkGenerator;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Contracts\SpamProtector;
 use Taldres\Waitlist\Facades\Waitlist;
 use Taldres\Waitlist\Models\WaitlistConsent;
 use Taldres\Waitlist\Models\WaitlistEntry;
-use Taldres\Waitlist\Support\DefaultConfirmationUrlGenerator;
 use Taldres\Waitlist\Support\DefaultEmailNormalizer;
+use Taldres\Waitlist\Support\DefaultLinkGenerator;
 use Taldres\Waitlist\Support\DefaultProjectResolver;
 use Taldres\Waitlist\Support\DefinedProjectCatalog;
 use Taldres\Waitlist\Support\NullSpamProtector;
@@ -34,7 +34,7 @@ class BindingsPlusNormalizer implements EmailNormalizer
     }
 }
 
-class BindingsUrlGenerator extends DefaultConfirmationUrlGenerator {}
+class BindingsUrlGenerator extends DefaultLinkGenerator {}
 
 class BindingsCatalog extends DefinedProjectCatalog {}
 
@@ -57,7 +57,7 @@ function bindingsContracts(): array
 {
     return [
         'the email normalizer' => [EmailNormalizer::class, DefaultEmailNormalizer::class, BindingsPlusNormalizer::class],
-        'the URL generator' => [ConfirmationUrlGenerator::class, DefaultConfirmationUrlGenerator::class, BindingsUrlGenerator::class],
+        'the URL generator' => [LinkGenerator::class, DefaultLinkGenerator::class, BindingsUrlGenerator::class],
         'the catalog' => [ProjectCatalog::class, DefinedProjectCatalog::class, BindingsCatalog::class],
         'the project resolver' => [ProjectResolver::class, DefaultProjectResolver::class, BindingsResolver::class],
         'the spam protector' => [SpamProtector::class, NullSpamProtector::class, BindingsDenyAllProtector::class],

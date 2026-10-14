@@ -39,7 +39,7 @@ use Taldres\Waitlist\Exceptions\WordingConflictException;
 use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Models\WaitlistSubscription;
 use Taldres\Waitlist\Reporting\WaitlistReport;
-use Taldres\Waitlist\Support\DefaultConfirmationUrlGenerator;
+use Taldres\Waitlist\Support\DefaultLinkGenerator;
 use Taldres\Waitlist\Support\ManageLink;
 use Taldres\Waitlist\Support\PersonalData;
 use Taldres\Waitlist\Support\PurposeWording;
@@ -365,7 +365,7 @@ class WaitlistManager
             return [];
         }
 
-        $url = DefaultConfirmationUrlGenerator::packageUrl(Page::Unsubscribe->value, array_filter([
+        $url = DefaultLinkGenerator::packageUrl(Page::Unsubscribe->value, array_filter([
             'token' => $this->unsubscribeToken($entry)->token,
             'purpose' => $purpose,
         ]));

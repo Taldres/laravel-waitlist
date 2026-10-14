@@ -24,8 +24,8 @@ use Taldres\Waitlist\Console\Commands\PruneCommand;
 use Taldres\Waitlist\Console\Commands\RekeyCommand;
 use Taldres\Waitlist\Console\Commands\ShowCommand;
 use Taldres\Waitlist\Console\Commands\WordingCommand;
-use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
 use Taldres\Waitlist\Contracts\EmailNormalizer;
+use Taldres\Waitlist\Contracts\LinkGenerator;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Contracts\SpamProtector;
@@ -33,8 +33,8 @@ use Taldres\Waitlist\Definitions\ProjectDefinitions;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Http\Limiters;
 use Taldres\Waitlist\Http\RouteRegistration;
-use Taldres\Waitlist\Support\DefaultConfirmationUrlGenerator;
 use Taldres\Waitlist\Support\DefaultEmailNormalizer;
+use Taldres\Waitlist\Support\DefaultLinkGenerator;
 use Taldres\Waitlist\Support\DefaultProjectResolver;
 use Taldres\Waitlist\Support\DefinedProjectCatalog;
 use Taldres\Waitlist\Support\NullSpamProtector;
@@ -57,7 +57,7 @@ class WaitlistServiceProvider extends ServiceProvider
         // bindIf(): a contract the app or another package has bound already is
         // theirs, and an app's bind() after this one replaces it.
         $this->app->bindIf(EmailNormalizer::class, DefaultEmailNormalizer::class);
-        $this->app->bindIf(ConfirmationUrlGenerator::class, DefaultConfirmationUrlGenerator::class);
+        $this->app->bindIf(LinkGenerator::class, DefaultLinkGenerator::class);
         $this->app->bindIf(ProjectCatalog::class, DefinedProjectCatalog::class);
         $this->app->bindIf(ProjectResolver::class, DefaultProjectResolver::class);
         $this->app->bindIf(SpamProtector::class, NullSpamProtector::class);

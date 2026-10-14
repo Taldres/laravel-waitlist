@@ -4,7 +4,7 @@ Add your own columns, methods and integrations without forking the package.
 
 | You want to | Use |
 | --- | --- |
-| point mail links at a page per list or locale | `ConfirmationUrlGenerator`, see [the SPA example](examples/landing-page-spa.md#2-point-the-mail-links-at-your-pages); one page per project needs only [`urls()`](projects.md#pages) |
+| point mail links at a page per list or locale | `LinkGenerator`, see [the SPA example](examples/landing-page-spa.md#2-point-the-mail-links-at-your-pages); one page per project needs only [`urls()`](projects.md#pages) |
 | decide which project an HTTP signup is for | `ProjectResolver`, see [Projects, lists and fields](projects.md#over-http-tell-the-package-which-project-a-signup-is-for) |
 | decide who may sign up, read the wording or request a manage link, per project and list | the `useWaitlist` gate, see [Who may call](projects.md#who-may-call-the-usewaitlist-gate) |
 | keep projects, lists, fields, pages and wording in your database | `ProjectCatalog`, see [A central waitlist API](examples/central-waitlist-api.md) |
