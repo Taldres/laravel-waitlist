@@ -130,7 +130,8 @@ Over HTTP: `POST /waitlist/confirm/{token}` with `Accept: application/json`
 answers `{"data": {..., "status": "confirmed"}}`, `404` unknown, `410` expired;
 a page that first asks with `GET` must still `POST` when `data.answer_by` is set:
 the address was asked to confirm again (`ReconfirmationRequested`) and only the
-post keeps it on the list, although `status` already reads `confirmed`;
+post keeps it on the list, although `status` already reads `confirmed` (the JS
+client reads it as `entry.answerBy` since 0.2.0);
 the package's own refusals name an `error`, e.g. `invalid_token`, and a `404`
 without one means a wrong URL, routes that are off or a `useWaitlist` gate that
 keeps the caller out.
@@ -189,6 +190,7 @@ Both are off until the list opts in, and only work on a list with double opt-in:
 - A server calling for its project is capped per server and endpoint
   (`caller_signup_per_minute`), so a server-rendered page caches the count
   rather than fetching it on every view.
+- The JS client has `count({ list })` and `position(token)` since 0.2.0.
 - In PHP, without the switches: `Waitlist::for('beta')->publicCount()` and
   `Waitlist::for('beta')->position($entry)`.
 
@@ -214,9 +216,10 @@ Both are off until the list opts in, and only work on a list with double opt-in:
   which the form sends back in `X-Waitlist-Challenge` between 2 seconds and an
   hour later (on `spam_check_failed`, fetch the wording again), and a hidden
   `website` field must stay empty. Servers calling for their project are not
-  checked; token links never are. The JS client does not expose the challenge
-  yet, so its browser users cannot pass this check; a plain HTML form without
-  JavaScript cannot either (header only). Do not let a CDN cache `/purposes`.
+  checked; token links never are. The JS client returns the challenge from
+  `purposes()` since 0.2.0 and sends it with `{ challenge }`; it has no `website`
+  field, so through it only the time is checked. A plain HTML form without
+  JavaScript cannot pass this check (header only). Do not let a CDN cache `/purposes`.
 - Frontend on another origin: allow it in `config/cors.php` (`paths` with
   `'waitlist', 'waitlist/*'`, the site in `allowed_origins`, `Retry-After` in
   `exposed_headers`). `$project->origins(['https://site.example'])` in the definition

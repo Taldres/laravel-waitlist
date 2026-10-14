@@ -373,7 +373,7 @@ class SendWaitlistReconfirmationMail implements ShouldQueue, ShouldBeEncrypted
   and a retried job mails the same link.
 - **Your confirm page** posts the token back as for a signup. If it looks
   first with `GET`, `data.answer_by` set means: post, although `status` reads
-  `confirmed`.
+  `confirmed`. The JS client reads it as `entry.answerBy` since 0.2.0.
 - **Queue the listener.** `waitlist:prune` fires the event; a synchronous
   listener that throws ends the run.
 - **A mail that never went out** still lets the address lapse: the package

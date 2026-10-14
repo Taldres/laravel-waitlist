@@ -608,10 +608,12 @@ What to know before you bind it:
 - **Only this protector hands out a challenge.** `/purposes` carries one while the
   protector the endpoints use is `TimeTrapSpamProtector` or a subclass of it. A
   `ClosureSpamProtector`, or a protector of yours that wraps this one, gets none.
-- **The JavaScript client does not expose the challenge yet.** Its `purposes()`
-  drops it, so a browser or another guest that uses the client cannot pass this
-  check until the client returns it. Servers calling for their project with
-  credentials are not checked, so they are not affected.
+- **The JavaScript client** returns the challenge from `purposes()` since version
+  0.2.0 and sends it back with its `{ challenge }` option. It has no field for the
+  hidden `website` input, so through it only the time is checked. Earlier versions
+  drop the challenge, so a browser or another guest that uses one cannot pass this
+  check. Servers calling for their project with credentials are not checked, so
+  they are not affected.
 - **No plain HTML form without JavaScript.** The proof is read from the header
   only, which a form post cannot set.
 - **Do not cache `/purposes`.** An answer with a challenge is sent with
