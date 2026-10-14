@@ -14,7 +14,7 @@ you out of the box:
 
 | Threat | Protection |
 | --- | --- |
-| Spam / flooding | [Rate limits](#rate-limits) per group (signups per IP and endpoint, token links per token; replaceable) plus the `SpamProtector` hook (below) |
+| Spam / flooding | [Rate limits](#rate-limits) per group (signups per IP and endpoint, token links per token; replaceable) plus the `SpamProtector` hook (below); a hidden field and time trap ship with the package, off until you bind them |
 | Mail-bombing one address | A repeat signup is a resend, capped by `resend_cooldown` and `max_confirmations`; across lists, `max_pending_per_address` caps the confirmation requests per day, checked per request, so signups or resends for different lists at the same moment can each pass it (see [Lifecycle](lifecycle.md#what-a-signup-does)); manage links by address only go to confirmed addresses, once per `manage.request_cooldown` |
 | Overwriting someone's data | A signup for an address with a running cycle never changes its metadata or consents; that takes the mailbox. After someone has left, a new signup starts a new cycle that again needs the confirmation |
 | Email enumeration | Subscribe and manage-link requests always answer `202` with an identical body (a project without manage links refuses every request alike); queue the listeners that send mail, so response times do not tell either |
@@ -565,7 +565,72 @@ link requested by address (`POST /waitlist/manage-link` with `email`), so a form
 for either must then send what your check expects. Send the proof in the
 `X-Waitlist-Challenge` header, which every client can set, the JS client
 included; a plain HTML form posts it as a field instead. The examples below read
-either. There are two ways to plug in your own check.
+either. The package ships one check that needs no outside service, and there
+are two ways to plug in your own.
+
+### Built in: a hidden field and a time trap
+
+`TimeTrapSpamProtector` asks nobody else and stores nothing. It is off until you
+bind it:
+
+```php
+// app/Providers/WaitlistServiceProvider.php, in register()
+$this->app->bind(\Taldres\Waitlist\Contracts\SpamProtector::class, \Taldres\Waitlist\Support\TimeTrapSpamProtector::class);
+```
+
+`GET /waitlist/purposes` then answers with a `challenge` next to `data`: the
+time it was issued, encrypted with your `APP_KEY`. The form sends it back in
+the `X-Waitlist-Challenge` header, also for a manage link requested by address.
+The request is refused with `spam_check_failed` when:
+
+- the challenge is missing, or was not issued by this protector;
+- it comes back less than 2 seconds after it was issued, faster than a person
+  fills in a form, or more than an hour after, so fetch the wording again and
+  retry once when a form stood open that long;
+- the hidden field `website` is filled. Put it into the form, out of sight, and
+  send what it holds along with the signup; people leave it empty, many bots do
+  not. Hide a wrapper element rather than the input, keep the input out of the
+  tab order, and turn off autofill, which could otherwise fill it in for a
+  person:
+
+```html
+<div style="position: absolute; left: -9999px" aria-hidden="true">
+  <input type="text" name="website" value="" tabindex="-1" autocomplete="off">
+</div>
+```
+
+What to know before you bind it:
+
+- **Only this protector hands out a challenge.** `/purposes` carries one while the
+  protector the endpoints use is `TimeTrapSpamProtector` or a subclass of it. A
+  `verifySpamUsing()` closure, or a protector of yours that wraps this one, gets
+  none.
+- **The JavaScript client does not expose the challenge yet.** Its `purposes()`
+  drops it, so a browser or another guest that uses the client cannot pass this
+  check until the client returns it. Servers calling for their project with
+  credentials are not checked, so they are not affected.
+- **No plain HTML form without JavaScript.** The proof is read from the header
+  only, which a form post cannot set.
+- **Do not cache `/purposes`.** An answer with a challenge is sent with
+  `Cache-Control: no-store`; make sure no CDN or proxy in front of the app caches
+  it anyway, or every visitor gets the same challenge until it goes stale.
+- **Clocks.** The challenge is issued by one app server and checked by another;
+  behind several of them, any difference between their clocks eats into the
+  2-second floor, so keep them synchronized.
+- A form that sends no `website` at all is checked by the time alone. A challenge
+  can be used more than once within its hour; the [rate limits](#rate-limits) cap
+  how often.
+- A server calling for its project with credentials is not checked: it sees its
+  visitors and checks them in its own form (see "One check, in one place" below).
+  A server without credentials is a guest, so it passes the challenge from the
+  wording it fetched through its form and forwards it. The links in mails are
+  never checked.
+- After rotating `APP_KEY`, challenges issued under a key in `APP_PREVIOUS_KEYS`
+  still read.
+
+This keeps out bots that post the form blindly; a script that fetches the
+wording and waits passes it. When that is not enough, use a challenge service
+such as Turnstile, below.
 
 ### The quick path: a closure
 
@@ -646,8 +711,8 @@ $this->app->bind(\Taldres\Waitlist\Contracts\SpamProtector::class, \App\Waitlist
 
 Either way, a failed check returns `422 {"message": "Spam check failed.", "error": "spam_check_failed"}`,
 so a client can ask for a new challenge without matching the message.
-The same pattern works for reCAPTCHA, hCaptcha, or a simple honeypot field
-(the check returns false when the hidden field is filled).
+The same pattern works for reCAPTCHA or hCaptcha. For a hidden field and a time
+trap without an outside service, bind the [built-in protector](#built-in-a-hidden-field-and-a-time-trap).
 
 **One check, in one place.** Challenge tokens such as Turnstile's are single use,
 so a token your own server already verified cannot be verified again by the API.
