@@ -71,7 +71,11 @@ say where they looked.
   such as a binding to a class that does not exist; the spam protector checked
   is the one the endpoints use, and it is never asked to check a request.
   Resolving builds the bound classes, so run the check where the application can
-  boot with its database and secrets. It
+  boot with its database and secrets. With `PublishableKeyResolver` bound, it
+  fails on projects whose definitions share a publishable key and on a definition
+  it cannot build, naming the projects; its own messages never show a key, while
+  the one for a definition it cannot build includes the error that definition
+  threw. It
   hints while no scheduled task of your application runs
   `waitlist:prune` (only Laravel's scheduler is in sight, so `--strict` leaves
   the hint alone for an app that runs it from cron), compares the tables and
@@ -80,7 +84,7 @@ say where they looked.
   `routes.enabled`: a group missing although the routes are on, or routes still
   registered although they are off, as when a route cache was built under other
   settings. Run it again after `route:cache`. The exit code is 1 for a setting, a
-  binding or a table, and with `--strict` for a warning too. `php artisan about` shows a
+  binding, a publishable key or a table, and with `--strict` for a warning too. `php artisan about` shows a
   Laravel Waitlist section with the same state.
 - **`waitlist:privacy`** describes the configured package storage, the fields
   and purposes of every list, retention, the rate limits (including those of

@@ -165,8 +165,9 @@ does not exist yet).
 // The websites of your projects together.
 'allowed_origins' => ['https://acme.example', 'https://rocket.example'],
 'allowed_methods' => ['GET', 'POST', 'PUT'],
-// What your clients send, such as the bot check proof and the CSRF token.
-'allowed_headers' => ['Content-Type', 'Accept', 'X-Waitlist-Challenge', 'X-XSRF-TOKEN'],
+// What your clients send, such as the bot check proof, the CSRF token and,
+// with PublishableKeyResolver, the project's key.
+'allowed_headers' => ['Content-Type', 'Accept', 'X-Waitlist-Challenge', 'X-XSRF-TOKEN', 'X-Waitlist-Key'],
 // Lets a cross-origin client read how long to wait after a 429.
 'exposed_headers' => ['Retry-After'],
 // Only when the browser sends cookies, with credentials: "include".
@@ -210,7 +211,9 @@ links in mails do not.
 
 The project a request acts for comes from the `ProjectResolver`; for servers that
 call with credentials of their own, `AuthenticatedProjectResolver` takes it from
-them. See [Who may call](projects.md#who-may-call-the-usewaitlist-gate).
+them. `PublishableKeyResolver` takes it from a key the page sends, which is public
+and keeps nobody out: it changes none of the setups below. See
+[Who may call](projects.md#who-may-call-the-usewaitlist-gate).
 
 Pick the setup by who may call; [the table in Projects](projects.md#who-may-call-the-usewaitlist-gate)
 lists the settings of each:

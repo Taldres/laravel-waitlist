@@ -15,6 +15,7 @@ use Taldres\Waitlist\Contracts\EmailNormalizer;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Contracts\SpamProtector;
+use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Definitions\ProjectDefinitions;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
@@ -24,6 +25,7 @@ use Taldres\Waitlist\Support\ClosureSpamProtector;
 use Taldres\Waitlist\Support\DefaultProjectResolver;
 use Taldres\Waitlist\Support\DefinedProjectCatalog;
 use Taldres\Waitlist\Support\NullSpamProtector;
+use Taldres\Waitlist\Support\PublishableKeyResolver;
 use Taldres\Waitlist\Support\SetupAudit;
 use Taldres\Waitlist\Tests\Fixtures\ArrayProjectCatalog;
 use Taldres\Waitlist\Tests\Fixtures\HeaderProjectResolver;
@@ -418,4 +420,35 @@ it('keeps every row apart, those that read no contract included', function () {
     expect($about['prune_schedule'])->toBe('unavailable')
         ->and($about['projects'])->toBe('default')
         ->and($about['double_opt-in'])->toBe('on');
+});
+
+describe('publishable keys', function () {
+    beforeEach(function () {
+        app()->bind(ProjectResolver::class, PublishableKeyResolver::class);
+
+        Waitlist::define('acme', fn (ProjectDefinition $project) => $project->publishableKey('pk_shared'));
+        Waitlist::define('rocket', fn (ProjectDefinition $project) => $project->publishableKey('pk_shared'));
+        Waitlist::define('anvil', fn (ProjectDefinition $project) => $project->publishableKey('pk_anvil'));
+    });
+
+    it('names the projects that share a key, never the key', function () {
+        expect(SetupAudit::publishableKeyProblems())->toBe(['The projects [acme], [rocket] share a publishable key, which PublishableKeyResolver refuses; give each its own.']);
+
+        $this->artisan('waitlist:check')->assertFailed()->doesntExpectOutputToContain('pk_shared');
+    });
+
+    it('names a definition it cannot build, which would hide a shared key', function () {
+        Waitlist::define('rocket', fn () => throw new RuntimeException('The database is down.'));
+
+        expect(SetupAudit::publishableKeyProblems())->toBe(['The definition of the project [rocket] cannot be built, so PublishableKeyResolver cannot reach it by key: The database is down.']);
+    });
+
+    it('leaves the keys alone with another resolver, or a subclass that reads them elsewhere', function (Closure $resolver) {
+        app()->bind(ProjectResolver::class, $resolver);
+
+        expect(SetupAudit::publishableKeyProblems())->toBe([]);
+    })->with([
+        'the default resolver' => [fn () => new DefaultProjectResolver],
+        'a subclass' => [fn () => new class(app(ProjectDefinitions::class), app(ProjectCatalog::class)) extends PublishableKeyResolver {}],
+    ]);
 });

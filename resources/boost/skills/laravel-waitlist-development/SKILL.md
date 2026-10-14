@@ -80,7 +80,8 @@ Waitlist::define(function (ProjectDefinition $project): void {
   For projects kept in a database, bind your own `ProjectCatalog` in a provider's
   `register()`: it supplies lists, fields, wording versions and frontend URL
   patterns per project. Over HTTP, the bound `ProjectResolver` picks the project of
-  a signup, e.g. from a publishable key; never put that check into
+  a signup, e.g. `PublishableKeyResolver` from a publishable key, which is public
+  and authorizes nothing; never put that check into
   `routes.middleware`, which also guards the token links in mails. Checks for
   the forms only, such as CSRF or an origin check, go into
   `routes.group_middleware.signup`.
