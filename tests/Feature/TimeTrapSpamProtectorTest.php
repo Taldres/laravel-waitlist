@@ -8,7 +8,6 @@ use Illuminate\Support\Facades\Crypt;
 use Illuminate\Testing\TestResponse;
 use Taldres\Waitlist\Contracts\SpamProtector;
 use Taldres\Waitlist\Enums\ConfigKey;
-use Taldres\Waitlist\Facades\Waitlist;
 use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Support\TimeTrapSpamProtector;
 use Taldres\Waitlist\Tests\Fixtures\ProjectCaller;
@@ -171,8 +170,8 @@ it('does not check a server calling for its project', function () {
     assertSpamRefused($this->postJson('/waitlist', ['email' => 'guest@example.com', 'list' => 'beta', 'purposes' => waitlistConsent()]));
 });
 
-it('gives way to a verifySpamUsing closure, which needs no challenge', function () {
-    Waitlist::verifySpamUsing(fn (Request $request): bool => true);
+it('gives way to another protector, which needs no challenge', function () {
+    useSpamCheck(fn (Request $request): bool => true);
 
     expect($this->getJson('/waitlist/purposes?list=beta')->assertOk()->json())->not->toHaveKey('challenge');
 

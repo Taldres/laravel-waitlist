@@ -176,20 +176,20 @@ describe('with routes enabled', function () {
 
     it('runs the spam check when the address is typed in', function () {
         Event::fake([ManageLinkRequested::class]);
-        Waitlist::verifySpamUsing(fn () => false);
+        useSpamCheck(fn () => false);
 
         $this->postJson('/waitlist/manage-link', ['email' => 'user@example.com', 'list' => 'beta'])
             ->assertStatus(422)
             ->assertExactJson(['message' => 'Spam check failed.', 'error' => 'spam_check_failed']);
         $this->postJson("/waitlist/unsubscribe/{$this->tokens['unsubscribe']}/manage-link")->assertStatus(202);
 
-        Waitlist::verifySpamUsing(null);
+        useSpamCheck(null);
         Event::assertDispatchedTimes(ManageLinkRequested::class, 1);
     });
 
     it('refuses manage links for a project that turned them off, the same for every address', function () {
         Event::fake([ManageLinkRequested::class]);
-        Waitlist::verifySpamUsing(fn () => false);
+        useSpamCheck(fn () => false);
         defineDefaultProject(fn (ProjectDefinition $project) => $project->manageLinks(false));
 
         $refused = ['message' => 'This project offers no manage links.', 'error' => 'manage_links_disabled'];
@@ -199,7 +199,7 @@ describe('with routes enabled', function () {
         $this->postJson('/waitlist/manage-link', ['email' => 'nobody@example.com', 'list' => 'beta'])->assertNotFound()->assertExactJson($refused);
         $this->postJson('/waitlist/unsubscribe/nope/manage-link')->assertStatus(202);
 
-        Waitlist::verifySpamUsing(null);
+        useSpamCheck(null);
         Event::assertNotDispatched(ManageLinkRequested::class);
         expect($this->tokens['entry']->fresh()->manage_link_sent_at)->toBeNull();
 

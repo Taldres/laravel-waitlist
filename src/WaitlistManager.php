@@ -22,7 +22,6 @@ use Taldres\Waitlist\Actions\WithdrawConsent;
 use Taldres\Waitlist\Auth\WaitlistCaller;
 use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
-use Taldres\Waitlist\Contracts\SpamProtector;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Definitions\ProjectDefinitions;
 use Taldres\Waitlist\Enums\Page;
@@ -40,7 +39,6 @@ use Taldres\Waitlist\Exceptions\WordingConflictException;
 use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Models\WaitlistSubscription;
 use Taldres\Waitlist\Reporting\WaitlistReport;
-use Taldres\Waitlist\Support\ClosureSpamProtector;
 use Taldres\Waitlist\Support\DefaultConfirmationUrlGenerator;
 use Taldres\Waitlist\Support\ManageLink;
 use Taldres\Waitlist\Support\PersonalData;
@@ -56,11 +54,6 @@ class WaitlistManager
 {
     use Macroable;
     use ResolvesModel;
-
-    /**
-     * @var (Closure(Request): bool)|null
-     */
-    protected ?Closure $spamCheck = null;
 
     protected ?Encrypter $encrypter = null;
 
@@ -84,32 +77,6 @@ class WaitlistManager
     public function customEncrypter(): ?Encrypter
     {
         return $this->encrypter;
-    }
-
-    /**
-     * Replaces the bound spam protector on the signup and on a manage link
-     * requested by address, the package endpoints; null restores it. The
-     * binding itself stays as it is: app(SpamProtector::class) still resolves
-     * the bound class.
-     *
-     * @param  (Closure(Request): bool)|null  $callback
-     */
-    public function verifySpamUsing(?Closure $callback): static
-    {
-        $this->spamCheck = $callback;
-
-        return $this;
-    }
-
-    /**
-     * The protector the package endpoints ask: the closure, while one is
-     * registered, without building the bound class, which may need secrets a
-     * test that bypasses it lacks. Ask it in your own controller to apply the
-     * same check.
-     */
-    public function spamProtector(): SpamProtector
-    {
-        return $this->spamCheck === null ? app(SpamProtector::class) : new ClosureSpamProtector($this->spamCheck);
     }
 
     /**

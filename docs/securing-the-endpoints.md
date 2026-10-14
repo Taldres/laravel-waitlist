@@ -607,8 +607,7 @@ What to know before you bind it:
 
 - **Only this protector hands out a challenge.** `/purposes` carries one while the
   protector the endpoints use is `TimeTrapSpamProtector` or a subclass of it. A
-  `verifySpamUsing()` closure, or a protector of yours that wraps this one, gets
-  none.
+  `ClosureSpamProtector`, or a protector of yours that wraps this one, gets none.
 - **The JavaScript client does not expose the challenge yet.** Its `purposes()`
   drops it, so a browser or another guest that uses the client cannot pass this
   check until the client returns it. Servers calling for their project with
@@ -638,19 +637,21 @@ such as Turnstile, below.
 
 ### The quick path: a closure
 
-Register a closure in your `AppServiceProvider::boot()` — no class, no
-binding. This example verifies Cloudflare Turnstile using Laravel's own `Http`
-facade, so it needs no extra dependency:
+`ClosureSpamProtector` wraps a closure, so a check of a few lines needs no class
+of its own. Bind it in your `AppServiceProvider::register()`. This example
+verifies Cloudflare Turnstile using Laravel's own `Http` facade, so it needs no
+extra dependency:
 
 ```php
 // app/Providers/AppServiceProvider.php
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
-use Taldres\Waitlist\Facades\Waitlist;
+use Taldres\Waitlist\Contracts\SpamProtector;
+use Taldres\Waitlist\Support\ClosureSpamProtector;
 
-public function boot(): void
+public function register(): void
 {
-    Waitlist::verifySpamUsing(function (Request $request): bool {
+    $this->app->bind(SpamProtector::class, fn () => new ClosureSpamProtector(function (Request $request): bool {
         $token = $request->header('X-Waitlist-Challenge') ?? $request->input('turnstile_token');
 
         if (! is_string($token) || $token === '') {
@@ -664,15 +665,13 @@ public function boot(): void
                 'remoteip' => $request->ip(),
             ])
             ->json('success') === true;
-    });
+    }));
 }
 ```
 
-On these two endpoints a registered closure always wins over the bound
-`SpamProtector`, a class of your own included, which is then not even built, so
-a test can bypass a protector that needs a secret it lacks. Pass `null` to remove
-the closure and fall back to the bound class again. The binding itself stays:
-`app(SpamProtector::class)` resolves the bound class either way.
+In a test, `$this->app->instance(SpamProtector::class, new ClosureSpamProtector(fn () => true))`
+replaces whatever is bound, so a protector that needs a secret the test lacks is
+never built.
 
 ### The class path: implement the contract
 
@@ -713,7 +712,7 @@ class TurnstileProtector implements SpamProtector
 $this->app->bind(\Taldres\Waitlist\Contracts\SpamProtector::class, \App\Waitlist\TurnstileProtector::class);
 ```
 
-Either way, a failed check returns `422 {"message": "Spam check failed.", "error": "spam_check_failed"}`,
+A failed check returns `422 {"message": "Spam check failed.", "error": "spam_check_failed"}`,
 so a client can ask for a new challenge without matching the message.
 The same pattern works for reCAPTCHA or hCaptcha. For a hidden field and a time
 trap without an outside service, bind the [built-in protector](#built-in-a-hidden-field-and-a-time-trap).
@@ -727,6 +726,5 @@ one that verifies it. Doing both refuses every signup with `Spam check failed.`.
 
 **Scope:** the protector guards only the package's HTTP endpoint. Actions and
 your own controllers are never affected. If you build your own controller
-(architecture B), consult the protector yourself with `Waitlist::spamProtector()`,
-which is the closure from `verifySpamUsing()` while one is set and the bound class
-otherwise; an injected `SpamProtector` is always the bound class.
+(architecture B), consult the protector yourself: inject `SpamProtector` or
+resolve it with `app(SpamProtector::class)`.

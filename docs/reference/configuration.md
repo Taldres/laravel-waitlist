@@ -186,7 +186,7 @@ container, and a `bind()` in a provider of yours replaces them, see
 | `ConfirmationUrlGenerator` | `DefaultConfirmationUrlGenerator` | the confirm, unsubscribe and manage URLs in mails |
 | `ProjectResolver` | `DefaultProjectResolver`, always `default` | which project an HTTP signup is for; `PublishableKeyResolver` takes it from the `X-Waitlist-Key` header, `AuthenticatedProjectResolver` from the caller |
 | `EmailNormalizer` | `DefaultEmailNormalizer`, lowercase and trim | which spellings are the same address; part of the lookup hash |
-| `SpamProtector` | `NullSpamProtector`, accepts all | the bot check on the signup and manage links by address; `TimeTrapSpamProtector` is a built-in one to bind, and a closure from `Waitlist::verifySpamUsing()` wins there |
+| `SpamProtector` | `NullSpamProtector`, accepts all | the bot check on the signup and manage links by address; `TimeTrapSpamProtector` is a built-in one to bind, and `ClosureSpamProtector` wraps a closure |
 | `ProjectCatalog` | `DefinedProjectCatalog` | where projects, lists, wording, fields and pages come from, see [Projects and wording](#projects-and-wording) |
 
 ## CSV export: `export`

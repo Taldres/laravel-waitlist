@@ -39,8 +39,6 @@ use Taldres\Waitlist\WaitlistManager;
  * @method static \Taldres\Waitlist\Reporting\WaitlistReport report()
  * @method static int forget(string $email, ?string $list = null)
  * @method static \Illuminate\Support\Collection<int, \Taldres\Waitlist\Support\PersonalData> personalData(string $email, ?string $list = null)
- * @method static \Taldres\Waitlist\WaitlistManager verifySpamUsing(?\Closure $callback)
- * @method static \Taldres\Waitlist\Contracts\SpamProtector spamProtector()
  * @method static \Taldres\Waitlist\WaitlistManager encryptUsing(?\Illuminate\Contracts\Encryption\Encrypter $encrypter)
  * @method static \Illuminate\Contracts\Encryption\Encrypter encrypter()
  * @method static \Illuminate\Contracts\Encryption\Encrypter|null customEncrypter()

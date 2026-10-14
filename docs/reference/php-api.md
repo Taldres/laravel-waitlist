@@ -81,8 +81,6 @@ Waitlist::recipients(string $purpose): LazyCollection                       // L
 Waitlist::report(): WaitlistReport
 Waitlist::forget(string $email, ?string $list = null): int
 Waitlist::personalData(string $email, ?string $list = null): Collection
-Waitlist::verifySpamUsing(?Closure $callback): WaitlistManager
-Waitlist::spamProtector(): SpamProtector                                    // the closure while one is set, else the bound class
 Waitlist::encryptUsing(?Encrypter $encrypter): WaitlistManager
 ```
 

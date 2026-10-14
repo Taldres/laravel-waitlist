@@ -60,8 +60,8 @@ it('never affects the action path — custom controllers stay unprotected by des
         ->and(WaitlistEntry::query()->count())->toBe(1);
 });
 
-it('rejects the http subscribe when a verifySpamUsing closure denies', function () {
-    Waitlist::verifySpamUsing(fn (Request $request): bool => false);
+it('rejects the http subscribe when a closure protector denies', function () {
+    useSpamCheck(fn (Request $request): bool => false);
 
     $this->postJson('/waitlist', ['email' => 'user@example.com', 'purposes' => waitlistConsent()])
         ->assertStatus(422)
@@ -70,8 +70,8 @@ it('rejects the http subscribe when a verifySpamUsing closure denies', function 
     expect(WaitlistEntry::query()->count())->toBe(0);
 });
 
-it('accepts the http subscribe when a verifySpamUsing closure allows', function () {
-    Waitlist::verifySpamUsing(fn (Request $request): bool => true);
+it('accepts the http subscribe when a closure protector allows', function () {
+    useSpamCheck(fn (Request $request): bool => true);
 
     $this->postJson('/waitlist', ['email' => 'user@example.com', 'purposes' => waitlistConsent()])->assertStatus(202);
 
@@ -120,54 +120,21 @@ function spamCheckedStatuses(mixed $test, string $email): array
     ];
 }
 
-it('lets a verifySpamUsing closure take precedence over the bound protector on both endpoints, however it is bound', function (string $how) {
-    bindDenyingProtector($how);
-    Waitlist::verifySpamUsing(fn (Request $request): bool => true);
-
-    expect(spamCheckedStatuses($this, 'user@example.com'))->toBe([202, 202]);
-
-    Waitlist::verifySpamUsing(null);
-
-    expect(spamCheckedStatuses($this, 'other@example.com'))->toBe([422, 422])
-        ->and(WaitlistEntry::query()->count())->toBe(1);
-})->with(['bind', 'instance', 'singleton']);
-
-it('builds no bound protector while a verifySpamUsing closure stands in for it', function () {
-    CountingSpamProtector::$built = 0;
-    app()->bind(SpamProtector::class, CountingSpamProtector::class);
-    Waitlist::verifySpamUsing(fn (Request $request): bool => true);
-
-    expect(spamCheckedStatuses($this, 'user@example.com'))->toBe([202, 202])
-        ->and(CountingSpamProtector::$built)->toBe(0);
-
-    Waitlist::verifySpamUsing(null);
-
-    expect(spamCheckedStatuses($this, 'other@example.com'))->toBe([422, 422])
-        ->and(CountingSpamProtector::$built)->toBe(2);
-});
-
-it('leaves the binding alone: the container resolves the bound protector while a closure is registered', function () {
-    app()->bind(SpamProtector::class, DenyAllSpamProtector::class);
-    Waitlist::verifySpamUsing(fn (Request $request): bool => true);
-
-    expect(app(SpamProtector::class))->toBeInstanceOf(DenyAllSpamProtector::class);
-});
-
 it('hands your own controller the protector the endpoints use', function () {
     app()->bind(SpamProtector::class, DenyAllSpamProtector::class);
 
-    expect(Waitlist::spamProtector())->toBeInstanceOf(DenyAllSpamProtector::class);
+    expect(app(SpamProtector::class))->toBeInstanceOf(DenyAllSpamProtector::class);
 
-    Waitlist::verifySpamUsing(fn (Request $request): bool => true);
+    useSpamCheck(fn (Request $request): bool => true);
 
-    expect(Waitlist::spamProtector())->toBeInstanceOf(ClosureSpamProtector::class)
-        ->and(Waitlist::spamProtector()->passes(request()))->toBeTrue();
+    expect(app(SpamProtector::class))->toBeInstanceOf(ClosureSpamProtector::class)
+        ->and(app(SpamProtector::class)->passes(request()))->toBeTrue();
 });
 
-it('passes the actual request to the verifySpamUsing closure', function () {
+it('passes the actual request to a closure protector', function () {
     $seen = null;
 
-    Waitlist::verifySpamUsing(function (Request $request) use (&$seen): bool {
+    useSpamCheck(function (Request $request) use (&$seen): bool {
         $seen = $request->input('email');
 
         return true;

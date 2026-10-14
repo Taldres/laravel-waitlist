@@ -129,7 +129,7 @@ class WaitlistServiceProvider extends ServiceProvider
             'Projects' => $read(fn (): string => implode(', ', app(ProjectCatalog::class)->projects())),
             'Catalog' => $read(fn (): string => app(ProjectCatalog::class)::class),
             'Project resolver' => $read(fn (): string => app(ProjectResolver::class)::class),
-            'Spam protector' => $read(fn (): string => app(WaitlistManager::class)->spamProtector()::class),
+            'Spam protector' => $read(fn (): string => app(SpamProtector::class)::class),
             'Authentication required' => $read(fn (): string => WaitlistConfig::authenticationRequired() ? 'yes' : 'no'),
             'Double opt-in' => $read(fn (): string => WaitlistConfig::doubleOptIn() ? 'on' : 'off'),
             'Retention' => $read(fn (): string => sprintf('unconfirmed %s, left %s, request metadata %s', $days(WaitlistConfig::pendingDays()), $days(WaitlistConfig::unsubscribedDays()), $days(WaitlistConfig::requestMetadataDays()))),

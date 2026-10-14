@@ -2,9 +2,11 @@
 
 declare(strict_types=1);
 
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Event;
 use Taldres\Waitlist\Config\WaitlistConfig;
+use Taldres\Waitlist\Contracts\SpamProtector;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Enums\ActivityType;
 use Taldres\Waitlist\Enums\ConfirmationOutcome;
@@ -16,6 +18,7 @@ use Taldres\Waitlist\Models\WaitlistActivity;
 use Taldres\Waitlist\Models\WaitlistConsent;
 use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Models\WaitlistSubscription;
+use Taldres\Waitlist\Support\ClosureSpamProtector;
 use Taldres\Waitlist\Support\PurposeRegistry;
 use Taldres\Waitlist\Tests\TestCase;
 
@@ -61,6 +64,23 @@ function defineDefaultProject(?Closure $extend = null, bool $lists = true): void
             $extend($project);
         }
     });
+}
+
+/**
+ * Binds a protector that asks the closure, or the package's default again for
+ * null.
+ *
+ * @param  (Closure(Request): bool)|null  $callback
+ */
+function useSpamCheck(?Closure $callback): void
+{
+    if ($callback === null) {
+        app()->forgetInstance(SpamProtector::class);
+
+        return;
+    }
+
+    app()->instance(SpamProtector::class, new ClosureSpamProtector($callback));
 }
 
 /**

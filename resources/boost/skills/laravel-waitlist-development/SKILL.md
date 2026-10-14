@@ -237,9 +237,7 @@ $entry->hasConsentFor('newsletter');
   `EmailNormalizer`, `SpamProtector`), the `useWaitlist` gate, events and macros.
   Bind a contract with `$this->app->bind()` in a provider's `register()`: the
   package binds its defaults with `bindIf()` first, so a `bindIf()` of yours is
-  ignored. On the package endpoints a `Waitlist::verifySpamUsing()` closure wins
-  over the bound `SpamProtector`, which is then not built; `app(SpamProtector::class)`
-  stays the bound class. Remove `catalog`, `url_generator`, `project_resolver`,
+  ignored. Remove `catalog`, `url_generator`, `project_resolver`,
   `email_normalizer` and `spam_protector` from a published config: one that names
   a class other than the default makes resolving its contract throw until the
   contract is bound, and `waitlist:check` fail until it is removed. Other

@@ -198,12 +198,14 @@ Both are off until the list opts in, and only work on a list with double opt-in:
   `NullSpamProtector` accepts every request), e.g. Cloudflare Turnstile:
 
   ```php
-  Waitlist::verifySpamUsing(fn (Request $request): bool => Http::asForm()
-      ->post('https://challenges.cloudflare.com/turnstile/v0/siteverify', [
-          'secret' => config('services.turnstile.secret'),
-          'response' => (string) ($request->header('X-Waitlist-Challenge') ?? $request->input('turnstile_token')),
-          'remoteip' => $request->ip(),
-      ])->json('success') === true);
+  $this->app->bind(SpamProtector::class, fn () => new ClosureSpamProtector(
+      fn (Request $request): bool => Http::asForm()
+          ->post('https://challenges.cloudflare.com/turnstile/v0/siteverify', [
+              'secret' => config('services.turnstile.secret'),
+              'response' => (string) ($request->header('X-Waitlist-Challenge') ?? $request->input('turnstile_token')),
+              'remoteip' => $request->ip(),
+          ])->json('success') === true,
+  ));
   ```
 
   It guards the package routes only; in own controllers, check it yourself.

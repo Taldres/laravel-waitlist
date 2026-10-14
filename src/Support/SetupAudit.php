@@ -23,7 +23,6 @@ use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Http\RouteRegistration;
 use Taldres\Waitlist\Models\WaitlistWording;
-use Taldres\Waitlist\WaitlistManager;
 use Throwable;
 
 /**
@@ -227,7 +226,7 @@ final class SetupAudit
      */
     private static function resolve(string $contract): mixed
     {
-        return $contract === SpamProtector::class ? app(WaitlistManager::class)->spamProtector() : app($contract);
+        return app($contract);
     }
 
     /**
