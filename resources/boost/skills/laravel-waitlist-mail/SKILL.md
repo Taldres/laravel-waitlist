@@ -37,6 +37,14 @@ listeners send through any Laravel mailer (Resend, Postmark, SES, SMTP, …).
 
 ### 2. Confirmation listener
 
+`php artisan waitlist:install --mail` writes the listener below, its
+`ConfirmWaitlistMail` and `resources/views/mail/waitlist/confirm.blade.php` into
+the app, skipping files that exist. Laravel discovers the listener; do not
+register it again (no listener is written while `EntrySubscribed` already has one:
+the command replaces a confirmation listener, it does not add to one). With
+`event:cache`, re-cache; with event discovery off, register it yourself. The files
+are the app's to edit afterwards.
+
 ```php
 namespace App\Listeners;
 
@@ -47,8 +55,9 @@ use Illuminate\Support\Facades\Mail;
 use LogicException;
 use Taldres\Waitlist\Events\EntrySubscribed;
 use Taldres\Waitlist\Facades\Waitlist;
+use Throwable;
 
-class SendWaitlistConfirmationMail implements ShouldQueue, ShouldBeEncrypted
+class SendWaitlistConfirmationMail implements ShouldBeEncrypted, ShouldQueue
 {
     public function handle(EntrySubscribed $event): void
     {
@@ -56,15 +65,34 @@ class SendWaitlistConfirmationMail implements ShouldQueue, ShouldBeEncrypted
             return;
         }
 
-        $confirmUrl = $event->confirmUrl ?? throw new LogicException('Set the confirm page in urls() or enable the package routes.');
+        // Erased since the event: a retried job must not mail the address again.
+        if ($event->entry->fresh() === null) {
+            return;
+        }
 
-        Mail::to($event->entry->email)->send(new ConfirmWaitlistMail(
-            $confirmUrl,
-            $event->unsubscribeUrl,
-            $event->subscription->consents->pluck('text')->all(), // what is being confirmed
-        ));
+        // Report only a send that did not happen. After the mail is out, a
+        // failure must not free the cooldown, so it is not reported. A
+        // MessageSent listener that throws counts as a failed send.
+        try {
+            // Null only while the project sets no confirm page and the package
+            // routes are off: fail loudly rather than mail a confirmation without a link.
+            $confirmUrl = $event->confirmUrl ?? throw new LogicException('Set the confirm page in urls() or enable the package routes.');
 
-        Waitlist::confirmationMailed($event, 'confirm-mail@2026-10');
+            Mail::to($event->entry->email)->send(new ConfirmWaitlistMail(
+                $confirmUrl,
+                $event->unsubscribeUrl,
+                // A withdrawn optional purpose stays on a pending cycle.
+                $event->subscription->consents->reject(fn ($consent) => $consent->isWithdrawn())->pluck('text')->values()->all(),
+            ));
+        } catch (Throwable $exception) {
+            // The exception's class, never its message: that may hold the address.
+            Waitlist::confirmationFailed($event, class_basename($exception));
+
+            throw $exception;
+        }
+
+        // The reference of what you sent: bump the version when the mail changes.
+        Waitlist::confirmationMailed($event, 'confirm-mail@1');
     }
 }
 ```
@@ -73,10 +101,11 @@ class SendWaitlistConfirmationMail implements ShouldQueue, ShouldBeEncrypted
   the listener; the package's cooldown and caps already did.
 - `confirmationMailed()` records the reference of the mail next to the consent;
   use a template name and version, and keep each version's text.
-- A request counts against the cooldown and the caps when it is issued. If the
-  queued listener gives up, call `Waitlist::confirmationFailed($event,
-  'http-429')` from its `failed()` method (an error code, never the address): the
-  person's own retry then gets a mail. Report with the event, never a model
+- A request counts against the cooldown and the caps when it is issued. The
+  listener reports a send that threw with `Waitlist::confirmationFailed($event,
+  'http-429')` (an error code, never the address) and rethrows: the person's own
+  retry then gets a mail. It reports nothing after the mail is out. It lists only
+  purposes not withdrawn, and the view renders them as Markdown: keep wording plain. Report with the event, never a model
   loaded afresh: each request takes one report, and a repeat, a report about an earlier request or a
   failure after `confirmationMailed()` answers `false`. A mail that went out after
   its failure was reported is accepted once.

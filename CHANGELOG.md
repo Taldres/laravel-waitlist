@@ -46,6 +46,7 @@
 - Inside a transaction of the application, a signup or confirmation that loses a race reads what the other request committed past the transaction's snapshot (MySQL and MariaDB REPEATABLE READ), instead of answering `UnknownWaitlistException` or `InvalidTokenException`
 - Manage links by address are sent once per cooldown across the address's lists also when requested on two lists at once, two requests minting a lost unsubscribe token at once hand out the same one, and `waitlist:wording` or `Waitlist::registerWording()` on two deploys at once retry instead of failing on a deadlock or a unique violation
 - Lifecycle events and `ManageLinkRequested` wait for the commit on `waitlist.connection`, so a transaction the application rolls back on another connection no longer discards what the package deferred; a manage link that cannot be built no longer starts the request cooldown
+- `waitlist:install --mail` writes the double opt-in confirmation into your app: a mailable, its view and a queued, encrypted `EntrySubscribed` listener that lists the purposes still held, reports `confirmationMailed()`, or `confirmationFailed()` for a send that threw; files that exist are left as they are, and no listener is written while `EntrySubscribed` already has one
 - Bundled Laravel Boost skills: the integration as a whole, plus focused skills for the frontend, mail, provider sync, projects, reporting, the launch, privacy operations and testing
 
 ## [v0.1.1](https://github.com/taldres/laravel-waitlist/commits/main/compare/v0.1.0...v0.1.1) - 2026-10-14
