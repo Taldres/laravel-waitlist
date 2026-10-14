@@ -57,13 +57,4 @@ class IssueManageLink
             throw ManageLinksDisabledException::forProject($project);
         }
     }
-
-    /**
-     * Minutes a manage link stays valid, at least one: a link that never
-     * expires would stand in for a login forever.
-     */
-    public static function ttl(): int
-    {
-        return WaitlistConfig::manageTokenTtl();
-    }
 }

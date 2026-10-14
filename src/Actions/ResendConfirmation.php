@@ -92,7 +92,7 @@ class ResendConfirmation
      */
     public function addressSaturated(string $project, string $email, ?WaitlistSubscription $except = null): bool
     {
-        $cap = static::maxPendingPerAddress();
+        $cap = WaitlistConfig::maxPendingPerAddress();
 
         if ($cap === null) {
             return false;
@@ -115,7 +115,7 @@ class ResendConfirmation
 
     protected function throttled(WaitlistSubscription $subscription): bool
     {
-        $max = static::maxConfirmations();
+        $max = WaitlistConfig::maxConfirmations();
 
         // Past the cap, one more may go out once the last link has expired:
         // otherwise anyone could use the cap up and leave the address unable
@@ -124,37 +124,12 @@ class ResendConfirmation
             return true;
         }
 
-        $cooldown = static::cooldown();
+        $cooldown = WaitlistConfig::resendCooldown();
 
         if ($cooldown === null || $subscription->confirmation_sent_at === null) {
             return false;
         }
 
         return $subscription->confirmation_sent_at->copy()->addMinutes($cooldown)->isFuture();
-    }
-
-    /**
-     * Minutes between two confirmation requests of a cycle; null for none.
-     */
-    public static function cooldown(): ?int
-    {
-        return WaitlistConfig::resendCooldown();
-    }
-
-    /**
-     * Confirmation requests per cycle; null for no cap.
-     */
-    public static function maxConfirmations(): ?int
-    {
-        return WaitlistConfig::maxConfirmations();
-    }
-
-    /**
-     * Confirmation requests per address and day across a project's
-     * unconfirmed lists; null for no cap.
-     */
-    public static function maxPendingPerAddress(): ?int
-    {
-        return WaitlistConfig::maxPendingPerAddress();
     }
 }

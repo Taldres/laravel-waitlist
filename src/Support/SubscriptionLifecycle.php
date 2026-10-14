@@ -90,15 +90,14 @@ class SubscriptionLifecycle
                 ($this->activity)($entry, ActivityType::ConfirmationRequested, $subscription, $context);
             }
 
-            $events = [
-                ...(! $doubleOptIn || $confirmToken !== null ? [$this->subscribed($entry, $subscription, $confirmToken, $doubleOptIn, isNewCycle: true)] : []),
-                // Without double opt-in the cycle starts confirmed;
-                // confirmation listeners must hear about it too.
-                ...(! $doubleOptIn ? [$this->confirmed($entry, $subscription)] : []),
-            ];
+            if (! $doubleOptIn || $confirmToken !== null) {
+                event($this->subscribed($entry, $subscription, $confirmToken, $doubleOptIn, isNewCycle: true));
+            }
 
-            foreach ($events as $event) {
-                event($event);
+            // Without double opt-in the cycle starts confirmed;
+            // confirmation listeners must hear about it too.
+            if (! $doubleOptIn) {
+                event($this->confirmed($entry, $subscription));
             }
 
             return $subscription;
@@ -326,8 +325,10 @@ class SubscriptionLifecycle
      */
     public function end(WaitlistSubscription $subscription, EndReason $reason, RequestContext $context): bool
     {
+        $now = Carbon::now();
+
         return $this->transition($subscription, [
-            'ended_at' => Carbon::now(),
+            'ended_at' => $now,
             'end_reason' => $reason->value,
             'active' => null,
             'confirm_token_hash' => null,
@@ -341,7 +342,7 @@ class SubscriptionLifecycle
             ->when($reason === EndReason::Lapsed, fn (Builder $query): Builder => $query
                 ->whereNotNull('confirmed_at')
                 ->whereNotNull('reconfirmation_requested_at')
-                ->where('confirm_token_expires_at', '<', Carbon::now())),
+                ->where('confirm_token_expires_at', '<', $now)),
             $reason->activityType(), $context,
             fn (WaitlistEntry $entry): object => match ($reason) {
                 EndReason::Unsubscribed => new EntryUnsubscribed($entry, $subscription),

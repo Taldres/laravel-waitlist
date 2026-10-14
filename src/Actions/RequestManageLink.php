@@ -44,7 +44,7 @@ class RequestManageLink
         $now = Carbon::now();
 
         // Read before the claim below: a link that cannot be issued must not start the cooldown.
-        IssueManageLink::ttl();
+        WaitlistConfig::manageTokenTtl();
 
         // Found outside the transaction, locked in key order inside it, as a
         // withdrawal does: requests for two lists of the address would

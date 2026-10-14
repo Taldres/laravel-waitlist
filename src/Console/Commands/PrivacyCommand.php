@@ -14,8 +14,6 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
 use ReflectionFunction;
 use Symfony\Component\Console\Output\OutputInterface;
-use Taldres\Waitlist\Actions\IssueManageLink;
-use Taldres\Waitlist\Actions\ResendConfirmation;
 use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Console\Concerns\ReadsStringOptions;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
@@ -379,8 +377,8 @@ class PrivacyCommand extends Command
      */
     protected function measures(ProjectCatalog $catalog, array $projects): array
     {
-        $cooldown = ResendConfirmation::cooldown();
-        $cap = ResendConfirmation::maxConfirmations();
+        $cooldown = WaitlistConfig::resendCooldown();
+        $cap = WaitlistConfig::maxConfirmations();
         [$offering, $without] = $this->manageLinkProjects($catalog, $projects);
         $token = '- Mails carry an unsubscribe token that can only remove'
             .($this->positionLists($catalog, $projects) === [] ? '' : ', and read the place in line on the lists that publish positions');
@@ -401,7 +399,7 @@ class PrivacyCommand extends Command
             },
             '- Confirmation mails limited to one per '.($cooldown !== null ? "{$cooldown} minutes" : 'request')
                 .($cap !== null ? " and {$cap} per cycle" : ''),
-            ...(($pending = ResendConfirmation::maxPendingPerAddress()) !== null
+            ...(($pending = WaitlistConfig::maxPendingPerAddress()) !== null
                 ? ["- At most {$pending} confirmation requests per address and day for unconfirmed lists of a project; further ones are held back"]
                 : []),
             WaitlistConfig::routesEnabled()
@@ -760,7 +758,7 @@ class PrivacyCommand extends Command
 
     protected function manageTtl(): string
     {
-        $minutes = IssueManageLink::ttl();
+        $minutes = WaitlistConfig::manageTokenTtl();
 
         return $minutes === 1 ? '1 minute' : "{$minutes} minutes";
     }
