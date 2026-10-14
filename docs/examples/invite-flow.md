@@ -81,3 +81,6 @@ Waitlist::for('beta')->inviteNext(25);
 
 From a scheduled command, an admin button or a Tinker session. With
 [several projects](../projects.md): `Waitlist::project('anvil')->for('default')->inviteNext(25)`.
+
+To invite by referral credits instead of by signup date, see
+[referrals that move people up the line](referrals.md).

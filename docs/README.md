@@ -30,6 +30,7 @@ optional newsletter, end to end, over HTTP or in your own controllers.
 - [Several products in one app](examples/several-products.md): two products, two domains, one Laravel app
 - [A central waitlist API](examples/central-waitlist-api.md): projects, lists and wording in your database
 - [An invite flow](examples/invite-flow.md): let people in from the waitlist in batches
+- [Referrals](examples/referrals.md): credit people who bring others, and invite by credits
 
 ## Privacy
 
