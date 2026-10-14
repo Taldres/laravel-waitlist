@@ -35,6 +35,7 @@ use Taldres\Waitlist\Exceptions\MissingWordingException;
 use Taldres\Waitlist\Http\Limiters;
 use Taldres\Waitlist\Models\WaitlistActivity;
 use Taldres\Waitlist\Support\AuthenticatedProjectResolver;
+use Taldres\Waitlist\Support\ListPolicy;
 use Taldres\Waitlist\Support\PublishableKeyResolver;
 use Taldres\Waitlist\Support\PurposeRegistry;
 use Taldres\Waitlist\Support\ResolvesModel;
@@ -336,6 +337,8 @@ class PrivacyCommand extends Command
         $cooldown = ResendConfirmation::cooldown();
         $cap = ResendConfirmation::maxConfirmations();
         [$offering, $without] = $this->manageLinkProjects($catalog, $projects);
+        $token = '- Mails carry an unsubscribe token that can only remove'
+            .($this->positionLists($catalog, $projects) === [] ? '' : ', and read the place in line on the lists that publish positions');
 
         return [
             '## Technical and organisational measures (Art. 32)',
@@ -346,9 +349,9 @@ class PrivacyCommand extends Command
             '- Addresses looked up by an HMAC-SHA256 hash with a subkey of the '.$this->encryptedWith().' key, never by the address itself',
             '- Tokens stored as SHA-256 hashes, the unsubscribe token additionally encrypted; none exported',
             match (true) {
-                $without === [] => '- Mails carry an unsubscribe token that can only remove; access to the data and erasure needs a manage link that is mailed to the address on request and expires after '.$this->manageTtl(),
-                $offering === [] => '- Mails carry an unsubscribe token that can only remove; no manage links are sent, so access to the data and erasure go through you (waitlist:export, waitlist:forget)',
-                default => '- Mails carry an unsubscribe token that can only remove; access to the data and erasure needs a manage link that is mailed to the address on request and expires after '.$this->manageTtl()
+                $without === [] => $token.'; access to the data and erasure needs a manage link that is mailed to the address on request and expires after '.$this->manageTtl(),
+                $offering === [] => $token.'; no manage links are sent, so access to the data and erasure go through you (waitlist:export, waitlist:forget)',
+                default => $token.'; access to the data and erasure needs a manage link that is mailed to the address on request and expires after '.$this->manageTtl()
                     .'; projects without manage links ('.implode(', ', $without).') handle both through you (waitlist:export, waitlist:forget)',
             },
             '- Confirmation mails limited to one per '.($cooldown !== null ? "{$cooldown} minutes" : 'request')
@@ -362,6 +365,7 @@ class PrivacyCommand extends Command
                     .'; GET never changes state'
                 : '- No public endpoints (package routes disabled)',
             ...$this->servers(),
+            ...$this->publishedFigures($catalog, $projects),
             ...$this->publishableKeys($catalog, $projects),
             '- Consent records immutable; lifecycle log rows never deleted, only stripped on erasure',
             '- Erasure strips the log: only project, list, step, purpose, the status a departure left and date remain',
@@ -650,6 +654,63 @@ class PrivacyCommand extends Command
         }
 
         return [$offering, $without];
+    }
+
+    /**
+     * Lists that answer the count or the position over HTTP: neither names
+     * anyone, but a position is exact.
+     *
+     * @param  list<string>  $projects
+     * @return list<string>
+     */
+    protected function publishedFigures(ProjectCatalog $catalog, array $projects): array
+    {
+        if (! WaitlistConfig::routesEnabled()) {
+            return [];
+        }
+
+        $counts = $this->publishingLists($catalog, $projects, fn (ListPolicy $policy): bool => $policy->publishesCount());
+        $positions = $this->positionLists($catalog, $projects);
+
+        return [
+            ...($counts === [] ? [] : ['- Public count of confirmed addresses ('.implode(', ', $counts).'): rounded down to a multiple of 10, withheld below 10, cached for 60 seconds']),
+            ...($positions === [] ? [] : ['- The unsubscribe token also reads the person\'s exact place among the confirmed addresses of their list ('.implode(', ', $positions).'); it names no one else, but tells how many are ahead']),
+        ];
+    }
+
+    /**
+     * Empty while the routes are off: the switch is for the route.
+     *
+     * @param  list<string>  $projects
+     * @return list<string>
+     */
+    protected function positionLists(ProjectCatalog $catalog, array $projects): array
+    {
+        return WaitlistConfig::routesEnabled()
+            ? $this->publishingLists($catalog, $projects, fn (ListPolicy $policy): bool => $policy->publishesPosition())
+            : [];
+    }
+
+    /**
+     * @param  list<string>  $projects
+     * @param  Closure(ListPolicy): bool  $publishes
+     * @return list<string> project/list labels
+     */
+    protected function publishingLists(ProjectCatalog $catalog, array $projects, Closure $publishes): array
+    {
+        $labels = [];
+
+        foreach ($projects as $project) {
+            foreach ($catalog->lists($project) as $list) {
+                $policy = $catalog->policy($project, $list);
+
+                if ($policy !== null && $publishes($policy)) {
+                    $labels[] = $list === '*' ? "{$project}/any other list" : "{$project}/{$list}";
+                }
+            }
+        }
+
+        return $labels;
     }
 
     protected function manageTtl(): string

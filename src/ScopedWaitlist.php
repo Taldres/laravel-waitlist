@@ -7,6 +7,7 @@ namespace Taldres\Waitlist;
 use DateTimeInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\LazyCollection;
 use Illuminate\Support\Traits\Macroable;
 use InvalidArgumentException;
@@ -22,6 +23,7 @@ use Taldres\Waitlist\Actions\SubscribeToWaitlist;
 use Taldres\Waitlist\Actions\UnsubscribeEntry;
 use Taldres\Waitlist\Actions\WithdrawConsent;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
+use Taldres\Waitlist\Enums\EntryStatus;
 use Taldres\Waitlist\Exceptions\InvalidEmailException;
 use Taldres\Waitlist\Exceptions\InvalidTokenException;
 use Taldres\Waitlist\Exceptions\ManageLinksDisabledException;
@@ -51,6 +53,14 @@ class ScopedWaitlist
 {
     use Macroable;
     use ResolvesModel;
+
+    /**
+     * publicCount() rounds down to a multiple of this and withholds anything
+     * below it, so a small list does not show each signup.
+     */
+    public const int PUBLIC_COUNT_STEP = 10;
+
+    public const int PUBLIC_COUNT_CACHE_SECONDS = 60;
 
     public function __construct(
         protected string $list,
@@ -241,6 +251,71 @@ class ScopedWaitlist
     public function count(): int
     {
         return $this->entries()->count();
+    }
+
+    /**
+     * The confirmed addresses, rounded down to a multiple of 10 and null below
+     * 10, cached briefly in the default cache store. Answers whether or not the
+     * list publishes its count; that switch is for the HTTP route.
+     */
+    public function publicCount(): ?int
+    {
+        $key = 'waitlist:public-count:'.hash('sha256', (string) json_encode([$this->project, $this->list]));
+        // Wrapped, as some stores hand a plain number back as a string.
+        $cached = Cache::get($key);
+
+        if (is_array($cached) && is_int($cached['count'] ?? null)) {
+            return $cached['count'];
+        }
+
+        $confirmed = $this->entries()->where('status', EntryStatus::Confirmed->value)->count();
+        $rounded = intdiv($confirmed, self::PUBLIC_COUNT_STEP) * self::PUBLIC_COUNT_STEP;
+
+        if ($rounded === 0) {
+            return null;
+        }
+
+        // Only counts worth showing are stored, so made-up names on a "*" list
+        // leave nothing behind in the cache.
+        Cache::put($key, ['count' => $rounded], self::PUBLIC_COUNT_CACHE_SECONDS);
+
+        return $rounded;
+    }
+
+    /**
+     * The entry's place among the confirmed addresses of this list, in the
+     * order their current cycles were confirmed, 1 for the earliest; within
+     * the same second, the cycle that started first. Null when the entry is
+     * not on this list or not confirmed and on it, also when it was erased.
+     * Answers whether or not the list publishes positions; that switch is for
+     * the HTTP route.
+     */
+    public function position(WaitlistEntry $entry): ?int
+    {
+        $entry = $entry->fresh(['latestSubscription']);
+        $mine = $entry?->latestSubscription;
+
+        if ($entry === null || $mine === null || $entry->project !== $this->project || $entry->list !== $this->list
+            || $entry->status !== EntryStatus::Confirmed || ! $mine->isOpen() || ! $mine->isConfirmed()) {
+            return null;
+        }
+
+        $entries = $entry->getTable();
+        $cycles = $mine->getTable();
+        $confirmedAt = $mine->getRawOriginal('confirmed_at');
+
+        $ahead = $this->entries()
+            ->where("{$entries}.status", EntryStatus::Confirmed->value)
+            ->join($cycles, "{$cycles}.id", '=', "{$entries}.latest_subscription_id")
+            ->whereNull("{$cycles}.ended_at")
+            ->where(fn (Builder $query) => $query
+                ->where("{$cycles}.confirmed_at", '<', $confirmedAt)
+                ->orWhere(fn (Builder $query) => $query
+                    ->where("{$cycles}.confirmed_at", $confirmedAt)
+                    ->where("{$cycles}.id", '<', $mine->getKey())))
+            ->count();
+
+        return $ahead + 1;
     }
 
     /**

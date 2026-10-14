@@ -80,8 +80,8 @@ Waitlist::project('rocket')->report()->since(30)->totals();
 
 ### 3. HTTP signups need a resolver
 
-With `WAITLIST_ROUTES_ENABLED=true`, the signup, the wording and manage links
-requested by address act for the project a `ProjectResolver` returns. The default
+With `WAITLIST_ROUTES_ENABLED=true`, the signup, the wording, the count and manage
+links requested by address act for the project a `ProjectResolver` returns. The default
 `DefaultProjectResolver` always returns `default`, so bind one:
 
 ```php

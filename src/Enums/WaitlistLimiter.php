@@ -10,7 +10,7 @@ namespace Taldres\Waitlist\Enums;
  */
 enum WaitlistLimiter: string
 {
-    /** The signup, the wording and a manage link requested by address. */
+    /** The signup, the wording, the count and a manage link requested by address. */
     case Signup = 'waitlist';
 
     /** Everything with a token. */

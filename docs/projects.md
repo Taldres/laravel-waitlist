@@ -153,6 +153,8 @@ optional too throws.
 | `->optional(string ...$purposes)` | none | purposes granted on their own |
 | `->doubleOptIn(bool $enabled = true)` | `waitlist.double_opt_in.enabled` | overrides the global switch for this list |
 | `->fields(Closure\|array $rules)` | none | see [Fields](#fields) |
+| `->publicCount(bool $enabled = true)` | off | answers `GET /waitlist/count` for this list, rounded, with double opt-in only, see [Count and position](reference/http-api.md#count-and-position) |
+| `->publicPosition(bool $enabled = true)` | off | lets the unsubscribe token read the person's place in line on this list, with double opt-in only |
 
 **`*` takes every list name the project does not define.** It suits lists made
 up at runtime, one per product page for example:
@@ -588,8 +590,8 @@ answers it `403`; with `auth:sanctum` in the signup group instead, it is
 `AuthenticatedProjectResolver` that does. A resolver of your own must then refuse
 it itself, or the gate you define must.
 
-Three requests act for a project: the signup, the wording for a form and a manage
-link requested by address. For each, once the resolver has picked the project and
+Four requests act for a project: the signup, the wording for a form, the count of
+a list and a manage link requested by address. For each, once the resolver has picked the project and
 before the body is validated, the package asks Laravel's gate `useWaitlist`. Token
 links never reach it: the token is the proof there, and the mail it comes from
 carries no credentials.
@@ -604,7 +606,7 @@ Gate::define('useWaitlist', function (?Authenticatable $caller, string $project,
 | --- | --- |
 | `$caller` | the user of the first guard in `waitlist.authentication.guards` that authenticates the request; `null` for a guest |
 | `$project` | the project the resolver picked |
-| `$action` | `WaitlistAction::Subscribe`, `ViewPurposes`, `RequestManageLink`, or `RegisterWording` for a signup that brings its wording, asked after `Subscribe` |
+| `$action` | `WaitlistAction::Subscribe`, `ViewPurposes`, `ViewCount`, `RequestManageLink`, or `RegisterWording` for a signup that brings its wording, asked after `Subscribe` |
 | `$list` | the list the request acts on; `waitlist.default_list` when it names none |
 
 **The package's default lets everyone through**, as a public form needs, with

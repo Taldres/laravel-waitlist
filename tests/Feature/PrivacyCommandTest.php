@@ -467,3 +467,20 @@ it('still fails on a setting it describes that does not read', function (string 
     ConfigKey::ResendCooldown->value,
     ConfigKey::RetentionRequestMetadataDays->value,
 ]);
+
+it('names the lists that publish their count or positions while the routes are on', function () {
+    defineDefaultProject(function (ProjectDefinition $project): void {
+        $project->list('beta', purpose: 'waitlist')->publicCount()->publicPosition();
+        $project->list('launch', purpose: 'waitlist')->publicCount();
+        $project->list('instant', purpose: 'waitlist')->doubleOptIn(false)->publicCount()->publicPosition();
+    });
+
+    expect(privacyRecord())->not->toContain('Public count')->not->toContain('place among')->not->toContain('place in line');
+
+    config()->set(ConfigKey::RoutesEnabled->value, true);
+
+    expect(privacyRecord())
+        ->toContain('- Public count of confirmed addresses (default/beta, default/launch): rounded down to a multiple of 10, withheld below 10, cached for 60 seconds')
+        ->toContain('- Mails carry an unsubscribe token that can only remove, and read the place in line on the lists that publish positions; access')
+        ->toContain("- The unsubscribe token also reads the person's exact place among the confirmed addresses of their list (default/beta); it names no one else, but tells how many are ahead");
+});

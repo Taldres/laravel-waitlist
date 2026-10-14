@@ -13,6 +13,11 @@ Waitlist::for('beta')->snapshot()->active();
 A later erasure must not change the first number. That is the whole reason
 reporting reads a log instead of counting rows in a table someone can leave.
 
+For a public page, `Waitlist::for('beta')->publicCount()` is the confirmed count
+rounded down to a multiple of 10 and cached, see
+[Count and position](reference/http-api.md#count-and-position); `snapshot()` is
+exact and meant for you.
+
 ## Daily counts
 
 ```php

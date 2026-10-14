@@ -63,6 +63,9 @@ Waitlist::define(function (ProjectDefinition $project): void {
 - Every list has exactly one required primary purpose; anything else is optional.
 - Only defined lists accept signups; `$project->list('*', purpose: ...)` covers any
   other list name. `->doubleOptIn(false)` turns double opt-in off for one list.
+  `->publicCount()` and `->publicPosition()` publish the list's rounded count and a
+  person's place in line (by unsubscribe token) over HTTP; both are off by default
+  and stay off on a list without double opt-in.
 - Read the environment through `config()`, never `env()`: with a cached config,
   `env()` returns `null` outside the config files. The callback runs when the
   project is first needed, and defining a project again replaces it.
@@ -187,7 +190,8 @@ $entry->hasConsentFor('newsletter');
 
 ### 6. Preference page and rights
 
-- Mails carry only the unsubscribe token, which can only remove. The preference
+- Mails carry only the unsubscribe token, which can only remove (and read the
+  place in line where a list publishes it). The preference
   page needs a short-lived manage token, mailed on request: listen to
   `ManageLinkRequested` and send `$event->manageUrl` to `$event->entry->email`.
   Requests: `POST /waitlist/unsubscribe/{token}/manage-link` (the unsubscribe

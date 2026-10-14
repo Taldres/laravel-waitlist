@@ -142,15 +142,15 @@ itself](../projects.md#periods-a-project-promises-itself).
 | `prefix` | | `waitlist` | the path the routes live under, empty for the root; no `{placeholder}`, as the links in mails cannot be built for one |
 | `name` | | `waitlist.` | the route name prefix |
 | `middleware` | | `['api']` | applies to every route, token links included: no authentication here |
-| `group_middleware.signup` | | `[]` | added to signup, wording and manage links by address only, after the rate limit, apart from what Laravel always sorts ahead of it, such as the session of `web`: checks for your forms, such as CSRF or an origin check, see [Checks for your forms only](../securing-the-endpoints.md#checks-for-your-forms-only) |
+| `group_middleware.signup` | | `[]` | added to signup, wording, count and manage links by address only, after the rate limit, apart from what Laravel always sorts ahead of it, such as the session of `web`: checks for your forms, such as CSRF or an origin check, see [Checks for your forms only](../securing-the-endpoints.md#checks-for-your-forms-only) |
 | `group_middleware.links` | | `[]` | added to everything with a token only |
 | `rate_limits.signup_per_minute` | `WAITLIST_RATE_LIMIT_SIGNUP` | 10 | per visitor and endpoint: a guest's IP, or the address a server forwards; at least 1, as do all four |
 | `rate_limits.link_per_minute` | `WAITLIST_RATE_LIMIT_LINK` | 10 | per token; one that does not read gives way to 10, reported |
 | `rate_limits.links_per_ip_per_minute` | `WAITLIST_RATE_LIMIT_LINKS_PER_IP` | 600 | bounds made-up tokens per IP, per server, or per visitor a server forwards; one that does not read gives way to 600, reported |
 | `rate_limits.caller_signup_per_minute` | `WAITLIST_RATE_LIMIT_CALLER_SIGNUP` | 120 | per server calling for a project and endpoint, see [Servers calling for a project](../securing-the-endpoints.md#servers-calling-for-a-project) |
 
-The numbers tune the package's limiters, `waitlist` for signup, wording and manage
-links by address and `waitlist-links` for everything with a token. To replace one,
+The numbers tune the package's limiters, `waitlist` for signup, wording, count and
+manage links by address and `waitlist-links` for everything with a token. To replace one,
 or to turn it off with `Limit::none()`, define a limiter of that name with
 `RateLimiter::for()`; no setting turns a limit off. See [Securing the
 endpoints](../securing-the-endpoints.md#rate-limits).
