@@ -16,7 +16,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('waitlist_consents', function (Blueprint $table) {
-            $table->bigIncrements('id');
+            $table->id();
             $table->foreignId('waitlist_subscription_id')
                 ->constrained('waitlist_subscriptions')
                 ->cascadeOnDelete();

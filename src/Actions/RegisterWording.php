@@ -32,7 +32,7 @@ class RegisterWording
     {
         $texts = is_string($wording) ? ['' => $wording] : $wording;
 
-        $this->assertWithinLimits($purpose, $version, max(array_map(mb_strlen(...), array_map('strval', array_keys($texts))) ?: [0]));
+        $this->assertWithinLimits($project, $purpose, $version, max(array_map(mb_strlen(...), array_map('strval', array_keys($texts))) ?: [0]));
 
         if ($texts === [] || in_array('', array_map(trim(...), $texts), true)) {
             throw WordingConflictException::empty($purpose, $version);
@@ -107,7 +107,7 @@ class RegisterWording
      */
     public function fromCaller(string $project, string $purpose, string $version, ?string $locale, string $text, ?string $caller = null): bool
     {
-        $this->assertWithinLimits($purpose, $version, mb_strlen((string) $locale));
+        $this->assertWithinLimits($project, $purpose, $version, mb_strlen((string) $locale));
 
         if (trim($text) === '') {
             throw WordingConflictException::empty($purpose, $version);
@@ -178,10 +178,10 @@ class RegisterWording
     /**
      * @throws InvalidArgumentException
      */
-    private function assertWithinLimits(string $purpose, string $version, int $longestLocale): void
+    private function assertWithinLimits(string $project, string $purpose, string $version, int $longestLocale): void
     {
-        if (mb_strlen($purpose) > 100 || mb_strlen($version) > 100 || $longestLocale > 35) {
-            throw new InvalidArgumentException('Purposes and versions take up to 100 characters, locales up to 35.');
+        if (mb_strlen($project) > WaitlistWording::PROJECT_LENGTH || mb_strlen($purpose) > WaitlistWording::KEY_LENGTH || mb_strlen($version) > WaitlistWording::KEY_LENGTH || $longestLocale > 35) {
+            throw new InvalidArgumentException('Projects take up to '.WaitlistWording::PROJECT_LENGTH.' characters, purposes and versions up to '.WaitlistWording::KEY_LENGTH.', locales up to 35.');
         }
     }
 

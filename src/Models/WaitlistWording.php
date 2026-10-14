@@ -30,6 +30,12 @@ use Taldres\Waitlist\Models\Concerns\UsesWaitlistConnection;
 #[Fillable(['project', 'purpose', 'version', 'locale', 'text', 'registered_by', 'registered_at', 'retired_at'])]
 class WaitlistWording extends Model
 {
+    /** The length of the purpose and version columns. */
+    public const int KEY_LENGTH = 255;
+
+    /** The length of the project column, which a project name may fill, as ProjectDefinition requires. */
+    public const int PROJECT_LENGTH = 100;
+
     use GuardsImmutableAttributes;
     use UsesWaitlistConnection;
 

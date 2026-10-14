@@ -17,7 +17,7 @@ return new class extends Migration
     {
         Schema::create('waitlist_subscriptions', function (Blueprint $table) {
             // Numeric PK, so rows order without a database-specific uuid function.
-            $table->bigIncrements('id');
+            $table->id();
             $table->foreignUuid('waitlist_entry_id')
                 ->constrained('waitlist_entries')
                 ->cascadeOnDelete();

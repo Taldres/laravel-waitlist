@@ -16,11 +16,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('waitlist_wordings', function (Blueprint $table) {
-            $table->bigIncrements('id');
-            $table->string('project')->default('default');
-            // Short enough for the unique index on MySQL with utf8mb4.
-            $table->string('purpose', 100);
-            $table->string('version', 100);
+            $table->id();
+            // Project names are at most 100 characters, which keeps the unique
+            // index below within what MySQL holds with utf8mb4.
+            $table->string('project', 100)->default('default');
+            $table->string('purpose');
+            $table->string('version');
             // Empty, not null, for a version with one text for every locale:
             // NULLs never collide in the unique index.
             $table->string('locale', 35)->default('');

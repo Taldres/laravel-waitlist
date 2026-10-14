@@ -225,7 +225,7 @@ describe('a server of the project', function () {
     })->with([
         'empty text' => [['version' => '2026-10', 'text' => '  '], 'The purposes.launch.text field must be the wording that was shown.'],
         'text too long' => [['version' => '2026-10', 'text' => str_repeat('a', 10001)], 'The purposes.launch.text field may not be longer than 10000 characters.'],
-        'version too long for text' => [['version' => str_repeat('v', 101), 'text' => CALLER_WORDING], 'The purposes.launch.version field may not be longer than 100 characters when it comes with its text.'],
+        'version too long' => [['version' => str_repeat('v', 256), 'text' => CALLER_WORDING], 'The purposes.launch.version field must be a version of 1 to 255 characters.'],
         'no version' => [['text' => CALLER_WORDING], 'The purposes.launch.version field must be a version of 1 to 255 characters.'],
         'malformed hash' => [['version' => '2026-10', 'hash' => '0000'], 'The purposes.launch.hash field must be the SHA-256 of the wording shown, as 64 hex characters.'],
         'unknown key' => [['version' => '2026-10', 'admin' => true], 'The purposes.launch field may only have the keys version, locale, hash, text.'],

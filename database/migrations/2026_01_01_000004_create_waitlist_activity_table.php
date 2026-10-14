@@ -16,7 +16,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('waitlist_activity', function (Blueprint $table) {
-            $table->bigIncrements('id');
+            $table->id();
             // Both keys are nulled on erasure (by the database or
             // RecordActivity::erased()); project, list, type, purpose and
             // occurred_on survive, which keeps historical counts intact.
