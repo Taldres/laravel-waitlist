@@ -300,7 +300,7 @@ describe('waitlist:import', function () {
 
         $this->artisan('waitlist:import', ['file' => $file, '--source' => 'paper forms', '--request-confirmation' => true, '--list' => 'gamma', '--limit' => '2'])
             ->expectsOutputToContain('Stopped at line 4 after 2 imports')
-            ->expectsOutputToContain("php artisan waitlist:import '{$file}' --source='paper forms' --request-confirmation --list='gamma' --project='default' --limit=2 --from-line=4")
+            ->expectsOutputToContain('php artisan waitlist:import '.escapeshellarg($file).' --source='.escapeshellarg('paper forms').' --request-confirmation --list='.escapeshellarg('gamma').' --project='.escapeshellarg('default').' --limit=2 --from-line=4')
             ->expectsOutputToContain('Imported 2, skipped 0 already on the list, 0 failed.')
             ->assertSuccessful();
 
