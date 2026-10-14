@@ -1,7 +1,7 @@
 # Commands
 
 ```bash
-php artisan waitlist:install [--projects]                  # publish the provider, config and migrations; register the provider
+php artisan waitlist:install [--projects] [--mail]         # publish the provider, config and migrations; register the provider; --mail writes the confirmation mail
 php artisan waitlist:privacy [--project=]                  # input for your record of processing
 php artisan waitlist:check [--strict]                       # settings and tables, for a deploy
 php artisan waitlist:show {email} [--list=] [--project=] [--json|--pretty]  # right of access
@@ -37,7 +37,12 @@ say where they looked.
   [Several products in one app](../projects.md#several-products-in-one-app); the
   command warns that the package routes, once enabled, answer every signup with
   `422` until you bind a `ProjectResolver`. This provider is copied, not published under a tag,
-  and an existing provider is left as it is, which the command says.
+  and an existing provider is left as it is, which the command says. With `--mail`
+  it also writes `app/Mail/ConfirmWaitlistMail.php`,
+  `app/Listeners/SendWaitlistConfirmationMail.php` and
+  `resources/views/mail/waitlist/confirm.blade.php`, from stubs, for the double
+  opt-in confirmation; a file that exists is left as it is, and the files are
+  yours afterwards, see [Mail](../mail.md#the-confirmation-mail).
 - **`waitlist:prune`** applies the retention periods. Schedule it yourself, for
   example `Schedule::command('waitlist:prune')->daily()`, and keep Laravel's
   scheduler running; `waitlist:privacy` warns while no scheduled task runs it. See
@@ -83,7 +88,11 @@ say where they looked.
   such as a binding to a class that does not exist; the spam protector checked
   is the one the endpoints use, and it is never asked to check a request.
   Resolving builds the bound classes, so run the check where the application can
-  boot with its database and secrets. It
+  boot with its database and secrets. With `PublishableKeyResolver` bound, it
+  fails on projects whose definitions share a publishable key and on a definition
+  it cannot build, naming the projects; its own messages never show a key, while
+  the one for a definition it cannot build includes the error that definition
+  threw. It
   hints while no scheduled task of your application runs
   `waitlist:prune` (only Laravel's scheduler is in sight, so `--strict` leaves
   the hint alone for an app that runs it from cron), compares the tables and
@@ -92,7 +101,7 @@ say where they looked.
   `routes.enabled`: a group missing although the routes are on, or routes still
   registered although they are off, as when a route cache was built under other
   settings. Run it again after `route:cache`. The exit code is 1 for a setting, a
-  binding or a table, and with `--strict` for a warning too. `php artisan about` shows a
+  binding, a publishable key or a table, and with `--strict` for a warning too. `php artisan about` shows a
   Laravel Waitlist section with the same state.
 - **`waitlist:privacy`** describes the configured package storage, the fields
   and purposes of every list, retention, the rate limits (including those of

@@ -17,6 +17,7 @@ use Taldres\Waitlist\Actions\ResendConfirmation;
 use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
+use Taldres\Waitlist\Definitions\ProjectDefinitions;
 use Taldres\Waitlist\Enums\ActivityType;
 use Taldres\Waitlist\Enums\Page;
 use Taldres\Waitlist\Enums\WaitlistLimiter;
@@ -34,6 +35,7 @@ use Taldres\Waitlist\Exceptions\MissingWordingException;
 use Taldres\Waitlist\Http\Limiters;
 use Taldres\Waitlist\Models\WaitlistActivity;
 use Taldres\Waitlist\Support\AuthenticatedProjectResolver;
+use Taldres\Waitlist\Support\PublishableKeyResolver;
 use Taldres\Waitlist\Support\PurposeRegistry;
 use Taldres\Waitlist\Support\ResolvesModel;
 use Taldres\Waitlist\Support\SetupAudit;
@@ -360,6 +362,7 @@ class PrivacyCommand extends Command
                     .'; GET never changes state'
                 : '- No public endpoints (package routes disabled)',
             ...$this->servers(),
+            ...$this->publishableKeys($catalog, $projects),
             '- Consent records immutable; lifecycle log rows never deleted, only stripped on erasure',
             '- Erasure strips the log: only project, list, step, purpose, the status a departure left and date remain',
             '- No mail sent and no outbound requests made by the package',
@@ -399,6 +402,46 @@ class PrivacyCommand extends Command
         }
 
         return $lines;
+    }
+
+    /**
+     * A publishable key ships in every page that sends it, so the record must
+     * not read it as access control. Only the package's own resolver is known
+     * to take keys from the definitions alone; a subclass may reach any project.
+     *
+     * @param  list<string>  $projects
+     * @return list<string>
+     */
+    protected function publishableKeys(ProjectCatalog $catalog, array $projects): array
+    {
+        $resolver = WaitlistConfig::routesEnabled() ? rescue(fn (): mixed => app(ProjectResolver::class), null, report: false) : null;
+
+        if (! $resolver instanceof PublishableKeyResolver) {
+            return [];
+        }
+
+        $exact = $resolver::class === PublishableKeyResolver::class;
+        $open = [];
+        $keyless = [];
+
+        foreach ($projects as $project) {
+            if ($catalog->lists($project) === []) {
+                continue;
+            }
+
+            if ($exact && rescue(fn (): ?string => app(ProjectDefinitions::class)->get($project)?->getPublishableKey(), null, report: false) === null) {
+                $keyless[] = $project;
+            } elseif ($catalog->origins($project) === []) {
+                $open[] = $project;
+            }
+        }
+
+        return [
+            '- Signups, the wording and manage links by address pick their project by a publishable key in the `'.$resolver::HEADER.'` header. The key is public, shown by every page that sends it: it authorizes nothing and keeps nobody out. Who may call is decided by the useWaitlist gate, authentication.required and any auth middleware on the signup; which websites a browser may call from is decided by each project\'s origins'
+                .($open !== [] ? ' (none set for '.implode(', ', $open).', so any website may)' : '')
+                .'; a script outside a browser can send any key and any origin'
+                .($keyless !== [] ? '. Projects without a key ('.implode(', ', $keyless).') cannot be reached this way' : ''),
+        ];
     }
 
     /**

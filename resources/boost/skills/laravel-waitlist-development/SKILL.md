@@ -36,7 +36,9 @@ php artisan migrate
 (`waitlist-migrations`). For several projects, `waitlist:install --projects` writes
 a provider with named projects instead; bind a `ProjectResolver` before the
 package routes take signups, they answer `422` until then. An existing provider
-is never overwritten. Schedule `waitlist:prune` yourself,
+is never overwritten. With double opt-in, `waitlist:install --mail` also writes the
+confirmation mailable, its view and a queued `EntrySubscribed` listener into the app
+(existing files are left alone). Schedule `waitlist:prune` yourself,
 `Schedule::command('waitlist:prune')->daily()` in `routes/console.php`, and keep
 Laravel's scheduler running.
 
@@ -78,7 +80,8 @@ Waitlist::define(function (ProjectDefinition $project): void {
   For projects kept in a database, bind your own `ProjectCatalog` in a provider's
   `register()`: it supplies lists, fields, wording versions and frontend URL
   patterns per project. Over HTTP, the bound `ProjectResolver` picks the project of
-  a signup, e.g. from a publishable key; never put that check into
+  a signup, e.g. `PublishableKeyResolver` from a publishable key, which is public
+  and authorizes nothing; never put that check into
   `routes.middleware`, which also guards the token links in mails. Checks for
   the forms only, such as CSRF or an origin check, go into
   `routes.group_middleware.signup`.

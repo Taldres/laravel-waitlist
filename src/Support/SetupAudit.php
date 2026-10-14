@@ -18,6 +18,7 @@ use Taldres\Waitlist\Contracts\EmailNormalizer;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Contracts\SpamProtector;
+use Taldres\Waitlist\Definitions\ProjectDefinitions;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Http\RouteRegistration;
@@ -169,6 +170,52 @@ final class SetupAudit
 
             if (! $resolved instanceof $contract) {
                 $problems[] = "{$contract} resolves to ".get_debug_type($resolved).', which does not implement it.';
+            }
+        }
+
+        return $problems;
+    }
+
+    /**
+     * For the package's own PublishableKeyResolver, which reads the keys from
+     * the definitions: keys that projects share, which it refuses, and
+     * definitions it cannot build, which it skips, so a shared key would only
+     * show once they are fixed. Names projects, never keys. A subclass reads
+     * its keys elsewhere and is left alone.
+     *
+     * @return list<string>
+     */
+    public static function publishableKeyProblems(): array
+    {
+        try {
+            if (app(ProjectResolver::class)::class !== PublishableKeyResolver::class) {
+                return [];
+            }
+        } catch (Throwable) {
+            return []; // bindingProblems() names it.
+        }
+
+        $definitions = app(ProjectDefinitions::class);
+        $problems = [];
+        $owners = [];
+
+        foreach ($definitions->names() as $project) {
+            try {
+                $key = $definitions->get($project)?->getPublishableKey();
+            } catch (Throwable $exception) {
+                $problems[] = "The definition of the project [{$project}] cannot be built, so PublishableKeyResolver cannot reach it by key: ".$exception->getMessage();
+
+                continue;
+            }
+
+            if ($key !== null) {
+                $owners[$key][] = $project;
+            }
+        }
+
+        foreach ($owners as $projects) {
+            if (count($projects) > 1) {
+                $problems[] = 'The projects ['.implode('], [', $projects).'] share a publishable key, which PublishableKeyResolver refuses; give each its own.';
             }
         }
 
