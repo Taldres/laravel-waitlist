@@ -149,11 +149,21 @@ class SubscribeToWaitlist
         $current = $entry->currentSubscription;
 
         if ($current !== null) {
-            return $current->isConfirmed()
-                ? new SubscribeResult($entry, $current, SubscribeOutcome::AlreadyConfirmed)
-                : new SubscribeResult($entry, $current, $this->resend->resend($current, $context)
-                    ? SubscribeOutcome::ConfirmationResent
-                    : SubscribeOutcome::ResendSuppressed);
+            if ($current->isConfirmed()) {
+                return new SubscribeResult($entry, $current, SubscribeOutcome::AlreadyConfirmed);
+            }
+
+            $resent = $this->resend->resend($current, $context);
+
+            // Erased on the way, by a prune for example: the address is new
+            // again, rather than suppressed with nothing left to confirm.
+            if (! $resent && ! $retried && ! $this->stillStored($entry)) {
+                return $this->findAndAct($policy, $doubleOptIn, $email, $metadata, $wordings, $context, retried: true);
+            }
+
+            return new SubscribeResult($entry, $current, $resent
+                ? SubscribeOutcome::ConfirmationResent
+                : SubscribeOutcome::ResendSuppressed);
         }
 
         $deferred = $doubleOptIn && $this->resend->addressSaturated($policy->project, $email);

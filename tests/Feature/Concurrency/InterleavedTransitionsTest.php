@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Taldres\Waitlist\Actions\EraseEntry;
+use Taldres\Waitlist\Actions\PruneEntries;
 use Taldres\Waitlist\Actions\ResendConfirmation;
 use Taldres\Waitlist\Actions\UnsubscribeEntry;
 use Taldres\Waitlist\Enums\ActivityType;
@@ -19,6 +20,7 @@ use Taldres\Waitlist\Events\EntryConfirmed;
 use Taldres\Waitlist\Events\EntryForgotten;
 use Taldres\Waitlist\Events\EntrySubscribed;
 use Taldres\Waitlist\Events\EntryUnsubscribed;
+use Taldres\Waitlist\Events\SubscriptionExpired;
 use Taldres\Waitlist\Facades\Waitlist;
 use Taldres\Waitlist\Models\WaitlistActivity;
 use Taldres\Waitlist\Models\WaitlistConsent;
@@ -249,6 +251,58 @@ it('keeps a confirmation that crossed an expiry', function () {
     expect($expired)->toBeFalse()
         ->and(WaitlistEntry::query()->firstOrFail()->status)->toBe(EntryStatus::Confirmed);
 
+    assertWaitlistInvariants();
+});
+
+it('keeps a signup that lands between a prune\'s expiry and its erasure', function () {
+    subscribeAndCapture('beta', 'user@example.com');
+    WaitlistSubscription::query()->update(['started_at' => now()->subDays(40)]);
+    $stale = WaitlistEntry::query()->sole();
+
+    $outcome = null;
+    // After the expiry committed, before the erasure locks the entry.
+    Event::listen(SubscriptionExpired::class, function () use (&$outcome) {
+        $outcome ??= $this->as('b', fn () => Waitlist::subscribe('beta', 'user@example.com', waitlistConsent())->outcome);
+    });
+
+    $erased = $this->as('a', fn () => app(PruneEntries::class)->expirePending(30));
+
+    $entry = WaitlistEntry::query()->sole();
+
+    expect($outcome)->toBe(SubscribeOutcome::Resubscribed)
+        ->and($erased)->toBe(0)
+        ->and($entry->is($stale))->toBeTrue()
+        ->and($entry->status)->toBe(EntryStatus::Pending)
+        ->and($entry->subscriptions()->count())->toBe(2);
+
+    assertWaitlistInvariants();
+});
+
+it('starts afresh when a prune expires and erases the signup it is resending for', function () {
+    config()->set(ConfigKey::ResendCooldown->value, null);
+
+    subscribeAndCapture('beta', 'user@example.com');
+    WaitlistSubscription::query()->update(['started_at' => now()->subDays(40)]);
+    $stale = WaitlistEntry::query()->sole();
+
+    $pruned = null;
+    $entryReads = 0;
+    // The resend found the open cycle and now reads its entry again.
+    DB::connection('waitlist_b')->beforeExecuting(function (string $query) use (&$pruned, &$entryReads) {
+        if ($pruned === null && preg_match('/^select .* from [`"]?waitlist_entries[`"]? /i', $query) === 1 && ++$entryReads === 2) {
+            $pruned = $this->as('a', fn () => app(PruneEntries::class)->expirePending(30));
+        }
+    });
+
+    Event::fake([EntrySubscribed::class]);
+
+    $outcome = $this->as('b', fn () => Waitlist::subscribe('beta', 'user@example.com', waitlistConsent())->outcome);
+
+    expect($pruned)->toBe(1)
+        ->and($outcome)->toBe(SubscribeOutcome::Started)
+        ->and(WaitlistEntry::query()->sole()->isNot($stale))->toBeTrue();
+
+    Event::assertDispatchedTimes(EntrySubscribed::class, 1);
     assertWaitlistInvariants();
 });
 
