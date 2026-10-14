@@ -239,7 +239,19 @@ DB_CONNECTION=mariadb vendor/bin/pest
 DB_CONNECTION=pgsql vendor/bin/pest
 ```
 
-See [CONTRIBUTING](.github/CONTRIBUTING.md) and the [changelog](CHANGELOG.md).
+See the [changelog](CHANGELOG.md) for what changed.
+
+## Contributing
+
+Bug reports with a reproduction, documentation, examples and small features that
+fit the scope are welcome. The issues labeled
+[`good first issue`](https://github.com/Taldres/laravel-waitlist/labels/good%20first%20issue)
+are meant for a first pull request, and
+[`help wanted`](https://github.com/Taldres/laravel-waitlist/labels/help%20wanted)
+marks work that needs someone with a free evening. [CONTRIBUTING](.github/CONTRIBUTING.md)
+explains the scope, how the code is organized and how to run the tests. Larger
+ideas, such as a sync to your mail provider, fit best as a companion package built
+on the events and contracts, see [Extending](docs/extending.md).
 
 ## License
 

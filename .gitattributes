@@ -13,6 +13,7 @@
 /.claude            export-ignore
 /.agents            export-ignore
 /CLAUDE.md          export-ignore
+/RELEASE.md         export-ignore
 /AGENTS.md          export-ignore
 /docs              export-ignore
 /graphify-out      export-ignore

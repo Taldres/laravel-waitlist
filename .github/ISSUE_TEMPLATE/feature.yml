@@ -1,0 +1,64 @@
+name: Feature Request
+description: Suggest an addition or a change to the package.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea. The package deliberately stays small, see the [scope](https://github.com/Taldres/laravel-waitlist/blob/main/.github/CONTRIBUTING.md#scope). A few lines on the problem help more than a finished design.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do, and what stops you today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What would you like the package to do? A snippet of how you would call it is enough.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Could this be built on top of the events, contracts or macros (see "Extending" in the docs)? What gets in the way?
+    validations:
+      required: false
+
+  - type: dropdown
+    id: home
+    attributes:
+      label: Where should it live?
+      options:
+        - In the package
+        - In a companion package on top of it
+        - In the documentation as an example
+        - I am not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Personal data
+      description: Would this store or send personal data? If so, which, and how would it be covered by encryption, access, erasure and retention?
+    validations:
+      required: false
+
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Would you like to build it?
+      options:
+        - "Yes"
+        - "Yes, with guidance"
+        - "No"
+    validations:
+      required: false
