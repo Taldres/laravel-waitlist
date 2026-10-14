@@ -169,20 +169,32 @@ function assertWaitlistInvariants(): void
             }
 
             // A request counts from when it is issued until its failure is reported,
-            // and again if its mail went out after all.
+            // and again if its mail went out after all. A request to confirm again
+            // starts the count anew, and its resends add to it.
             $sent = 0;
             $last = null;
+            $asking = false;
 
             foreach ($entry->activity->where('waitlist_subscription_id', $cycle->getKey()) as $row) {
                 match ($row->type) {
                     ActivityType::ConfirmationRequested => $sent++,
                     ActivityType::ConfirmationFailed => $sent--,
                     ActivityType::ConfirmationMailed => $last === ActivityType::ConfirmationFailed ? $sent++ : null,
+                    ActivityType::ReconfirmationRequested => $sent = $asking ? $sent + 1 : 1,
                     default => null,
                 };
 
                 if (in_array($row->type, [ActivityType::ConfirmationRequested, ActivityType::ConfirmationFailed, ActivityType::ConfirmationMailed], true)) {
                     $last = $row->type;
+                }
+
+                if ($row->type === ActivityType::ReconfirmationRequested) {
+                    $asking = true;
+                    $last = null;
+                }
+
+                if ($row->type === ActivityType::Reconfirmed) {
+                    $asking = false;
                 }
             }
 

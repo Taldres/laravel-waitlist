@@ -104,6 +104,15 @@ final class ConfigReader
         return self::atMost($key, $this->number($key, $min, nullable: true), TimestampRange::minutesAhead(), 'minutes', self::LIFETIME_LIMIT);
     }
 
+    /**
+     * For a period of days counted forward from now whose end is stored.
+     */
+    public function lifetimeDays(ConfigKey $key, int $min): int
+    {
+        /** @var int */
+        return self::atMost($key, $this->number($key, $min, nullable: false), TimestampRange::daysAhead(), 'days', self::LIFETIME_LIMIT);
+    }
+
     public function lifetimeMinutes(ConfigKey $key, int $min): int
     {
         /** @var int */

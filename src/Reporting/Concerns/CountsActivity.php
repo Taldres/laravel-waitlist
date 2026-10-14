@@ -30,11 +30,13 @@ trait CountsActivity
     }
 
     /**
-     * An expiry only ever ends an unconfirmed cycle, so it never counts.
+     * An expiry only ever ends an unconfirmed cycle, so it never counts; a
+     * lapse only ever ends a confirmed one.
      */
     public function leftConfirmed(): int
     {
         return $this->of(ActivityType::Unsubscribed, EntryStatus::Confirmed)
+            + $this->of(ActivityType::Lapsed, EntryStatus::Confirmed)
             + $this->of(ActivityType::Erased, EntryStatus::Confirmed);
     }
 

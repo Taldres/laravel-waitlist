@@ -232,20 +232,29 @@ final class ProjectDefinition
     /**
      * The retention periods this project promises in its privacy notice, in
      * days, where they differ from waitlist.retention: how long an address may
-     * stay unconfirmed, how long one is kept after it left, and how long the IP
-     * and user agent stay on the log. A period you leave out stays with the
-     * configuration; to keep data longer than it says, give a longer one. Meant
-     * for a central API whose sites promise different periods.
+     * stay unconfirmed, how long one is kept after it left, how long the IP
+     * and user agent stay on the log, after how long a confirmed address is
+     * asked to confirm again and how long it then has to answer. A period you
+     * leave out stays with the configuration; to keep data longer than it
+     * says, give a longer one. Meant for a central API whose sites promise
+     * different periods.
      *
      * @throws InvalidConfigurationException
      */
-    public function retention(?int $pendingDays = null, ?int $unsubscribedDays = null, ?int $requestMetadataDays = null): static
-    {
+    public function retention(
+        ?int $pendingDays = null,
+        ?int $unsubscribedDays = null,
+        ?int $requestMetadataDays = null,
+        ?int $reconfirmAfterDays = null,
+        ?int $reconfirmWithinDays = null,
+    ): static {
         $this->periods = new ProjectPeriods(
             pendingDays: $pendingDays ?? $this->periods->pendingDays,
             unsubscribedDays: $unsubscribedDays ?? $this->periods->unsubscribedDays,
             requestMetadataDays: $requestMetadataDays ?? $this->periods->requestMetadataDays,
             confirmLinkMinutes: $this->periods->confirmLinkMinutes,
+            reconfirmAfterDays: $reconfirmAfterDays ?? $this->periods->reconfirmAfterDays,
+            reconfirmWithinDays: $reconfirmWithinDays ?? $this->periods->reconfirmWithinDays,
         );
 
         return $this;
@@ -265,6 +274,8 @@ final class ProjectDefinition
             unsubscribedDays: $this->periods->unsubscribedDays,
             requestMetadataDays: $this->periods->requestMetadataDays,
             confirmLinkMinutes: $minutes,
+            reconfirmAfterDays: $this->periods->reconfirmAfterDays,
+            reconfirmWithinDays: $this->periods->reconfirmWithinDays,
         );
 
         return $this;

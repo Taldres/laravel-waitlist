@@ -40,7 +40,8 @@ class SubscribeToWaitlist
      *
      * - unknown: a first cycle starts with the given purposes
      * - waiting for confirmation: treated as a resend request
-     * - already confirmed: nothing happens
+     * - already confirmed: nothing happens, unless a request to confirm again
+     *   is out unanswered, which is then sent again like a resend
      * - left before: a new cycle starts with the given purposes
      *
      * Purposes are only recorded when a cycle starts. Adding one to a running
@@ -149,7 +150,7 @@ class SubscribeToWaitlist
         $current = $entry->currentSubscription;
 
         if ($current !== null) {
-            return $current->isConfirmed()
+            return $current->isConfirmed() && ! $current->awaitsReconfirmation()
                 ? new SubscribeResult($entry, $current, SubscribeOutcome::AlreadyConfirmed)
                 : new SubscribeResult($entry, $current, $this->resend->resend($current, $context)
                     ? SubscribeOutcome::ConfirmationResent

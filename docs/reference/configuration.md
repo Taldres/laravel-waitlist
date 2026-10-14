@@ -19,11 +19,11 @@ with, and a value beyond is refused with an `InvalidConfigurationException`
 that names the key and the limit, since a period near the largest integer would
 wrap around and land on the wrong side of now:
 
-- A lifetime (`double_opt_in.token_ttl`, `manage.token_ttl`, in minutes) may not
-  end after 2038-01-19 03:14:07 UTC, the last moment a MySQL or MariaDB
+- A lifetime (`double_opt_in.token_ttl`, `manage.token_ttl`, in minutes, and
+  `retention.reconfirm_within_days`, in days) may not end after 2038-01-19 03:14:07 UTC, the last moment a MySQL or MariaDB
   `timestamp` column holds. That is about 5.9 million minutes (11 years) from
   October 2026, and the limit shrinks by the minute.
-- A retention period (`retention.*_days`) and a cooldown (`resend_cooldown`,
+- A retention period (the other `retention.*_days`) and a cooldown (`resend_cooldown`,
   `manage.request_cooldown`, in minutes) count back from now and may not reach
   before 1970, earlier than any row: about 20 700 days or 29.9 million minutes
   today, growing with the clock. A period that long would never erase a row, so
@@ -128,6 +128,8 @@ which replaces the definitions and decides double opt-in per list; see
 | `retention.pending_days` | `WAITLIST_RETENTION_PENDING_DAYS` | 30 | unconfirmed signups, from the start of the cycle; 0 at the next run, `null` kept, at most the days since 1970 |
 | `retention.unsubscribed_days` | `WAITLIST_RETENTION_UNSUBSCRIBED_DAYS` | 1095 | people who left, from when they left; 0 at the next run, `null` kept, at most the days since 1970 |
 | `retention.request_metadata_days` | `WAITLIST_RETENTION_REQUEST_METADATA_DAYS` | 30 | IP and user agent on the log; 0 at the next run, `null` kept, at most the days since 1970 |
+| `retention.reconfirm_after_days` | `WAITLIST_RETENTION_RECONFIRM_AFTER_DAYS` | `null` | confirmed addresses are asked to confirm again this many days after they confirmed or last answered, at least 1, at most the days since 1970; `null` asks nobody. See [Asking confirmed addresses again](../lifecycle.md#asking-confirmed-addresses-again) |
+| `retention.reconfirm_within_days` | `WAITLIST_RETENTION_RECONFIRM_WITHIN_DAYS` | 30 | days to answer such a request, at least 1 and not past 2038-01-19; without an answer the address leaves the list and is kept like one that left |
 
 The retention periods are technical defaults, not legal recommendations; see
 [GDPR in practice](../gdpr.md#retention). A project can promise its own periods,

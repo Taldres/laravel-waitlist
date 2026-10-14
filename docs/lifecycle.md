@@ -2,7 +2,8 @@
 
 An address on a list is an **entry**. What happens to it is a series of
 **cycles**: a cycle starts with an opt-in, is confirmed, and ends when the person
-leaves (`unsubscribed`) or the confirmation expires (`expired`). Consents belong
+leaves (`unsubscribed`), the confirmation expires (`expired`), or a confirmed
+person does not answer when asked to confirm again (`lapsed`). Consents belong
 to one cycle and nothing else. At most one cycle per entry is open at a time,
 which the database enforces with a unique index, not the application.
 
@@ -48,7 +49,11 @@ A cycle has no status column. Its state is which timestamps are set:
 | --- | --- | --- |
 | null | null | waiting for confirmation |
 | set | null | on the list |
-| any | set | gone; `end_reason` says whether they left or the confirmation expired |
+| any | set | gone; `end_reason` says whether they left, the confirmation expired or a request to confirm again went unanswered |
+
+On the list, `reconfirmation_requested_at` is set while a request to confirm
+again is out, and `reconfirmed_at` holds the last answer; see [Asking confirmed
+addresses again](#asking-confirmed-addresses-again).
 
 The entry carries a `status` projection of its latest cycle, so ordinary queries
 and exports never need a join.
@@ -114,11 +119,11 @@ comparison; they cannot both pass a counter.
 | | Confirm token | Unsubscribe token | Manage token |
 | --- | --- | --- | --- |
 | Belongs to | one cycle | the entry | the entry |
-| Can | confirm | unsubscribe, withdraw a purpose, ask for a manage link | read the data, set the purposes, leave, erase |
-| Issued | when a cycle starts, rotated on every resend | once, on the first signup | on request, mailed to the address |
-| Plain form | `EntrySubscribed` | every mail: event payloads, `unsubscribeToken()`, `unsubscribeUrl()` | `ManageLinkRequested`, `manageLink()` |
+| Can | confirm, or answer a request to confirm again | unsubscribe, withdraw a purpose, ask for a manage link | read the data, set the purposes, leave, erase |
+| Issued | when a cycle starts, rotated on every resend and when a confirmed cycle is asked to confirm again | once, on the first signup | on request, mailed to the address |
+| Plain form | `EntrySubscribed`, `ReconfirmationRequested` | every mail: event payloads, `unsubscribeToken()`, `unsubscribeUrl()` | `ManageLinkRequested`, `manageLink()` |
 | Stored as | SHA-256 hash | SHA-256 hash plus an encrypted copy | SHA-256 hash only |
-| Ends | when the cycle ends, or after `double_opt_in.token_ttl` (seven days) | when the entry is erased | after `manage.token_ttl` minutes (60), or when a new one is issued |
+| Ends | when the cycle ends, or after `double_opt_in.token_ttl` (seven days); a request to confirm again after `retention.reconfirm_within_days` | when the entry is erased | after `manage.token_ttl` minutes (60), or when a new one is issued |
 
 Three consequences worth knowing:
 
@@ -138,6 +143,58 @@ Three consequences worth knowing:
 Confirming is idempotent: a second click reports success rather than a
 confusing error, and the link degrades to a status link that can never change
 state again. An expired confirm link answers `410`; a resend issues a fresh one.
+
+## Asking confirmed addresses again
+
+A confirmed address stays on the list until it leaves or is erased. With
+`retention.reconfirm_after_days` set (or `reconfirmAfterDays` in a project's
+[`retention()`](projects.md#periods-a-project-promises-itself)), `waitlist:prune`
+asks the ones that have not confirmed or answered for that many days whether
+they still want to be on it. Off by default.
+
+1. **The request.** Each due cycle gets a fresh confirm link that works for
+   `retention.reconfirm_within_days` (30), and `ReconfirmationRequested` fires
+   with it, the unsubscribe link and `answerBy`. Your listener mails it, as it
+   mails the confirmation; the package sends nothing. The claim is a
+   conditional update like every transition, so a cycle is asked once per
+   period, however often pruning runs or is retried, and a queued listener's
+   retry mails the same link.
+2. **The answer.** The link is a confirm link: your confirm page posts it back,
+   or `Waitlist::confirm($token)` takes it. It logs `reconfirmed`, starts the
+   period anew and fires nothing; a second click reports success, as a
+   confirmation does. Until then the token routes answer `answer_by` with the
+   deadline, so a confirm page that looks first with `GET` sees that it must
+   post although `status` reads `confirmed`; see [HTTP
+   API](reference/http-api.md). Signing up again does not answer: anyone can
+   type an address in.
+3. **Another mail.** A resend (`Waitlist::for($list)->resendConfirmation()`)
+   or a repeated signup sends the request again, with a fresh link and the
+   same deadline, under the cooldown and cap of confirmation requests
+   (`confirmation_resent`, or `resend_suppressed`). The request counts as the
+   cycle's first confirmation request, so `confirmation_count` starts at 1
+   again. The newest link is the only one that works.
+4. **No answer.** Once the link has expired, the next run ends the cycle as
+   `lapsed`, logs `lapsed` from `confirmed` and fires `SubscriptionLapsed`. The
+   address is then off the list and kept like one that left, until
+   `unsubscribed_days`, so the consent records of the mails it got remain for a
+   dispute. It can sign up again like anyone who left.
+
+While a request is out, the address is still on the list: `recipients()` and
+`hasConsentFor()` include it. The unsubscribe link and the preference page work
+as before; leaving ends the cycle and with it the request's link, so the link
+cannot undo an unsubscribe. An answer and a lapse that cross settle on
+whichever lands first, as a confirmation and an expiry do. A request is the
+cycle's newest confirm link, so the link of the original signup mail reports
+`404` afterwards instead of success.
+
+`waitlist:prune` asks and ends last, after the erasures and the clean-up, so a
+listener that throws stops only the asking. Queue the listener that mails the
+request: a synchronous one that throws ends the run after the first address.
+
+Turning asking off stops new requests; one already out still ends the cycle
+when its link expires, as the mail said. Take care that the mail goes out: a
+request whose listener failed for good leaves the person to lapse unless they
+sign up again or you resend it, so monitor failed jobs.
 
 ## Consent in force
 
@@ -193,6 +250,10 @@ Waitlist::listUnsubscribeHeaders($entry, 'newsletter');  // RFC 8058 one-click, 
 | optional purpose withdrawn | `consent_withdrawn` (with purpose) | `ConsentWithdrawn` |
 | unsubscribed, or primary purpose withdrawn | `unsubscribed` | `EntryUnsubscribed` |
 | confirmation abandoned (retention) | `expired` | `SubscriptionExpired` |
+| confirmed address asked to confirm again (retention) | `reconfirmation_requested` | `ReconfirmationRequested` |
+| that request sent again (resend or signup) | `reconfirmation_requested` | `ReconfirmationRequested` |
+| that request answered | `reconfirmed` | — |
+| that request unanswered when its link expired (retention) | `lapsed` | `SubscriptionLapsed` |
 | erased | `erased` | `EntryForgotten` |
 
 With double opt-in disabled a cycle starts confirmed: `subscribed` and

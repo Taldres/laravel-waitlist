@@ -32,6 +32,7 @@ listeners send through any Laravel mailer (Resend, Postmark, SES, SMTP, …).
 | Confirmation (double opt-in) | `EntrySubscribed` with `$event->requiresConfirmation` | `$event->confirmUrl`, `$event->unsubscribeUrl` |
 | Preference page link | `ManageLinkRequested` | `$event->manageUrl`, sent only to `$event->entry->email` |
 | Welcome (optional) | `EntryConfirmed` | `$event->unsubscribeUrl`, `Waitlist::listUnsubscribeHeaders($event->entry)` |
+| Still interested? (with `retention.reconfirm_after_days`) | `ReconfirmationRequested`, fired by `waitlist:prune` once per period | `$event->confirmUrl` (posted back like a confirmation), `$event->unsubscribeUrl`, `$event->answerBy`; without an answer the address lapses |
 | Launch or update about one list | the app decides | per-recipient link that leaves the list |
 | Newsletter (optional purpose) | the app decides | per-recipient link that withdraws only the newsletter |
 

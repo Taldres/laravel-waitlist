@@ -37,6 +37,10 @@ class WaitlistEntryResource extends JsonResource
             'confirmed_at' => $this->confirmed_at,
             'unsubscribed_at' => $this->unsubscribed_at,
             'created_at' => $this->created_at,
+            // Set while the address was asked to confirm again and has not
+            // answered: a confirm page then posts the token back, although the
+            // status already reads confirmed.
+            'answer_by' => $this->latestSubscription?->awaitsReconfirmation() === true ? $this->latestSubscription->confirm_token_expires_at : null,
         ];
     }
 }

@@ -11,10 +11,13 @@ enum SubscribeOutcome: string
 
     case Resubscribed = 'resubscribed';
 
-    /** The address was already waiting; another confirmation request went out. */
+    /**
+     * The address was already waiting, or was asked to confirm again and has
+     * not answered; another request went out.
+     */
     case ConfirmationResent = 'confirmation_resent';
 
-    /** The address was already waiting, but the resend cooldown or cap applied. */
+    /** As for ConfirmationResent, but the resend cooldown or cap applied. */
     case ResendSuppressed = 'resend_suppressed';
 
     /** The address is already confirmed; nothing happened. */

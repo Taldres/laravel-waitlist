@@ -107,7 +107,7 @@ function edgeCaseFlows(): array
     $signup = [ConfigKey::RoutesEnabled, ConfigKey::RoutesPrefix, ConfigKey::RoutesName, ConfigKey::RoutesMiddleware, ConfigKey::SignupMiddleware, ConfigKey::SignupPerMinute];
     $manageLink = [ConfigKey::ManageTokenTtl, ConfigKey::ManageRequestCooldown, ConfigKey::RoutesEnabled, EmailNormalizer::class, ConfirmationUrlGenerator::class, ProjectCatalog::class];
     $erasure = [ConfigKey::Model, ConfigKey::ActivityModel, ConfigKey::Connection, EmailNormalizer::class];
-    $retention = [ConfigKey::RetentionPendingDays, ConfigKey::RetentionUnsubscribedDays, ConfigKey::RetentionRequestMetadataDays];
+    $retention = [ConfigKey::RetentionPendingDays, ConfigKey::RetentionUnsubscribedDays, ConfigKey::RetentionRequestMetadataDays, ConfigKey::RetentionReconfirmAfterDays, ConfigKey::RetentionReconfirmWithinDays];
 
     $manage = fn (): string => Waitlist::manageLink(edgeCaseEntry())->token;
     $unsubscribed = fn (): bool => edgeCaseEntry()->status === EntryStatus::Unsubscribed;

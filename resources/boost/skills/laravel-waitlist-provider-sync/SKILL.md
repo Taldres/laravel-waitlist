@@ -35,11 +35,13 @@ Mails the Laravel app sends itself (through any mailer) need no sync: send them 
 | `EntryConfirmed` | add the contact, to one provider list per purpose in `$event->entry->purposes` |
 | `ConsentGranted` | add to that purpose's list, once `$event->subscription->isConfirmed()` |
 | `ConsentWithdrawn` | remove from `$event->consent->purpose`'s list, unless another list of the project still holds it |
-| `EntryUnsubscribed` | remove from the list of **every** purpose the cycle held, unless another list still holds it |
+| `EntryUnsubscribed`, `SubscriptionLapsed` | remove from the list of **every** purpose the cycle held, unless another list still holds it |
 | `EntryForgotten` | delete the contact only when no entry of the address is left; otherwise drop the purposes the remaining entries do not hold |
 
 - Leaving a list ends its cycle with every purpose on it: a newsletter agreed to on
-  that list ends too, and no `ConsentWithdrawn` fires for it.
+  that list ends too, and no `ConsentWithdrawn` fires for it. With
+  `retention.reconfirm_after_days`, a confirmed address that does not answer a
+  request to confirm again leaves the same way, with `SubscriptionLapsed`.
 - `EntryForgotten` fires for every erased entry, also for `forgetAll()` and
   retention pruning of one list, while the address may still be on another list.
 - Do not sync on `EntrySubscribed`: with double opt-in the address is unconfirmed.
@@ -56,6 +58,7 @@ use Taldres\Waitlist\Events\ConsentWithdrawn;
 use Taldres\Waitlist\Events\EntryConfirmed;
 use Taldres\Waitlist\Events\EntryForgotten;
 use Taldres\Waitlist\Events\EntryUnsubscribed;
+use Taldres\Waitlist\Events\SubscriptionLapsed;
 use Taldres\Waitlist\Models\WaitlistEntry;
 
 class SyncWaitlistToProvider implements ShouldQueue, ShouldBeEncrypted
@@ -77,7 +80,7 @@ class SyncWaitlistToProvider implements ShouldQueue, ShouldBeEncrypted
         $this->removeUnlessHeld($event->entry->project, $event->entry->email, $event->consent->purpose);
     }
 
-    public function onUnsubscribed(EntryUnsubscribed $event): void
+    public function onUnsubscribed(EntryUnsubscribed|SubscriptionLapsed $event): void
     {
         $event->subscription->consents()->pluck('purpose')->unique()->each(
             fn (string $purpose) => $this->removeUnlessHeld($event->entry->project, $event->entry->email, $purpose),
@@ -122,6 +125,7 @@ Event::listen(EntryConfirmed::class, [SyncWaitlistToProvider::class, 'onConfirme
 Event::listen(ConsentGranted::class, [SyncWaitlistToProvider::class, 'onGranted']);
 Event::listen(ConsentWithdrawn::class, [SyncWaitlistToProvider::class, 'onWithdrawn']);
 Event::listen(EntryUnsubscribed::class, [SyncWaitlistToProvider::class, 'onUnsubscribed']);
+Event::listen(SubscriptionLapsed::class, [SyncWaitlistToProvider::class, 'onUnsubscribed']);
 Event::listen(EntryForgotten::class, [SyncWaitlistToProvider::class, 'onForgotten']);
 ```
 

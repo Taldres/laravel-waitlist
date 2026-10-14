@@ -20,7 +20,7 @@ Leave the routes off and call the facade from your controllers;
 | GET | `/waitlist/purposes?list=&locale=` | Current wording per purpose, for the signup form, with the locale it is in |
 | POST | `/waitlist` | Subscribe with `email`, `purposes` (`{purpose: version}` or `{purpose: {version, locale, hash}}`; a project's own servers may add `text`, see [Wording sent by your servers](../purposes-and-wording.md#wording-sent-by-your-servers)), optional `list` (`waitlist.default_list` when missing, null or empty) and `metadata` (only the [fields](#metadata) the project and list define). `202` with an identical body for new and known addresses; `422` names the field (`email`, `list`, `purposes`, `metadata`, `metadata.{field}`), always as JSON, or says `Spam check failed.`; the project resolver and the [`useWaitlist` gate](#projects-and-who-may-call) may answer first, e.g. `401`, `403` or `404`. |
 | GET | `/waitlist/confirm/{token}` | Reports the token's state. `404` invalid, `410` expired. |
-| POST | `/waitlist/confirm/{token}` | Confirm. |
+| POST | `/waitlist/confirm/{token}` | Confirm, or answer a request to confirm again ([`ReconfirmationRequested`](../lifecycle.md#asking-confirmed-addresses-again)), which keeps the address on the list. |
 | GET | `/waitlist/unsubscribe/{token}` | Reports the entry. `404` invalid. |
 | POST | `/waitlist/unsubscribe/{token}[?purpose=]` | Unsubscribe, or withdraw one purpose; including [RFC 8058](https://www.rfc-editor.org/rfc/rfc8058) one-click. |
 | POST | `/waitlist/unsubscribe/{token}/manage-link` | Mail a manage link to the address behind the unsubscribe token. `202` with an identical body whether or not anything was sent, also for a token that belongs to nobody. A token needs no resolver, gate or spam check, and the route is in the `links` group. `404` with `manage_links_disabled` for a project [without manage links](../projects.md#pages). |
@@ -33,8 +33,15 @@ Leave the routes off and call the facade from your controllers;
 
 `/manage/…` takes the manage token, `/unsubscribe/…` the unsubscribe token, `/confirm/…` the confirm token. The token routes answer
 `{"data": {project, list, status, purposes, confirmed_at, unsubscribed_at,
-created_at}}`, never the address, also in an app that calls
+created_at, answer_by}}`, never the address, also in an app that calls
 `JsonResource::withoutWrapping()`; `/manage/{token}/data` answers the copy itself.
+
+`answer_by` is null unless the address was [asked to confirm
+again](../lifecycle.md#asking-confirmed-addresses-again) and has not answered;
+then it is the deadline, and `status` already reads `confirmed`. A confirm page
+that finds `answer_by` set on `GET /confirm/{token}` must post the token back,
+not show "already confirmed": without that post the address leaves the list at
+the deadline. Once answered, the same link answers `answer_by: null`.
 Validation errors are always `422` JSON, also for a plain form post.
 
 Nothing looks up data by address over HTTP: access and erasure by address exist

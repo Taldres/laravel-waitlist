@@ -33,7 +33,7 @@ legal requirement is satisfied.
 | Lookup hash of the address | `waitlist_entries.email_hash` | HMAC-SHA256 with a subkey of `APP_KEY` |
 | Metadata (the fields a project or list defines) | `waitlist_entries.metadata` | Encrypted with `APP_KEY` |
 | Consent per purpose: wording, version, granted and withdrawn at | `waitlist_consents` | Frozen once written |
-| Cycle: started, confirmed, ended, end reason | `waitlist_subscriptions` | Forward-only state machine |
+| Cycle: started, confirmed, asked again and answered, ended, end reason | `waitlist_subscriptions` | Forward-only state machine |
 | Log: step, purpose, date, the reference your listener reports, optionally IP and user agent | `waitlist_activity` | Reference, IP and user agent encrypted; stripped to project, list, step, purpose, the status a departure left and date on erasure |
 | Tokens | hashed, the unsubscribe token also encrypted | Never exported |
 
@@ -111,7 +111,7 @@ How to configure all of this: [Purposes and wording](purposes-and-wording.md).
 
 ## Retention
 
-`waitlist:prune` applies three periods from `waitlist.retention`. Your
+`waitlist:prune` applies the periods from `waitlist.retention`. Your
 application schedules it, in `routes/console.php`:
 
 ```php
@@ -136,11 +136,23 @@ the ones that differ.
   while retains consent records in case a mail is disputed. Agree on the
   period with your data protection officer; set `null` to keep them until erased.
 - **IP and user agent** (30 days): cleared from the log. Both are off by default.
+- **Confirmed addresses** (off): with `reconfirm_after_days` set, an address
+  that has not confirmed or answered for that many days is asked whether it
+  still wants to be on the list. Without an answer within
+  `reconfirm_within_days` (30) it leaves the list as `lapsed` and is then kept
+  like someone who left. Your listener mails the request
+  (`ReconfirmationRequested`), see [Mail](mail.md#asking-again-after-a-while)
+  and [Lifecycle](lifecycle.md#asking-confirmed-addresses-again). A request
+  restarts the cycle's `confirmation_count` and `confirmation_sent_at`, so the
+  cycle row and its export show the latest request; the double opt-in it
+  started with stays on record in the activity log (`confirmation_requested`,
+  `confirmed`) until the address is erased.
 
 When the purpose of a list is fulfilled, for example after the launch, erase it:
 `Waitlist::for('beta')->forgetAll()` or `php artisan waitlist:forget --list=beta --all`.
 
-Confirmed entries that remain subscribed are not expired by these rules. The
+Without `reconfirm_after_days`, confirmed entries that remain subscribed are not
+expired by these rules. The
 remaining reporting log is not automatically deleted and is not guaranteed to be
 anonymous. The operator must define its lawful handling and retention, as well as
 cleanup for backups, queues, logs, exports and external services. See

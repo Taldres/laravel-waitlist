@@ -34,6 +34,18 @@ enum ActivityType: string
     /** The confirmation was never completed within the retention period. */
     case Expired = 'expired';
 
+    /**
+     * A confirmed entry was asked to confirm again, its period without an
+     * answer having passed. The package sends no mail itself.
+     */
+    case ReconfirmationRequested = 'reconfirmation_requested';
+
+    /** The person answered that request in time; the period starts again. */
+    case Reconfirmed = 'reconfirmed';
+
+    /** The request to confirm again went unanswered; the cycle ended. */
+    case Lapsed = 'lapsed';
+
     case Erased = 'erased';
 
     /** An optional purpose was granted within a running cycle. */
@@ -49,6 +61,6 @@ enum ActivityType: string
      */
     public function isDeparture(): bool
     {
-        return in_array($this, [self::Unsubscribed, self::Expired, self::Erased], true);
+        return in_array($this, [self::Unsubscribed, self::Expired, self::Lapsed, self::Erased], true);
     }
 }

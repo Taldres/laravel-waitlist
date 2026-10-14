@@ -12,6 +12,8 @@ listeners do. Which transition fires which event, and what it logs, is in the
 | `ConsentWithdrawn` | An optional purpose was withdrawn; the cycle continues | `entry`, `subscription`, `consent` |
 | `EntryUnsubscribed` | Someone left a list | `entry`, `subscription` |
 | `SubscriptionExpired` | A confirmation was abandoned, just before the entry is erased | `entry`, `subscription` |
+| `ReconfirmationRequested` | `waitlist:prune` asks a confirmed address whether it still wants to be on the list; mail the link to the address | `entry`, `subscription`, `confirmToken`, `confirmUrl`, `unsubscribeToken`, `unsubscribeUrl`, `answerBy` |
+| `SubscriptionLapsed` | A request to confirm again went unanswered and the cycle ended; the entry is kept like one that left | `entry`, `subscription` |
 | `EntryForgotten` | An entry was erased | `entryId`, `project`, `list`, `email` (scalars; the entry is gone, and `email` is null when it cannot be decrypted) |
 | `ManageLinkRequested` | Someone asked for the preference page; mail the link to the address | `entry`, `manageToken`, `manageUrl`, `expiresAt` |
 | `WordingRegistered` | A project's server sent a version, or a locale of one, the project did not have yet ([Wording sent by your servers](../purposes-and-wording.md#wording-sent-by-your-servers)) | `wording` (`WaitlistWording`: `project`, `purpose`, `version`, `locale`, `text`, `registered_by`) |
@@ -38,7 +40,8 @@ What to do with them:
 | Confirmation mail | `EntrySubscribed` | [Mail](../mail.md#the-confirmation-mail) |
 | Preference page link | `ManageLinkRequested` | [Mail](../mail.md#the-preference-page-link) |
 | Welcome mail | `EntryConfirmed` | [Mail](../mail.md#a-welcome-mail) |
-| Newsletter tool sync | `EntryConfirmed`, `ConsentGranted`, `ConsentWithdrawn`, `EntryUnsubscribed`, `EntryForgotten` | [Sync to your email provider](../email-provider-sync.md) |
+| Still interested? | `ReconfirmationRequested` | [Mail](../mail.md#asking-again-after-a-while) |
+| Newsletter tool sync | `EntryConfirmed`, `ConsentGranted`, `ConsentWithdrawn`, `EntryUnsubscribed`, `SubscriptionLapsed`, `EntryForgotten` | [Sync to your email provider](../email-provider-sync.md) |
 | Copies you keep elsewhere | `EntryForgotten`: delete the copy for that entry; a copy shared across lists only once no entry of the address is left | [GDPR in practice](../gdpr.md#your-listeners) |
 
 `php artisan waitlist:privacy` lists the listeners registered for package events,

@@ -25,7 +25,9 @@ use Taldres\Waitlist\Events\EntryForgotten;
 use Taldres\Waitlist\Events\EntrySubscribed;
 use Taldres\Waitlist\Events\EntryUnsubscribed;
 use Taldres\Waitlist\Events\ManageLinkRequested;
+use Taldres\Waitlist\Events\ReconfirmationRequested;
 use Taldres\Waitlist\Events\SubscriptionExpired;
+use Taldres\Waitlist\Events\SubscriptionLapsed;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Exceptions\MissingWordingException;
 use Taldres\Waitlist\Http\Limiters;
@@ -46,6 +48,8 @@ class PrivacyCommand extends Command
         EntryConfirmed::class,
         EntryUnsubscribed::class,
         SubscriptionExpired::class,
+        ReconfirmationRequested::class,
+        SubscriptionLapsed::class,
         EntryForgotten::class,
         ConsentGranted::class,
         ConsentWithdrawn::class,
@@ -213,6 +217,7 @@ class PrivacyCommand extends Command
             $period($retention->pendingDays, 'Unconfirmed signups erased'),
             $period($retention->unsubscribedDays, 'Addresses that left erased'),
             $period($retention->requestMetadataDays, 'IP and user agent cleared from the log'),
+            $this->reconfirmation($retention->reconfirmAfterDays, $retention->reconfirmWithinDays),
             ...$this->projectRetention($catalog, $projects),
             $scheduled !== null
                 ? "- Applied by waitlist:prune, which the application's scheduler runs on `{$scheduled}`; Laravel's scheduler must run"
@@ -222,10 +227,37 @@ class PrivacyCommand extends Command
                 $offering === [] => '- On request (Art. 17): waitlist:forget',
                 default => '- On request (Art. 17): waitlist:forget, or the person via a manage link sent to their address, except in projects without manage links ('.implode(', ', $without).')',
             },
-            '- Active confirmed entries and remaining reporting rows have no automatic expiry; the remaining log is not guaranteed anonymous',
+            $this->asksAgain($catalog, $projects, $retention->reconfirmAfterDays)
+                ? '- Remaining reporting rows have no automatic expiry, nor have confirmed entries where nobody is asked again; the remaining log is not guaranteed anonymous'
+                : '- Active confirmed entries and remaining reporting rows have no automatic expiry; the remaining log is not guaranteed anonymous',
             '- Backups, queues, logs, exports and external provider copies require separate retention and erasure handling',
             '',
         ];
+    }
+
+    protected function reconfirmation(?int $afterDays, int $withinDays): string
+    {
+        return $afterDays === null
+            ? '- Confirmed addresses: kept while subscribed, never asked to confirm again'
+            : "- Confirmed addresses asked to confirm again {$afterDays} days after they confirmed or last answered; without an answer within {$withinDays} days they leave the list and are kept like addresses that left";
+    }
+
+    /**
+     * @param  list<string>  $projects
+     */
+    protected function asksAgain(ProjectCatalog $catalog, array $projects, ?int $afterDays): bool
+    {
+        if ($afterDays !== null) {
+            return true;
+        }
+
+        foreach ($projects as $project) {
+            if ($catalog->periods($project)->reconfirmAfterDays !== null) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -249,6 +281,17 @@ class PrivacyCommand extends Command
             ] as $text => $days) {
                 if ($days !== null) {
                     $lines[] = "- {$text} in project [{$project}]: after {$days} days";
+                }
+            }
+
+            // Both periods together, each the project's own or the configured
+            // one, and nothing for a project in which nobody is asked.
+            if ($periods->reconfirmAfterDays !== null || $periods->reconfirmWithinDays !== null) {
+                $after = $periods->reconfirmAfterDays ?? WaitlistConfig::reconfirmAfterDays();
+
+                if ($after !== null) {
+                    $within = $periods->reconfirmWithinDays ?? WaitlistConfig::reconfirmWithinDays();
+                    $lines[] = "- Confirmed addresses asked to confirm again in project [{$project}]: after {$after} days; without an answer within {$within} days they leave the list";
                 }
             }
         }

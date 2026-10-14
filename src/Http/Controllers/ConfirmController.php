@@ -54,7 +54,7 @@ class ConfirmController
                 ?? new JsonResponse(['message' => 'Invalid token.', 'error' => ApiError::InvalidToken->value], 404);
         }
 
-        if (! $subscription->isConfirmed() && $subscription->hasExpiredToken()) {
+        if ((! $subscription->isConfirmed() || $subscription->awaitsReconfirmation()) && $subscription->hasExpiredToken()) {
             return $this->redirectFor(Page::Expired->value, $entry)
                 ?? new JsonResponse(['message' => 'This confirmation link has expired.', 'error' => ApiError::ExpiredToken->value], 410);
         }

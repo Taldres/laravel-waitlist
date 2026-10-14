@@ -165,8 +165,8 @@ return [
     | data. A period reaching back before 1970, which would never match a row,
     | is refused: write null to keep. waitlist:prune
     | applies the periods; one that does not read is reported and fails the
-    | run once the others are applied. Active confirmed entries and the
-    | remaining activity rows never expire automatically.
+    | run once the others are applied. Active confirmed entries expire only
+    | when reconfirm_after_days is set; the remaining activity rows never do.
     |
     | - pending_days: addresses whose confirmation stayed outstanding, counted
     |   from the start of the cycle, so resends never extend it
@@ -174,6 +174,13 @@ return [
     |   Keeping them for a while retains consent records in case a mail is
     |   disputed; agree on the period with your data protection officer
     | - request_metadata_days: IP and user agent on the log, when stored at all
+    | - reconfirm_after_days: confirmed addresses are asked to confirm again
+    |   this many days after they confirmed or last answered, at least 1;
+    |   null, the default, asks nobody. ReconfirmationRequested tells your
+    |   app, which mails the link it carries
+    | - reconfirm_within_days: days the person has to answer, at least 1 and
+    |   not past 2038-01-19. Without an answer the address leaves the list
+    |   (lapsed) and is then kept like one that left, for unsubscribed_days
     |
     | A project can promise periods of its own, see ProjectDefinition::retention().
     |
@@ -187,6 +194,8 @@ return [
         'pending_days' => env('WAITLIST_RETENTION_PENDING_DAYS', 30),
         'unsubscribed_days' => env('WAITLIST_RETENTION_UNSUBSCRIBED_DAYS', 1095),
         'request_metadata_days' => env('WAITLIST_RETENTION_REQUEST_METADATA_DAYS', 30),
+        'reconfirm_after_days' => env('WAITLIST_RETENTION_RECONFIRM_AFTER_DAYS'),
+        'reconfirm_within_days' => env('WAITLIST_RETENTION_RECONFIRM_WITHIN_DAYS', 30),
     ],
 
     /*

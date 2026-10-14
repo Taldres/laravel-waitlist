@@ -201,7 +201,8 @@ $entry->hasConsentFor('newsletter');
 ## Rules, References, and Templates
 
 - Events: `EntrySubscribed`, `EntryConfirmed`, `ConsentGranted`, `ConsentWithdrawn`,
-  `EntryUnsubscribed`, `SubscriptionExpired`, `EntryForgotten`, `ManageLinkRequested`;
+  `EntryUnsubscribed`, `SubscriptionExpired`, `ReconfirmationRequested`, `SubscriptionLapsed`,
+  `EntryForgotten`, `ManageLinkRequested`;
   all dispatch after commit.
 - Config is read where it is used and refused when it does not read, with an
   `InvalidConfigurationException` that names the key. `.env` takes `true`/`false`,
