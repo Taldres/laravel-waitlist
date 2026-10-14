@@ -17,7 +17,7 @@ Leave the routes off and call the facade from your controllers;
 
 | Method | URI | Behavior |
 | --- | --- | --- |
-| GET | `/waitlist/purposes?list=&locale=` | Current wording per purpose, for the signup form, with the locale it is in |
+| GET | `/waitlist/purposes?list=&locale=` | Current wording per purpose, for the signup form, with the locale it is in. With [`TimeTrapSpamProtector`](../securing-the-endpoints.md#built-in-a-hidden-field-and-a-time-trap) bound, also a `challenge` that the signup or manage link sends back in `X-Waitlist-Challenge`, with `Cache-Control: no-store`; the JS client does not expose it yet |
 | POST | `/waitlist` | Subscribe with `email`, `purposes` (`{purpose: version}` or `{purpose: {version, locale, hash}}`; a project's own servers may add `text`, see [Wording sent by your servers](../purposes-and-wording.md#wording-sent-by-your-servers)), optional `list` (`waitlist.default_list` when missing, null or empty) and `metadata` (only the [fields](#metadata) the project and list define). `202` with an identical body for new and known addresses; `422` names the field (`email`, `list`, `purposes`, `metadata`, `metadata.{field}`), always as JSON, or says `Spam check failed.`; the project resolver and the [`useWaitlist` gate](#projects-and-who-may-call) may answer first, e.g. `401`, `403` or `404`. |
 | GET | `/waitlist/confirm/{token}` | Reports the token's state. `404` invalid, `410` expired. |
 | POST | `/waitlist/confirm/{token}` | Confirm. |

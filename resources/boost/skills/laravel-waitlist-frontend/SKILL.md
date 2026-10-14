@@ -182,6 +182,14 @@ keeping or dropping one does not.
   ```
 
   It guards the package routes only; in own controllers, check it yourself.
+  Without an outside service, bind `Taldres\Waitlist\Support\TimeTrapSpamProtector`
+  as the `SpamProtector`: `GET /waitlist/purposes` then also answers a `challenge`,
+  which the form sends back in `X-Waitlist-Challenge` between 2 seconds and an
+  hour later (on `spam_check_failed`, fetch the wording again), and a hidden
+  `website` field must stay empty. Servers calling for their project are not
+  checked; token links never are. The JS client does not expose the challenge
+  yet, so its browser users cannot pass this check; a plain HTML form without
+  JavaScript cannot either (header only). Do not let a CDN cache `/purposes`.
 - Frontend on another origin: allow it in `config/cors.php` (`paths` with
   `'waitlist', 'waitlist/*'`, the site in `allowed_origins`, `Retry-After` in
   `exposed_headers`). `$project->origins(['https://site.example'])` in the definition
