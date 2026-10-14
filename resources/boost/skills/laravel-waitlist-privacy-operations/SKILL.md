@@ -3,8 +3,8 @@ name: laravel-waitlist-privacy-operations
 description: >
   Operate a taldres/laravel-waitlist installation: answer access and erasure
   requests, withdraw a purpose on request, apply retention, erase a list once its
-  purpose is fulfilled, rotate APP_KEY with waitlist:rekey, export a list, and
-  check the setup before going live.
+  purpose is fulfilled, rotate APP_KEY with waitlist:rekey, export a list, import
+  existing subscribers with waitlist:import, and check the setup before going live.
 license: MIT
 metadata:
   author: Dennis Petersmann
@@ -97,14 +97,34 @@ php artisan waitlist:export beta --status=confirmed --path=storage/app/beta.csv
 Columns come from `waitlist.export.columns`, limited to `CsvExporter::EXPORTABLE`
 (no tokens). The file holds addresses in plain text; delete it when done.
 
+### Import existing subscribers
+
+```bash
+php artisan waitlist:import subscribers.csv --source=mailchimp-2026-09 --list=beta --with-consent
+php artisan waitlist:import subscribers.csv --source="paper forms" --list=beta --request-confirmation --limit=500
+```
+
+CSV columns: `email`, `purposes` (`waitlist:2025-01, newsletter:2025-01`), and
+optionally `list`, `locale`, `consented_at`. `--with-consent` confirms without a
+mail and keeps `consented_at` as the time of each consent (`EntryImported` fires);
+`--request-confirmation` leaves each address pending, and `EntrySubscribed` asks
+for the confirmation mail. Only registered wording versions are accepted. The
+source is stored encrypted in the `imported` log step, shown by `waitlist:show` and
+listed by `waitlist:privacy`. Addresses already on the list, in any status, are
+skipped; a refused row is reported by line and column, never by a value. `--limit`
+stops and prints the resume command (`--from-line=N`); never rerun from the start,
+which brings back every address erased since. Delete the file afterwards.
+From PHP: `Waitlist::for($list)->import($email, $purposes, source: ..., consentedAt: ...)`.
+
 ### Record of processing
 
 ```bash
 php artisan waitlist:privacy [--project=]
 ```
 
-It describes configured package storage, purposes, the metadata fields of each
-list, retention and listeners registered for package events. It is input, not a
+It describes configured package storage, purposes, the sources of imported
+entries still held, the metadata fields of each list, retention and listeners
+registered for package events. It is input, not a
 complete record: it does not audit infrastructure or find every recipient.
 
 ### Go-live check
@@ -164,3 +184,5 @@ complete record: it does not audit infrastructure or find every recipient.
   projects.
 - Rotating `APP_KEY` without `APP_PREVIOUS_KEYS`.
 - Presenting `waitlist:privacy` output as a complete Art. 30 record.
+- Importing with `--with-consent` and a made-up `consented_at`, or `add()` in a loop:
+  the first fakes a consent record, the second treats known addresses as resends.

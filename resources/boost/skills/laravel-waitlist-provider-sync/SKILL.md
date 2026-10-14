@@ -33,6 +33,7 @@ Mails the Laravel app sends itself (through any mailer) need no sync: send them 
 | Event | Provider action |
 | --- | --- |
 | `EntryConfirmed` | add the contact, to one provider list per purpose in `$event->entry->purposes` |
+| `EntryImported` | the same, for an address imported with its time of consent (`waitlist:import --with-consent`) |
 | `ConsentGranted` | add to that purpose's list, once `$event->subscription->isConfirmed()` |
 | `ConsentWithdrawn` | remove from `$event->consent->purpose`'s list, unless another list of the project still holds it |
 | `EntryUnsubscribed` | remove from the list of **every** purpose the cycle held, unless another list still holds it |
@@ -55,12 +56,13 @@ use Taldres\Waitlist\Events\ConsentGranted;
 use Taldres\Waitlist\Events\ConsentWithdrawn;
 use Taldres\Waitlist\Events\EntryConfirmed;
 use Taldres\Waitlist\Events\EntryForgotten;
+use Taldres\Waitlist\Events\EntryImported;
 use Taldres\Waitlist\Events\EntryUnsubscribed;
 use Taldres\Waitlist\Models\WaitlistEntry;
 
 class SyncWaitlistToProvider implements ShouldQueue, ShouldBeEncrypted
 {
-    public function onConfirmed(EntryConfirmed $event): void
+    public function onConfirmed(EntryConfirmed|EntryImported $event): void
     {
         // add $event->entry->email to the provider list of each of $event->entry->purposes
     }
@@ -119,6 +121,7 @@ Laravel's event discovery does not register them a second time:
 ```php
 // AppServiceProvider::boot()
 Event::listen(EntryConfirmed::class, [SyncWaitlistToProvider::class, 'onConfirmed']);
+Event::listen(EntryImported::class, [SyncWaitlistToProvider::class, 'onConfirmed']);
 Event::listen(ConsentGranted::class, [SyncWaitlistToProvider::class, 'onGranted']);
 Event::listen(ConsentWithdrawn::class, [SyncWaitlistToProvider::class, 'onWithdrawn']);
 Event::listen(EntryUnsubscribed::class, [SyncWaitlistToProvider::class, 'onUnsubscribed']);

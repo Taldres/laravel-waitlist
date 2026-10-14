@@ -46,6 +46,10 @@ $totals->confirmationRate();   // ?float — null when nobody signed up
 Counts are steps, not people: someone who leaves and comes back is confirmed
 twice. `snapshot()` counts addresses.
 
+An import logs its steps like a signup, on the day it runs, plus an `imported`
+step: `$totals->of(ActivityType::Imported)` tells imports apart from people who
+signed up that day.
+
 `forPurpose('newsletter')` narrows a report to the grants and withdrawals of an
 optional purpose. Signups, confirmations and departures concern a whole cycle
 and are logged without a purpose, so they are not in such a report.

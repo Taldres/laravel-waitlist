@@ -90,6 +90,7 @@ Waitlist::encryptUsing(?Encrypter $encrypter): WaitlistManager
 Waitlist::for('beta')->purposes(?string $locale = null): array
 Waitlist::for('beta')->fields(): array                                         // field => rules the HTTP signup applies; add() does not
 Waitlist::for('beta')->add(string $email, array $purposes, array $metadata = [], ?RequestContext $context = null): SubscribeResult
+Waitlist::for('beta')->import(string $email, array $purposes, string $source, ?DateTimeInterface $consentedAt = null, ?RequestContext $context = null): ?SubscribeResult  // null for an address already on the list
 Waitlist::for('beta')->resendConfirmation(string $email, ?RequestContext $context = null): ?WaitlistEntry
 Waitlist::for('beta')->withdraw(string $email, string $purpose, ?RequestContext $context = null): ?WaitlistEntry
 Waitlist::for('beta')->unsubscribe(string $email, ?RequestContext $context = null): ?WaitlistEntry
@@ -110,6 +111,16 @@ Waitlist::for('beta')->personalData(string $email): Collection
 `find()`, `has()`, `count()` and `entries()` include addresses that left; use the
 entry's status or `hasConsentFor()` for current membership, `snapshot()` for
 counts by status.
+
+`import()` adds an address that consented elsewhere, see
+[Importing existing subscribers](../gdpr.md#importing-existing-subscribers). With
+`$consentedAt` it is confirmed without a mail; without, it waits for the
+confirmation mail. It takes registered versions only, never text, checks a hash
+when one is given without requiring it, and throws an
+`InvalidArgumentException` for an empty source, a time in the future, or no time
+on a list without double opt-in. It is for operators moving records they hold:
+never pass `$consentedAt` or `$purposes` from a visitor's request, which would
+let anyone confirm an address without its mailbox.
 
 `add()` returns a `SubscribeResult`:
 

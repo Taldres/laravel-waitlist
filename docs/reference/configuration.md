@@ -99,7 +99,7 @@ which replaces the definitions and decides double opt-in per list; see
 | Key | Default | What it is |
 | --- | --- | --- |
 | `default_list` | `default` | The list the HTTP endpoints use when a request names none |
-| `wording.require_hash` | `WAITLIST_REQUIRE_WORDING_HASH`, off | Refuse a purpose choice that is recorded without the hash of the text shown; keeping or withdrawing a purpose needs none |
+| `wording.require_hash` | `WAITLIST_REQUIRE_WORDING_HASH`, off | Refuse a purpose choice that is recorded without the hash of the text shown; keeping or withdrawing a purpose needs none, and neither does an [import](../gdpr.md#importing-existing-subscribers), which had no form whose copy of the text a hash could prove; a hash an import is given must match |
 
 ## Double opt-in: `double_opt_in`
 

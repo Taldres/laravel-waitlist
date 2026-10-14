@@ -6,6 +6,7 @@ namespace Taldres\Waitlist\Console\Commands;
 
 use Closure;
 use Illuminate\Console\Command;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
@@ -16,12 +17,14 @@ use Taldres\Waitlist\Actions\ResendConfirmation;
 use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
+use Taldres\Waitlist\Enums\ActivityType;
 use Taldres\Waitlist\Enums\Page;
 use Taldres\Waitlist\Enums\WaitlistLimiter;
 use Taldres\Waitlist\Events\ConsentGranted;
 use Taldres\Waitlist\Events\ConsentWithdrawn;
 use Taldres\Waitlist\Events\EntryConfirmed;
 use Taldres\Waitlist\Events\EntryForgotten;
+use Taldres\Waitlist\Events\EntryImported;
 use Taldres\Waitlist\Events\EntrySubscribed;
 use Taldres\Waitlist\Events\EntryUnsubscribed;
 use Taldres\Waitlist\Events\ManageLinkRequested;
@@ -29,13 +32,17 @@ use Taldres\Waitlist\Events\SubscriptionExpired;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Exceptions\MissingWordingException;
 use Taldres\Waitlist\Http\Limiters;
+use Taldres\Waitlist\Models\WaitlistActivity;
 use Taldres\Waitlist\Support\AuthenticatedProjectResolver;
 use Taldres\Waitlist\Support\PurposeRegistry;
+use Taldres\Waitlist\Support\ResolvesModel;
 use Taldres\Waitlist\Support\SetupAudit;
 use Taldres\Waitlist\WaitlistManager;
 
 class PrivacyCommand extends Command
 {
+    use ResolvesModel;
+
     protected $signature = 'waitlist:privacy
         {--project= : Only describe this project}';
 
@@ -44,6 +51,7 @@ class PrivacyCommand extends Command
     protected const array EVENTS = [
         EntrySubscribed::class,
         EntryConfirmed::class,
+        EntryImported::class,
         EntryUnsubscribed::class,
         SubscriptionExpired::class,
         EntryForgotten::class,
@@ -67,6 +75,7 @@ class PrivacyCommand extends Command
             '',
             ...$this->data($catalog, $projects),
             ...$this->purposes($registry, $catalog, $projects),
+            ...$this->sources($projects),
             ...$this->retention($catalog, $projects),
             ...$this->measures($catalog, $projects),
             ...$this->recipients(),
@@ -95,6 +104,7 @@ class PrivacyCommand extends Command
             "| Email address | waitlist_entries.email | {$protection}; looked up by a keyed hash |",
             '| Consent per purpose: wording, version, granted and withdrawn at | waitlist_consents | Wording frozen at the moment of consent |',
             '| Lifecycle log: step, purpose, date, reference of the mail your listener sent | waitlist_activity | Stripped to project, list, step, purpose, the status a departure left and date on erasure, so counts survive; one row per step, so not anonymous in a small list |',
+            "| Source of an imported entry and when it was imported | waitlist_activity (the imported step) | {$protection}; cleared on erasure |",
         ];
 
         foreach ($projects as $project) {
@@ -189,6 +199,65 @@ class PrivacyCommand extends Command
         }
 
         return [...$lines, '', 'The package records consent choices per purpose, each withdrawable on its own. The operator must determine the lawful basis and assess whether consent is valid; storing a record does not establish this.', ''];
+    }
+
+    /**
+     * Where the addresses came from. The sources of imports are read from the
+     * log, where each is stored encrypted with the entries it brought; a log
+     * that cannot be read is reported as a line instead of failing the record.
+     *
+     * @param  list<string>  $projects
+     * @return list<string>
+     */
+    protected function sources(array $projects): array
+    {
+        $lines = [
+            '## Sources',
+            '',
+            '- Signups: from the person, through your forms and your own calls of the PHP API',
+        ];
+
+        try {
+            $imports = $this->imports($projects);
+        } catch (InvalidConfigurationException|QueryException $exception) {
+            return [...$lines, '- Imports: the log cannot be read ('.class_basename($exception).'); run waitlist:check', ''];
+        }
+
+        if ($imports === []) {
+            return [...$lines, '- Imports: none held', ''];
+        }
+
+        $lines[] = '- Imports, consent given elsewhere; consents keep the time it was given there, each entry its source until it is erased:';
+
+        foreach ($imports as $source => $count) {
+            $lines[] = "  - {$source}: {$count} ".($count === 1 ? 'entry' : 'entries');
+        }
+
+        return [...$lines, ''];
+    }
+
+    /**
+     * @param  list<string>  $projects
+     * @return array<string, int> "[project] source" => entries
+     */
+    protected function imports(array $projects): array
+    {
+        $imports = [];
+
+        static::activityModelClass()::query()
+            ->whereIn('project', $projects)
+            ->where('type', ActivityType::Imported)
+            ->whereNotNull('reference')
+            ->lazyById(500)
+            ->each(function (WaitlistActivity $activity) use (&$imports): void {
+                $source = rescue(fn (): ?string => $activity->reference, null, report: false) ?? 'a source that cannot be decrypted';
+                $key = "[{$activity->project}] ".str_replace(["\r\n", "\n", "\r"], ' ', $source);
+                $imports[$key] = ($imports[$key] ?? 0) + 1;
+            });
+
+        ksort($imports);
+
+        return $imports;
     }
 
     /**

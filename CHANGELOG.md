@@ -47,6 +47,7 @@
 - Manage links by address are sent once per cooldown across the address's lists also when requested on two lists at once, two requests minting a lost unsubscribe token at once hand out the same one, and `waitlist:wording` or `Waitlist::registerWording()` on two deploys at once retry instead of failing on a deadlock or a unique violation
 - Lifecycle events and `ManageLinkRequested` wait for the commit on `waitlist.connection`, so a transaction the application rolls back on another connection no longer discards what the package deferred; a manage link that cannot be built no longer starts the request cooldown
 - Bundled Laravel Boost skills: the integration as a whole, plus focused skills for the frontend, mail, provider sync, projects, reporting, the launch, privacy operations and testing
+- Import of existing subscribers: `waitlist:import` and `Waitlist::for($list)->import()` add addresses that consented elsewhere, either confirmed without a mail with the original time of consent (`EntryImported`) or pending with the usual confirmation mail; only registered wording versions, the source recorded encrypted in an `imported` log step that access requests show and `waitlist:privacy` lists, known addresses skipped, `--limit` with a printed `--from-line` resume so a batch never starts over and brings back erased addresses, refused rows reported by line, column and a fixed reason, never by a value from the file
 
 ## [v0.1.1](https://github.com/taldres/laravel-waitlist/commits/main/compare/v0.1.0...v0.1.1) - 2026-10-14
 
