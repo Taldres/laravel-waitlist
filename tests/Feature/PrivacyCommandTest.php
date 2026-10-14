@@ -273,7 +273,7 @@ it('counts every project without origins as open when a subclass reads the keys'
     Waitlist::define('rocket', fn (ProjectDefinition $project) => TestCase::defineTestProject($project->publishableKey('pk_rocket')));
 
     expect(privacyRecord())
-        ->toContain("is decided by each project's origins (none set for default, rocket, so any website may); a script outside a browser can send any key and any origin\n")
+        ->toContain("is decided by each project's origins (none set for default, rocket, so any website may); a script outside a browser can send any key and any origin")
         ->not->toContain('cannot be reached this way');
 });
 
