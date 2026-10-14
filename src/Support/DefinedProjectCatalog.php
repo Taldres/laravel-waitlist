@@ -44,6 +44,8 @@ class DefinedProjectCatalog implements ProjectCatalog
             optional: $definition->getOptional(),
             doubleOptIn: $definition->getDoubleOptIn() ?? $this->defaultDoubleOptIn(),
             wordingFromCallers: $this->definitions->get($project)?->getWordingFromCallers() ?? false,
+            publicCount: $definition->getPublicCount(),
+            publicPosition: $definition->getPublicPosition(),
         );
     }
 

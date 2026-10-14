@@ -204,7 +204,8 @@ return [
     |--------------------------------------------------------------------------
     |
     | The package's JSON API: POST {prefix}, GET {prefix}/purposes,
-    | GET|POST {prefix}/confirm/{token}, GET|POST {prefix}/unsubscribe/{token},
+    | GET {prefix}/count, GET|POST {prefix}/confirm/{token},
+    | GET|POST {prefix}/unsubscribe/{token}, GET .../position,
     | POST {prefix}/manage-link, and the preference page behind the manage
     | token: GET {prefix}/manage/{token}, POST .../data, PUT .../purposes,
     | POST .../unsubscribe, POST .../erase. The prefix is a plain path, with no
@@ -227,8 +228,8 @@ return [
     | "signup" for checks on your forms, such as CSRF ("web") or an origin
     | check, which the token links that mail providers call must not face.
     |
-    | Rate limits apply per group: "signup" (signup, wording, manage links by
-    | address) through the limiter "waitlist", and "links" (everything with a
+    | Rate limits apply per group: "signup" (signup, wording, count, manage
+    | links by address) through the limiter "waitlist", and "links" (everything with a
     | token) through "waitlist-links". The numbers under rate_limits tune the
     | package's own two: whole numbers, at least 1, counted per minute. To
     | replace a group's limit, define the limiter of its name yourself with

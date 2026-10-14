@@ -14,13 +14,14 @@ you out of the box:
 
 | Threat | Protection |
 | --- | --- |
-| Spam / flooding | [Rate limits](#rate-limits) per group (signups per IP and endpoint, token links per token; replaceable) plus the `SpamProtector` hook (below) |
+| Spam / flooding | [Rate limits](#rate-limits) per group (signups per IP and endpoint, token links per token; replaceable) plus the `SpamProtector` hook (below); a hidden field and time trap ship with the package, off until you bind them |
 | Mail-bombing one address | A repeat signup is a resend, capped by `resend_cooldown` and `max_confirmations`; across lists, `max_pending_per_address` caps the confirmation requests per day, checked per request, so signups or resends for different lists at the same moment can each pass it (see [Lifecycle](lifecycle.md#what-a-signup-does)); manage links by address only go to confirmed addresses, once per `manage.request_cooldown` |
 | Overwriting someone's data | A signup for an address with a running cycle never changes its metadata or consents; that takes the mailbox. After someone has left, a new signup starts a new cycle that again needs the confirmation |
 | Email enumeration | Subscribe and manage-link requests always answer `202` with an identical body (a project without manage links refuses every request alike); queue the listeners that send mail, so response times do not tell either |
 | Subscribing someone else's email | Double opt-in; foreign addresses never reach `confirmed` |
 | Token guessing | 64-char random tokens, looked up via SHA-256 hash, optional TTL |
-| Forwarded mails, providers reading headers | The token in every mail can only remove; the data and erasure need a manage link that is mailed to the address on request and expires |
+| Reading the size of a list | Off unless a list opts in; the [count](reference/http-api.md#count-and-position) is rounded down to a multiple of 10, withheld below 10 and cached, and a position needs the person's unsubscribe token, never an address |
+| Forwarded mails, providers reading headers | The token in every mail can only remove, and on a list that publishes positions read the place in line; the data and erasure need a manage link that is mailed to the address on request and expires |
 | Link scanners acting for the user | `GET` and `HEAD` never change state and never return the address; confirming, unsubscribing, exporting and erasing need `POST` |
 | Tokens sent to another host | Links to the package routes are built from `APP_URL`, never from the Host header of the request that triggered the mail; without an absolute `APP_URL` they are refused, not rooted at the request |
 | Forged consent wording | Clients send purpose versions only; the stored text comes from the catalog, or, for a project that takes it from its servers, from those servers alone ([C](#the-three-architectures)) |
@@ -165,8 +166,9 @@ does not exist yet).
 // The websites of your projects together.
 'allowed_origins' => ['https://acme.example', 'https://rocket.example'],
 'allowed_methods' => ['GET', 'POST', 'PUT'],
-// What your clients send, such as the bot check proof and the CSRF token.
-'allowed_headers' => ['Content-Type', 'Accept', 'X-Waitlist-Challenge', 'X-XSRF-TOKEN'],
+// What your clients send, such as the bot check proof, the CSRF token and,
+// with PublishableKeyResolver, the project's key.
+'allowed_headers' => ['Content-Type', 'Accept', 'X-Waitlist-Challenge', 'X-XSRF-TOKEN', 'X-Waitlist-Key'],
 // Lets a cross-origin client read how long to wait after a 429.
 'exposed_headers' => ['Retry-After'],
 // Only when the browser sends cookies, with credentials: "include".
@@ -185,7 +187,7 @@ included: the browser reports a CORS failure instead.
 `routes.middleware` applies to every package route, including the links in your
 mails and one-click requests from mail providers, which carry no credentials.
 Never put authentication there. Decide in the `useWaitlist` gate instead: it runs
-for the signup, the wording and manage links requested by address, after the
+for the signup, the wording, the count and manage links requested by address, after the
 project is resolved and before the body is validated. Checks that only your
 forms have to pass go into `routes.group_middleware.signup`, see
 [Checks for your forms only](#checks-for-your-forms-only).
@@ -210,7 +212,9 @@ links in mails do not.
 
 The project a request acts for comes from the `ProjectResolver`; for servers that
 call with credentials of their own, `AuthenticatedProjectResolver` takes it from
-them. See [Who may call](projects.md#who-may-call-the-usewaitlist-gate).
+them. `PublishableKeyResolver` takes it from a key the page sends, which is public
+and keeps nobody out: it changes none of the setups below. See
+[Who may call](projects.md#who-may-call-the-usewaitlist-gate).
 
 Pick the setup by who may call; [the table in Projects](projects.md#who-may-call-the-usewaitlist-gate)
 lists the settings of each:
@@ -249,7 +253,7 @@ never face them.
 // config/waitlist.php
 'routes' => [
     'group_middleware' => [
-        'signup' => ['web'], // sessions and CSRF for the signup, the wording and manage links by address
+        'signup' => ['web'], // sessions and CSRF for the signup, the wording, the count and manage links by address
         'links' => [],
     ],
 ],
@@ -303,8 +307,8 @@ keeps out other websites, not bots.
 ## Websites that may use a project
 
 `$project->origins([...])` lists the websites from which a browser may use the
-project's endpoints as a guest: the signup, the wording and a manage link by
-address. A request that names another origin is refused with `403`
+project's endpoints as a guest: the signup, the wording, the count and a manage
+link by address. A request that names another origin is refused with `403`
 ("This website may not use the waitlist."), before the `useWaitlist` gate, so a
 gate that lets everyone through does not undo it. It sets no CORS headers: those
 stay in [`config/cors.php`](#cors), which lists the websites of all projects.
@@ -375,8 +379,8 @@ The routes fall into two groups, each throttled by its own named limiter:
 
 | Group | Routes | Limiter | Keyed by |
 | --- | --- | --- | --- |
-| `signup` | `POST /waitlist`, `GET /purposes`, `POST /manage-link` | `waitlist` | client IP and endpoint; for a [server calling for a project](#servers-calling-for-a-project), the server and endpoint |
-| `links` | everything with a `{token}`, including `POST /unsubscribe/{token}/manage-link` | `waitlist-links` | the token, plus a looser ceiling per IP, or per server |
+| `signup` | `POST /waitlist`, `GET /purposes`, `GET /count`, `POST /manage-link` | `waitlist` | client IP and endpoint; for a [server calling for a project](#servers-calling-for-a-project), the server and endpoint |
+| `links` | everything with a `{token}`, including `POST /unsubscribe/{token}/manage-link` and `GET /unsubscribe/{token}/position` | `waitlist-links` | the token, plus a looser ceiling per IP, or per server |
 
 Token links are limited per token because one-click unsubscribes arrive from mail
 providers' servers, many recipients behind a few addresses; a tight IP limit
@@ -531,7 +535,7 @@ A caller acting for a project (`HasWaitlistProject`, see
 every one of its visitors arrives from its address. The default limiters treat
 it as one source:
 
-- signups, wording and manage links by address are capped per server and
+- signups, wording, the count and manage links by address are capped per server and
   endpoint at `caller_signup_per_minute`, 120 by default. That cap is a ceiling
   against a leaked token, not a limit per visitor;
 - the ceiling on token requests counts the server once, not each of its
@@ -565,7 +569,72 @@ link requested by address (`POST /waitlist/manage-link` with `email`), so a form
 for either must then send what your check expects. Send the proof in the
 `X-Waitlist-Challenge` header, which every client can set, the JS client
 included; a plain HTML form posts it as a field instead. The examples below read
-either. There are two ways to plug in your own check.
+either. The package ships one check that needs no outside service, and there
+are two ways to plug in your own.
+
+### Built in: a hidden field and a time trap
+
+`TimeTrapSpamProtector` asks nobody else and stores nothing. It is off until you
+bind it:
+
+```php
+// app/Providers/WaitlistServiceProvider.php, in register()
+$this->app->bind(\Taldres\Waitlist\Contracts\SpamProtector::class, \Taldres\Waitlist\Support\TimeTrapSpamProtector::class);
+```
+
+`GET /waitlist/purposes` then answers with a `challenge` next to `data`: the
+time it was issued, encrypted with your `APP_KEY`. The form sends it back in
+the `X-Waitlist-Challenge` header, also for a manage link requested by address.
+The request is refused with `spam_check_failed` when:
+
+- the challenge is missing, or was not issued by this protector;
+- it comes back less than 2 seconds after it was issued, faster than a person
+  fills in a form, or more than an hour after, so fetch the wording again and
+  retry once when a form stood open that long;
+- the hidden field `website` is filled. Put it into the form, out of sight, and
+  send what it holds along with the signup; people leave it empty, many bots do
+  not. Hide a wrapper element rather than the input, keep the input out of the
+  tab order, and turn off autofill, which could otherwise fill it in for a
+  person:
+
+```html
+<div style="position: absolute; left: -9999px" aria-hidden="true">
+  <input type="text" name="website" value="" tabindex="-1" autocomplete="off">
+</div>
+```
+
+What to know before you bind it:
+
+- **Only this protector hands out a challenge.** `/purposes` carries one while the
+  protector the endpoints use is `TimeTrapSpamProtector` or a subclass of it. A
+  `verifySpamUsing()` closure, or a protector of yours that wraps this one, gets
+  none.
+- **The JavaScript client does not expose the challenge yet.** Its `purposes()`
+  drops it, so a browser or another guest that uses the client cannot pass this
+  check until the client returns it. Servers calling for their project with
+  credentials are not checked, so they are not affected.
+- **No plain HTML form without JavaScript.** The proof is read from the header
+  only, which a form post cannot set.
+- **Do not cache `/purposes`.** An answer with a challenge is sent with
+  `Cache-Control: no-store`; make sure no CDN or proxy in front of the app caches
+  it anyway, or every visitor gets the same challenge until it goes stale.
+- **Clocks.** The challenge is issued by one app server and checked by another;
+  behind several of them, any difference between their clocks eats into the
+  2-second floor, so keep them synchronized.
+- A form that sends no `website` at all is checked by the time alone. A challenge
+  can be used more than once within its hour; the [rate limits](#rate-limits) cap
+  how often.
+- A server calling for its project with credentials is not checked: it sees its
+  visitors and checks them in its own form (see "One check, in one place" below).
+  A server without credentials is a guest, so it passes the challenge from the
+  wording it fetched through its form and forwards it. The links in mails are
+  never checked.
+- After rotating `APP_KEY`, challenges issued under a key in `APP_PREVIOUS_KEYS`
+  still read.
+
+This keeps out bots that post the form blindly; a script that fetches the
+wording and waits passes it. When that is not enough, use a challenge service
+such as Turnstile, below.
 
 ### The quick path: a closure
 
@@ -646,8 +715,8 @@ $this->app->bind(\Taldres\Waitlist\Contracts\SpamProtector::class, \App\Waitlist
 
 Either way, a failed check returns `422 {"message": "Spam check failed.", "error": "spam_check_failed"}`,
 so a client can ask for a new challenge without matching the message.
-The same pattern works for reCAPTCHA, hCaptcha, or a simple honeypot field
-(the check returns false when the hidden field is filled).
+The same pattern works for reCAPTCHA or hCaptcha. For a hidden field and a time
+trap without an outside service, bind the [built-in protector](#built-in-a-hidden-field-and-a-time-trap).
 
 **One check, in one place.** Challenge tokens such as Turnstile's are single use,
 so a token your own server already verified cannot be verified again by the API.

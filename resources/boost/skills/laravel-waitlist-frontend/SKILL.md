@@ -170,6 +170,28 @@ Shape the `purposes` of that `PUT` like the signup's. With
 `WAITLIST_REQUIRE_WORDING_HASH=true`, only a purpose being added needs its `hash`;
 keeping or dropping one does not.
 
+### 5b. Count and place in line
+
+Both are off until the list opts in, and only work on a list with double opt-in:
+`$project->list('beta', purpose: 'waitlist')->publicCount()->publicPosition()`.
+
+- `GET /waitlist/count?list=beta` answers `{"data": {"list", "count"}}`: the
+  confirmed addresses, rounded down to a multiple of 10, `null` below 10, cached
+  for 60 seconds. Show your own wording for `null` ("Be one of the first"), never
+  `0`. It runs through the resolver, the origins and the `useWaitlist` gate
+  (`WaitlistAction::ViewCount`) like the wording; a list that does not publish it
+  answers `404` with `count_disabled`.
+- `GET /waitlist/unsubscribe/{token}/position` with the unsubscribe token answers
+  `{"data": {"project", "list", "status", "position"}}`: the place among the
+  confirmed addresses in the order they confirmed, `null` while pending or after
+  leaving, cached for a minute. Never by address. `404` with `position_disabled` where the list does
+  not publish positions, `invalid_token` for an unknown token.
+- A server calling for its project is capped per server and endpoint
+  (`caller_signup_per_minute`), so a server-rendered page caches the count
+  rather than fetching it on every view.
+- In PHP, without the switches: `Waitlist::for('beta')->publicCount()` and
+  `Waitlist::for('beta')->position($entry)`.
+
 ### 6. Protect the public endpoints
 
 - Optional bot check on the signup and manage links by address (the default
@@ -185,12 +207,25 @@ keeping or dropping one does not.
   ```
 
   It guards the package routes only; in own controllers, check it yourself.
+  Without an outside service, bind `Taldres\Waitlist\Support\TimeTrapSpamProtector`
+  as the `SpamProtector`: `GET /waitlist/purposes` then also answers a `challenge`,
+  which the form sends back in `X-Waitlist-Challenge` between 2 seconds and an
+  hour later (on `spam_check_failed`, fetch the wording again), and a hidden
+  `website` field must stay empty. Servers calling for their project are not
+  checked; token links never are. The JS client does not expose the challenge
+  yet, so its browser users cannot pass this check; a plain HTML form without
+  JavaScript cannot either (header only). Do not let a CDN cache `/purposes`.
 - Frontend on another origin: allow it in `config/cors.php` (`paths` with
   `'waitlist', 'waitlist/*'`, the site in `allowed_origins`, `Retry-After` in
   `exposed_headers`). `$project->origins(['https://site.example'])` in the definition
   additionally refuses other websites' browsers with `403` for that project (a
   request without an `Origin` header, as from a server, is not affected; it keeps
   other websites out, not bots).
+- Several projects called from the browser: with `PublishableKeyResolver` bound,
+  the page sends its project's `publishableKey()` in `X-Waitlist-Key` (add it to
+  `allowed_headers` in `config/cors.php`); a missing or unknown key answers `403`.
+  The key is public and only picks the project: pair it with `origins()`, and
+  never put a secret token in a page.
 - Behind a proxy or CDN: configure trusted proxies, or all visitors share one rate
   limit bucket.
 - Routes that are off (the default) are not registered: every URL under the prefix
@@ -231,3 +266,5 @@ keeping or dropping one does not.
   controllers for closed signups, and `waitlist.routes.group_middleware.signup`
   for checks on the forms only, such as CSRF or an origin check.
 - A pre-ticked checkbox for an optional purpose, or one checkbox for two purposes.
+- Showing a place in line looked up by address, or computing the count from
+  `snapshot()` on a public page: use the rounded `publicCount()` and the token.

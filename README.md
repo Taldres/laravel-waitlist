@@ -29,7 +29,7 @@ Privacy is the design constraint, not an add-on.
 - **Versioned consent records.** Each consent stores the registered text, version and locale; your application must display that text and obtain a valid agreement
 - **Encrypted at rest.** Addresses, metadata, IP and user agent are always encrypted with `APP_KEY`, or with your own encrypter; lookups run on a keyed hash, so these fields are unreadable in a database dump without the encryption key
 - **Scheduled retention.** `waitlist:prune` cleans up abandoned signups, people who left and request metadata, and can ask confirmed addresses to confirm again after a while; your application schedules it, runs and monitors Laravel's scheduler, and `waitlist:privacy` warns while nothing runs it
-- **People help themselves.** A preference page lets them change purposes, download their data and erase it, without writing to your support. It opens with a short-lived link that is mailed to the address on request; the link in every mail can only remove
+- **People help themselves.** A preference page lets them change purposes, download their data and erase it, without writing to your support. It opens with a short-lived link that is mailed to the address on request; the link in every mail can only remove, and read the place in line where a list publishes it
 - **Minimal by default.** Double opt-in on, IP and user agent off, no metadata accepted over HTTP unless a project or list defines the fields, with Laravel validation rules
 - **No built-in mail delivery or outbound requests.** Your application controls mail, integrations, exports and other data flows; `waitlist:privacy` lists registered package-event listeners to help you review them
 - **Correct under load.** State changes are conditional updates, so every event fires exactly once, even when two requests race
@@ -80,7 +80,9 @@ php artisan migrate
 
 `waitlist:install` publishes the migrations, the config and
 `app/Providers/WaitlistServiceProvider.php`, where you describe your waitlist,
-and registers that provider.
+and registers that provider. `--mail` also writes the double opt-in
+confirmation mail, its view and its queued listener into your app, see
+[Mail](docs/mail.md#the-confirmation-mail).
 
 Addresses are encrypted with `APP_KEY`: back it up apart from the database, and
 keep the old key in `APP_PREVIOUS_KEYS` when you rotate it. See
@@ -137,32 +139,11 @@ $result = Waitlist::for('default')->add('jane@example.com', [
 ]);
 ```
 
-The package sends no mail. Your listener sends the confirmation:
-
-```php
-use Illuminate\Contracts\Queue\ShouldBeEncrypted;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Taldres\Waitlist\Events\EntrySubscribed;
-
-class SendWaitlistConfirmationMail implements ShouldQueue, ShouldBeEncrypted
-{
-    public function handle(EntrySubscribed $event): void
-    {
-        if (! $event->requiresConfirmation) {
-            return;
-        }
-
-        // ConfirmWaitlistMail is yours: see docs/mail.md for one
-        Mail::to($event->entry->email)->send(new ConfirmWaitlistMail(
-            $event->confirmUrl,
-            $event->unsubscribeUrl,
-            $event->subscription->consents->pluck('text')->all(),
-        ));
-
-        Waitlist::confirmationMailed($event, 'confirm-mail@2026-10');
-    }
-}
-```
+The package sends no mail. A queued listener for `EntrySubscribed` sends the
+confirmation and reports it with `Waitlist::confirmationMailed()`, or a failed
+send with `Waitlist::confirmationFailed()`. `php artisan waitlist:install --mail`
+writes the Mailable, its view and that listener into your app; see
+[Mail](docs/mail.md#the-confirmation-mail) for what they do.
 
 Your pages post the token back:
 

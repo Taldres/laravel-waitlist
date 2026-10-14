@@ -17,6 +17,7 @@ use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Console\Commands\CheckCommand;
 use Taldres\Waitlist\Console\Commands\ExportCommand;
 use Taldres\Waitlist\Console\Commands\ForgetCommand;
+use Taldres\Waitlist\Console\Commands\ImportCommand;
 use Taldres\Waitlist\Console\Commands\InstallCommand;
 use Taldres\Waitlist\Console\Commands\PrivacyCommand;
 use Taldres\Waitlist\Console\Commands\PruneCommand;
@@ -100,6 +101,7 @@ class WaitlistServiceProvider extends ServiceProvider
             CheckCommand::class,
             ExportCommand::class,
             ForgetCommand::class,
+            ImportCommand::class,
             InstallCommand::class,
             PrivacyCommand::class,
             PruneCommand::class,

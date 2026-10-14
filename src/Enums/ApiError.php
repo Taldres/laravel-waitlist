@@ -17,5 +17,7 @@ enum ApiError: string
     case NotSubscribed = 'not_subscribed';
     case ListUnavailable = 'list_unavailable';
     case ManageLinksDisabled = 'manage_links_disabled';
+    case CountDisabled = 'count_disabled';
+    case PositionDisabled = 'position_disabled';
     case SpamCheckFailed = 'spam_check_failed';
 }

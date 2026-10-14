@@ -8,7 +8,8 @@ use Illuminate\Support\Str;
 
 /**
  * The entry's unsubscribe token and its URL. The token can only remove:
- * unsubscribe, withdraw a purpose, or ask for a manage link to be mailed. The
+ * unsubscribe, withdraw a purpose, or ask for a manage link to be mailed; on a
+ * list that publishes positions it also reads the place in line. The
  * URL is null only when the package routes are disabled and no URL pattern is
  * configured; build it from the plain token yourself in that case.
  */

@@ -99,7 +99,7 @@ which replaces the definitions and decides double opt-in per list; see
 | Key | Default | What it is |
 | --- | --- | --- |
 | `default_list` | `default` | The list the HTTP endpoints use when a request names none |
-| `wording.require_hash` | `WAITLIST_REQUIRE_WORDING_HASH`, off | Refuse a purpose choice that is recorded without the hash of the text shown; keeping or withdrawing a purpose needs none |
+| `wording.require_hash` | `WAITLIST_REQUIRE_WORDING_HASH`, off | Refuse a purpose choice that is recorded without the hash of the text shown; keeping or withdrawing a purpose needs none, and neither does an [import](../gdpr.md#importing-existing-subscribers), which had no form whose copy of the text a hash could prove; a hash an import is given must match |
 
 ## Double opt-in: `double_opt_in`
 
@@ -144,15 +144,15 @@ itself](../projects.md#periods-a-project-promises-itself).
 | `prefix` | | `waitlist` | the path the routes live under, empty for the root; no `{placeholder}`, as the links in mails cannot be built for one |
 | `name` | | `waitlist.` | the route name prefix |
 | `middleware` | | `['api']` | applies to every route, token links included: no authentication here |
-| `group_middleware.signup` | | `[]` | added to signup, wording and manage links by address only, after the rate limit, apart from what Laravel always sorts ahead of it, such as the session of `web`: checks for your forms, such as CSRF or an origin check, see [Checks for your forms only](../securing-the-endpoints.md#checks-for-your-forms-only) |
+| `group_middleware.signup` | | `[]` | added to signup, wording, count and manage links by address only, after the rate limit, apart from what Laravel always sorts ahead of it, such as the session of `web`: checks for your forms, such as CSRF or an origin check, see [Checks for your forms only](../securing-the-endpoints.md#checks-for-your-forms-only) |
 | `group_middleware.links` | | `[]` | added to everything with a token only |
 | `rate_limits.signup_per_minute` | `WAITLIST_RATE_LIMIT_SIGNUP` | 10 | per visitor and endpoint: a guest's IP, or the address a server forwards; at least 1, as do all four |
 | `rate_limits.link_per_minute` | `WAITLIST_RATE_LIMIT_LINK` | 10 | per token; one that does not read gives way to 10, reported |
 | `rate_limits.links_per_ip_per_minute` | `WAITLIST_RATE_LIMIT_LINKS_PER_IP` | 600 | bounds made-up tokens per IP, per server, or per visitor a server forwards; one that does not read gives way to 600, reported |
 | `rate_limits.caller_signup_per_minute` | `WAITLIST_RATE_LIMIT_CALLER_SIGNUP` | 120 | per server calling for a project and endpoint, see [Servers calling for a project](../securing-the-endpoints.md#servers-calling-for-a-project) |
 
-The numbers tune the package's limiters, `waitlist` for signup, wording and manage
-links by address and `waitlist-links` for everything with a token. To replace one,
+The numbers tune the package's limiters, `waitlist` for signup, wording, count and
+manage links by address and `waitlist-links` for everything with a token. To replace one,
 or to turn it off with `Limit::none()`, define a limiter of that name with
 `RateLimiter::for()`; no setting turns a limit off. See [Securing the
 endpoints](../securing-the-endpoints.md#rate-limits).
@@ -184,9 +184,9 @@ container, and a `bind()` in a provider of yours replaces them, see
 | Contract | Default | Decides |
 | --- | --- | --- |
 | `ConfirmationUrlGenerator` | `DefaultConfirmationUrlGenerator` | the confirm, unsubscribe and manage URLs in mails |
-| `ProjectResolver` | `DefaultProjectResolver`, always `default` | which project an HTTP signup is for; `AuthenticatedProjectResolver` takes it from the caller |
+| `ProjectResolver` | `DefaultProjectResolver`, always `default` | which project an HTTP signup is for; `PublishableKeyResolver` takes it from the `X-Waitlist-Key` header, `AuthenticatedProjectResolver` from the caller |
 | `EmailNormalizer` | `DefaultEmailNormalizer`, lowercase and trim | which spellings are the same address; part of the lookup hash |
-| `SpamProtector` | `NullSpamProtector`, accepts all | the bot check on the signup and manage links by address; a closure from `Waitlist::verifySpamUsing()` wins there |
+| `SpamProtector` | `NullSpamProtector`, accepts all | the bot check on the signup and manage links by address; `TimeTrapSpamProtector` is a built-in one to bind, and a closure from `Waitlist::verifySpamUsing()` wins there |
 | `ProjectCatalog` | `DefinedProjectCatalog` | where projects, lists, wording, fields and pages come from, see [Projects and wording](#projects-and-wording) |
 
 ## CSV export: `export`

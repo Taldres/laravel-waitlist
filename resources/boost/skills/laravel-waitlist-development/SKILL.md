@@ -36,7 +36,9 @@ php artisan migrate
 (`waitlist-migrations`). For several projects, `waitlist:install --projects` writes
 a provider with named projects instead; bind a `ProjectResolver` before the
 package routes take signups, they answer `422` until then. An existing provider
-is never overwritten. Schedule `waitlist:prune` yourself,
+is never overwritten. With double opt-in, `waitlist:install --mail` also writes the
+confirmation mailable, its view and a queued `EntrySubscribed` listener into the app
+(existing files are left alone). Schedule `waitlist:prune` yourself,
 `Schedule::command('waitlist:prune')->daily()` in `routes/console.php`, and keep
 Laravel's scheduler running.
 
@@ -61,6 +63,9 @@ Waitlist::define(function (ProjectDefinition $project): void {
 - Every list has exactly one required primary purpose; anything else is optional.
 - Only defined lists accept signups; `$project->list('*', purpose: ...)` covers any
   other list name. `->doubleOptIn(false)` turns double opt-in off for one list.
+  `->publicCount()` and `->publicPosition()` publish the list's rounded count and a
+  person's place in line (by unsubscribe token) over HTTP; both are off by default
+  and stay off on a list without double opt-in.
 - Read the environment through `config()`, never `env()`: with a cached config,
   `env()` returns `null` outside the config files. The callback runs when the
   project is first needed, and defining a project again replaces it.
@@ -78,7 +83,8 @@ Waitlist::define(function (ProjectDefinition $project): void {
   For projects kept in a database, bind your own `ProjectCatalog` in a provider's
   `register()`: it supplies lists, fields, wording versions and frontend URL
   patterns per project. Over HTTP, the bound `ProjectResolver` picks the project of
-  a signup, e.g. from a publishable key; never put that check into
+  a signup, e.g. `PublishableKeyResolver` from a publishable key, which is public
+  and authorizes nothing; never put that check into
   `routes.middleware`, which also guards the token links in mails. Checks for
   the forms only, such as CSRF or an origin check, go into
   `routes.group_middleware.signup`.
@@ -184,7 +190,8 @@ $entry->hasConsentFor('newsletter');
 
 ### 6. Preference page and rights
 
-- Mails carry only the unsubscribe token, which can only remove. The preference
+- Mails carry only the unsubscribe token, which can only remove (and read the
+  place in line where a list publishes it). The preference
   page needs a short-lived manage token, mailed on request: listen to
   `ManageLinkRequested` and send `$event->manageUrl` to `$event->entry->email`.
   Requests: `POST /waitlist/unsubscribe/{token}/manage-link` (the unsubscribe
@@ -200,10 +207,9 @@ $entry->hasConsentFor('newsletter');
 
 ## Rules, References, and Templates
 
-- Events: `EntrySubscribed`, `EntryConfirmed`, `ConsentGranted`, `ConsentWithdrawn`,
-  `EntryUnsubscribed`, `SubscriptionExpired`, `ReconfirmationRequested`, `SubscriptionLapsed`,
-  `EntryForgotten`, `ManageLinkRequested`;
-  all dispatch after commit.
+- Events: `EntrySubscribed`, `EntryConfirmed`, `EntryImported`, `ConsentGranted`,
+  `ConsentWithdrawn`, `EntryUnsubscribed`, `SubscriptionExpired`, `ReconfirmationRequested`,
+  `SubscriptionLapsed`, `EntryForgotten`, `ManageLinkRequested`; all dispatch after commit.
 - Config is read where it is used and refused when it does not read, with an
   `InvalidConfigurationException` that names the key. `.env` takes `true`/`false`,
   `on`/`off`, `yes`/`no`, `1`/`0` and whole numbers (`05` is 5); anything else is

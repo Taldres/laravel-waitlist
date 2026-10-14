@@ -3,9 +3,11 @@
 use Illuminate\Support\Facades\Route;
 use Taldres\Waitlist\Enums\Page;
 use Taldres\Waitlist\Http\Controllers\ConfirmController;
+use Taldres\Waitlist\Http\Controllers\CountController;
 use Taldres\Waitlist\Http\Controllers\ManageController;
 use Taldres\Waitlist\Http\Controllers\ManageLinkByTokenController;
 use Taldres\Waitlist\Http\Controllers\ManageLinkController;
+use Taldres\Waitlist\Http\Controllers\PositionController;
 use Taldres\Waitlist\Http\Controllers\PurposesController;
 use Taldres\Waitlist\Http\Controllers\SubscribeController;
 use Taldres\Waitlist\Http\Controllers\UnsubscribeController;
@@ -20,6 +22,7 @@ Route::group(RouteRegistration::attributes(), function () {
         Route::middleware($signup)->group(function () {
             Route::post('/', SubscribeController::class)->name('subscribe');
             Route::get('/purposes', PurposesController::class)->name('purposes');
+            Route::get('/count', CountController::class)->name('count');
             Route::post('/manage-link', ManageLinkController::class)->name('manage-link');
         });
     }
@@ -30,6 +33,7 @@ Route::group(RouteRegistration::attributes(), function () {
             Route::match(['GET', 'POST'], '/confirm/{token}', ConfirmController::class)->name(Page::Confirm->value);
             Route::match(['GET', 'POST'], '/unsubscribe/{token}', UnsubscribeController::class)->name(Page::Unsubscribe->value);
             Route::post('/unsubscribe/{token}/manage-link', ManageLinkByTokenController::class)->name('unsubscribe.manage-link');
+            Route::get('/unsubscribe/{token}/position', PositionController::class)->name('unsubscribe.position');
 
             // The short-lived manage token, mailed on request; mails carry the unsubscribe token.
             Route::get('/manage/{token}', [ManageController::class, 'show'])->name(Page::Manage->value);

@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Taldres\Waitlist\Actions\EraseEntry;
+use Taldres\Waitlist\Actions\PruneEntries;
 use Taldres\Waitlist\Actions\ResendConfirmation;
 use Taldres\Waitlist\Actions\UnsubscribeEntry;
 use Taldres\Waitlist\Enums\ActivityType;
@@ -19,6 +20,7 @@ use Taldres\Waitlist\Events\EntryConfirmed;
 use Taldres\Waitlist\Events\EntryForgotten;
 use Taldres\Waitlist\Events\EntrySubscribed;
 use Taldres\Waitlist\Events\EntryUnsubscribed;
+use Taldres\Waitlist\Events\SubscriptionExpired;
 use Taldres\Waitlist\Facades\Waitlist;
 use Taldres\Waitlist\Models\WaitlistActivity;
 use Taldres\Waitlist\Models\WaitlistConsent;
@@ -249,6 +251,119 @@ it('keeps a confirmation that crossed an expiry', function () {
     expect($expired)->toBeFalse()
         ->and(WaitlistEntry::query()->firstOrFail()->status)->toBe(EntryStatus::Confirmed);
 
+    assertWaitlistInvariants();
+});
+
+it('keeps a signup that lands between a prune\'s expiry and its erasure', function () {
+    subscribeAndCapture('beta', 'user@example.com');
+    WaitlistSubscription::query()->update(['started_at' => now()->subDays(40)]);
+    $stale = WaitlistEntry::query()->sole();
+
+    $outcome = null;
+    // After the expiry committed, before the erasure locks the entry.
+    Event::listen(SubscriptionExpired::class, function () use (&$outcome) {
+        $outcome ??= $this->as('b', fn () => Waitlist::subscribe('beta', 'user@example.com', waitlistConsent())->outcome);
+    });
+
+    $erased = $this->as('a', fn () => app(PruneEntries::class)->expirePending(30));
+
+    $entry = WaitlistEntry::query()->sole();
+
+    expect($outcome)->toBe(SubscribeOutcome::Resubscribed)
+        ->and($erased)->toBe(0)
+        ->and($entry->is($stale))->toBeTrue()
+        ->and($entry->status)->toBe(EntryStatus::Pending)
+        ->and($entry->subscriptions()->count())->toBe(2);
+
+    assertWaitlistInvariants();
+});
+
+it('starts afresh when a prune expires and erases the signup it is resending for', function () {
+    config()->set(ConfigKey::ResendCooldown->value, null);
+
+    subscribeAndCapture('beta', 'user@example.com');
+    WaitlistSubscription::query()->update(['started_at' => now()->subDays(40)]);
+    $stale = WaitlistEntry::query()->sole();
+
+    $pruned = null;
+    $entryReads = 0;
+    // The resend found the open cycle and now reads its entry again.
+    DB::connection('waitlist_b')->beforeExecuting(function (string $query) use (&$pruned, &$entryReads) {
+        if ($pruned === null && preg_match('/^select .* from [`"]?waitlist_entries[`"]? /i', $query) === 1 && ++$entryReads === 2) {
+            $pruned = $this->as('a', fn () => app(PruneEntries::class)->expirePending(30));
+        }
+    });
+
+    Event::fake([EntrySubscribed::class]);
+
+    $outcome = $this->as('b', fn () => Waitlist::subscribe('beta', 'user@example.com', waitlistConsent())->outcome);
+
+    expect($pruned)->toBe(1)
+        ->and($outcome)->toBe(SubscribeOutcome::Started)
+        ->and(WaitlistEntry::query()->sole()->isNot($stale))->toBeTrue();
+
+    Event::assertDispatchedTimes(EntrySubscribed::class, 1);
+    assertWaitlistInvariants();
+});
+
+it('signs up again when a prune expires the cycle it is resending for before erasing it', function () {
+    config()->set(ConfigKey::ResendCooldown->value, null);
+
+    subscribeAndCapture('beta', 'user@example.com');
+    WaitlistSubscription::query()->update(['started_at' => now()->subDays(40)]);
+    $stale = WaitlistEntry::query()->sole();
+    $cycle = $this->as('a', fn () => WaitlistSubscription::query()->sole());
+
+    $expired = null;
+    // The resend is about to lock the entry for its transition.
+    DB::connection('waitlist_b')->beforeExecuting(function (string $query) use (&$expired, $cycle) {
+        if ($expired === null && preg_match('/^select .*waitlist_entries.* for update/i', $query) === 1) {
+            $expired = $this->as('a', fn () => app(SubscriptionLifecycle::class)->end($cycle, EndReason::Expired, RequestContext::none()));
+        }
+    });
+
+    $outcome = $this->as('b', fn () => Waitlist::subscribe('beta', 'user@example.com', waitlistConsent())->outcome);
+    $erased = $this->as('a', fn () => app(PruneEntries::class)->expirePending(30));
+
+    $entry = WaitlistEntry::query()->sole();
+
+    expect($expired)->toBeTrue()
+        ->and($outcome)->toBe(SubscribeOutcome::Resubscribed)
+        ->and($erased)->toBe(0)
+        ->and($entry->is($stale))->toBeTrue()
+        ->and($entry->status)->toBe(EntryStatus::Pending);
+
+    assertWaitlistInvariants();
+});
+
+it('starts afresh when a prune erases the entry between the retry and its new cycle', function () {
+    config()->set(ConfigKey::ResendCooldown->value, null);
+
+    subscribeAndCapture('beta', 'user@example.com');
+    WaitlistSubscription::query()->update(['started_at' => now()->subDays(40)]);
+    $stale = WaitlistEntry::query()->sole();
+    $cycle = $this->as('a', fn () => WaitlistSubscription::query()->sole());
+    $onA = $this->as('a', fn () => WaitlistEntry::query()->sole());
+
+    $steps = [];
+    // The resend's transition locks first, the retry's new cycle second.
+    DB::connection('waitlist_b')->beforeExecuting(function (string $query) use (&$steps, $cycle, $onA) {
+        if (count($steps) < 2 && preg_match('/^select .*waitlist_entries.* for update/i', $query) === 1) {
+            $steps[] = count($steps) === 0
+                ? $this->as('a', fn () => app(SubscriptionLifecycle::class)->end($cycle, EndReason::Expired, RequestContext::none()))
+                : $this->as('a', fn () => app(EraseEntry::class)($onA));
+        }
+    });
+
+    Event::fake([EntrySubscribed::class]);
+
+    $outcome = $this->as('b', fn () => Waitlist::subscribe('beta', 'user@example.com', waitlistConsent())->outcome);
+
+    expect($steps)->toBe([true, true])
+        ->and($outcome)->toBe(SubscribeOutcome::Started)
+        ->and(WaitlistEntry::query()->sole()->isNot($stale))->toBeTrue();
+
+    Event::assertDispatchedTimes(EntrySubscribed::class, 1);
     assertWaitlistInvariants();
 });
 

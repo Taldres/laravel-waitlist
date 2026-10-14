@@ -47,6 +47,7 @@ purposes, decisions and activities, not on a label in this documentation.
 | Consent records | Store the registered text, version, locale and lifecycle. They do not verify that a person saw the text, acted freely or gave legally valid consent. A matching hash only checks the supplied text identifier. |
 | Wording sent by servers | With `wordingFromCallers()`, a project's servers register the text they send, and the consent stores it. The package checks who sent it and that a version never changes, not that the person saw that text; the server must send exactly what it showed and keep its credentials server-side. |
 | Rate limits for servers | A server calling for a project is capped as a whole. Limiting each visitor stays with that server unless it forwards the visitor's address, which the package then trusts as given. |
+| Imports | Record the source and the time of consent the operator states, and confirm without a mail only on that statement. They do not verify that consent was given, or that it covers your purposes and wording. |
 | Double opt-in | Records requests and confirmations; mail is sent by the application. It does not by itself establish a lawful basis or permission for every message. |
 | Encryption | Protects selected database fields. It does not encrypt every application response, log, queue payload, export or provider copy, and a party holding the key can read the values. |
 | Metadata | The HTTP signup accepts only the fields a project or list defines. Server-side actions trust their callers; review what those callers store. |

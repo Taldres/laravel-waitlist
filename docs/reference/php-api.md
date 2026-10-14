@@ -44,6 +44,8 @@ $project->urls(?string $confirm = null, ?string $unsubscribe = null, ?string $ma
 $list->optional(string ...$purposes): static
 $list->doubleOptIn(bool $enabled = true): static                    // overrides waitlist.double_opt_in.enabled
 $list->fields(Closure|array $rules): static                         // on top of the project's; same names replace them
+$list->publicCount(bool $enabled = true): static                    // GET /waitlist/count for this list
+$list->publicPosition(bool $enabled = true): static                 // GET /waitlist/unsubscribe/{token}/position for this list
 ```
 
 ## Manager: `Waitlist::`
@@ -90,6 +92,7 @@ Waitlist::encryptUsing(?Encrypter $encrypter): WaitlistManager
 Waitlist::for('beta')->purposes(?string $locale = null): array
 Waitlist::for('beta')->fields(): array                                         // field => rules the HTTP signup applies; add() does not
 Waitlist::for('beta')->add(string $email, array $purposes, array $metadata = [], ?RequestContext $context = null): SubscribeResult
+Waitlist::for('beta')->import(string $email, array $purposes, string $source, ?DateTimeInterface $consentedAt = null, ?RequestContext $context = null): ?SubscribeResult  // null for an address already on the list
 Waitlist::for('beta')->resendConfirmation(string $email, ?RequestContext $context = null): ?WaitlistEntry
 Waitlist::for('beta')->withdraw(string $email, string $purpose, ?RequestContext $context = null): ?WaitlistEntry
 Waitlist::for('beta')->unsubscribe(string $email, ?RequestContext $context = null): ?WaitlistEntry
@@ -98,6 +101,8 @@ Waitlist::for('beta')->recipients(?string $purpose = null): LazyCollection     /
 Waitlist::for('beta')->has(string $email): bool
 Waitlist::for('beta')->find(string $email): ?WaitlistEntry
 Waitlist::for('beta')->count(): int
+Waitlist::for('beta')->publicCount(): ?int                                    // confirmed, rounded down to a multiple of 10, null below 10, cached 60 seconds
+Waitlist::for('beta')->position(WaitlistEntry $entry): ?int                   // place among the confirmed, 1 first; null when not confirmed on this list
 Waitlist::for('beta')->entries(): Builder
 Waitlist::for('beta')->report(): WaitlistReport
 Waitlist::for('beta')->snapshot(): ListSnapshot
@@ -109,7 +114,28 @@ Waitlist::for('beta')->personalData(string $email): Collection
 
 `find()`, `has()`, `count()` and `entries()` include addresses that left; use the
 entry's status or `hasConsentFor()` for current membership, `snapshot()` for
-counts by status.
+counts by status. `publicCount()` and `position()` are the figures of
+[Count and position](http-api.md#count-and-position); they answer whether or not
+the list publishes them, as the switches are for the routes. For a person who
+holds a token, ask the entry's own project and list:
+
+```php
+$entry = Waitlist::findByUnsubscribeToken($token);
+
+$position = $entry === null
+    ? null
+    : Waitlist::project($entry->project)->for($entry->list)->position($entry);
+```
+
+`import()` adds an address that consented elsewhere, see
+[Importing existing subscribers](../gdpr.md#importing-existing-subscribers). With
+`$consentedAt` it is confirmed without a mail; without, it waits for the
+confirmation mail. It takes registered versions only, never text, checks a hash
+when one is given without requiring it, and throws an
+`InvalidArgumentException` for an empty source, a time in the future, or no time
+on a list without double opt-in. It is for operators moving records they hold:
+never pass `$consentedAt` or `$purposes` from a visitor's request, which would
+let anyone confirm an address without its mailbox.
 
 `add()` returns a `SubscribeResult`:
 

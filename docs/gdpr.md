@@ -34,7 +34,7 @@ legal requirement is satisfied.
 | Metadata (the fields a project or list defines) | `waitlist_entries.metadata` | Encrypted with `APP_KEY` |
 | Consent per purpose: wording, version, granted and withdrawn at | `waitlist_consents` | Frozen once written |
 | Cycle: started, confirmed, asked again and answered, ended, end reason | `waitlist_subscriptions` | Forward-only state machine |
-| Log: step, purpose, date, the reference your listener reports, optionally IP and user agent | `waitlist_activity` | Reference, IP and user agent encrypted; stripped to project, list, step, purpose, the status a departure left and date on erasure |
+| Log: step, purpose, date, the reference your listener reports, the source of an import, optionally IP and user agent | `waitlist_activity` | Reference, source, IP and user agent encrypted; stripped to project, list, step, purpose, the status a departure left and date on erasure |
 | Tokens | hashed, the unsubscribe token also encrypted | Never exported |
 
 `php artisan waitlist:privacy` prints this for your actual configuration, with the
@@ -72,6 +72,55 @@ keep each version's text, as you do with the consent wording. A provider's
 message id works too and is cleared on erasure. An IP address alone proves
 little and stays off unless you need it (`privacy.store_ip`).
 
+## Importing existing subscribers
+
+Moving people from a newsletter tool, an old database or paper forms onto a
+list keeps what you know about their consent:
+
+```php
+// They consented elsewhere, at a known time, to a text you registered as a version
+Waitlist::for('beta')->import($email, ['waitlist' => '2025-01', 'newsletter' => '2025-01'], source: 'mailchimp-2026-09', consentedAt: $consentedAt);
+
+// You cannot show when or to what they consented: ask them
+Waitlist::for('beta')->import($email, ['waitlist' => '2026-10'], source: 'paper forms 2025');
+```
+
+```bash
+php artisan waitlist:import subscribers.csv --source=mailchimp-2026-09 --list=beta --with-consent
+php artisan waitlist:import subscribers.csv --source="paper forms 2025" --list=beta --request-confirmation --limit=500
+# stops after 500 and prints the command that resumes, ending in --from-line=…
+```
+
+- **With the time of consent** the address is on the list at once, without a
+  mail. The consents keep the time given there, never the time of the import,
+  and the text of a version your catalog holds: register the wording the
+  source showed as a version first. `EntryImported` fires, not `EntrySubscribed`
+  or `EntryConfirmed`, so no confirmation or welcome mail goes out.
+- **Without it** the address waits for confirmation, and your listener sends
+  the usual confirmation mail on `EntrySubscribed`. The caps per address apply;
+  for the volume, run the import in batches with `--limit`, resume each with the
+  `--from-line` the command prints, and let your queue and mail provider
+  throttle the mails. Unconfirmed, it is erased after the
+  pending retention period like any signup.
+- **The source is recorded** with each entry, encrypted, in the `imported` step
+  of the log: an access request shows it, and when the import ran, next to the
+  original time on each consent. `waitlist:privacy` lists the sources still
+  held. Erasure clears it with the rest. Name the tool or file in `--source`,
+  never a person: it is stored with every entry of the import.
+- **Known addresses are skipped**, in any status, so an address on the list is
+  never duplicated and someone who left never comes back. An address erased
+  since is not known any more, though: **running a file again from the start
+  undoes every erasure since**, confirming those addresses again or mailing
+  them again. Resume a stopped import with `--from-line`, never from the start,
+  keep the file unchanged until the import is finished, and delete it then. Retry
+  the rows the import refused with a new file that holds only those rows.
+- A row the import refuses is reported by its line, the column and a fixed
+  reason, never by a value from the file.
+
+The package records what you state about the source; it cannot tell whether
+the consent given there is valid for your purposes. That assessment is yours,
+see [Operator responsibilities](responsibility.md).
+
 ## Purposes and wording
 
 Every list has one primary purpose, which is required, and optional purposes
@@ -99,7 +148,8 @@ freely given, specific, informed and unambiguous.
   `GET /waitlist/purposes`. A form with its own copy of the text posts back its
   hash, and a mismatch is refused; `WAITLIST_REQUIRE_WORDING_HASH=true` makes the
   hash mandatory for every consent that is newly recorded, never for keeping or
-  withdrawing one.
+  withdrawing one, nor for an [import](#importing-existing-subscribers), which
+  had no form whose copy of the text a hash could prove.
 - Retiring every version of an optional purpose stops offering it; its list keeps
   working.
 - Removing a purpose from the catalog does not strand anyone: withdrawal works from
@@ -186,7 +236,10 @@ request that reaches you another way is answered across all of them with
 the exception: they apply to every list of the project.
 
 Every mail carries the unsubscribe link; it can only remove, so forwarding a mail
-or a provider reading its headers exposes nothing. The preference page opens with
+or a provider reading its headers exposes no data. On a list that
+[publishes positions](reference/http-api.md#count-and-position), whoever holds the
+link can also read the person's place in line for as long as the entry exists,
+and so see people ahead of them leave, though never who. The preference page opens with
 a manage link that is mailed to the address on request (`ManageLinkRequested`)
 and expires after an hour. It only reaches the person through their mailbox,
 which is what lets it stand in for a login. Offer the request on your unsubscribe

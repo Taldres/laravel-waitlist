@@ -4,14 +4,18 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist;
 
+use DateTimeInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\LazyCollection;
 use Illuminate\Support\Traits\Macroable;
+use InvalidArgumentException;
 use Taldres\Waitlist\Actions\EraseEntry;
 use Taldres\Waitlist\Actions\ExportPersonalData;
 use Taldres\Waitlist\Actions\FindRecipients;
 use Taldres\Waitlist\Actions\ForgetEmail;
+use Taldres\Waitlist\Actions\ImportEntry;
 use Taldres\Waitlist\Actions\IssueManageLink;
 use Taldres\Waitlist\Actions\RequestManageLink;
 use Taldres\Waitlist\Actions\ResendConfirmation;
@@ -19,6 +23,7 @@ use Taldres\Waitlist\Actions\SubscribeToWaitlist;
 use Taldres\Waitlist\Actions\UnsubscribeEntry;
 use Taldres\Waitlist\Actions\WithdrawConsent;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
+use Taldres\Waitlist\Enums\EntryStatus;
 use Taldres\Waitlist\Exceptions\InvalidEmailException;
 use Taldres\Waitlist\Exceptions\InvalidTokenException;
 use Taldres\Waitlist\Exceptions\ManageLinksDisabledException;
@@ -26,6 +31,8 @@ use Taldres\Waitlist\Exceptions\MissingConsentException;
 use Taldres\Waitlist\Exceptions\UnknownPurposeException;
 use Taldres\Waitlist\Exceptions\UnknownWaitlistException;
 use Taldres\Waitlist\Exceptions\WordingConflictException;
+use Taldres\Waitlist\Exceptions\WordingMismatchException;
+use Taldres\Waitlist\Exceptions\WordingNotAcceptedException;
 use Taldres\Waitlist\Exports\CsvExporter;
 use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Reporting\ListSnapshot;
@@ -46,6 +53,14 @@ class ScopedWaitlist
 {
     use Macroable;
     use ResolvesModel;
+
+    /**
+     * publicCount() rounds down to a multiple of this and withholds anything
+     * below it, so a small list does not show each signup.
+     */
+    public const int PUBLIC_COUNT_STEP = 10;
+
+    public const int PUBLIC_COUNT_CACHE_SECONDS = 60;
 
     public function __construct(
         protected string $list,
@@ -79,6 +94,36 @@ class ScopedWaitlist
             email: $email,
             purposes: $purposes,
             metadata: $metadata,
+            context: $context,
+            project: $this->project,
+        );
+    }
+
+    /**
+     * Adds an address that consented elsewhere, recording $source with it.
+     * With the time it consented there, it is confirmed without a mail and
+     * EntryImported fires; without, it waits for the confirmation mail that
+     * EntrySubscribed asks for. Null when the address is on the list already,
+     * in any status: nothing changes for it.
+     *
+     * @param  array<string, string|array{version: string, locale?: string|null, hash?: string}>  $purposes  purpose => version, or {version, locale, hash}
+     *
+     * @throws InvalidArgumentException for a missing source, a time of consent in the future, or no time on a list without double opt-in
+     * @throws UnknownWaitlistException
+     * @throws UnknownPurposeException
+     * @throws WordingNotAcceptedException when a purpose comes with text
+     * @throws WordingMismatchException when a hash is given that does not match
+     * @throws MissingConsentException
+     * @throws InvalidEmailException
+     */
+    public function import(string $email, array $purposes, string $source, ?DateTimeInterface $consentedAt = null, ?RequestContext $context = null): ?SubscribeResult
+    {
+        return app(ImportEntry::class)(
+            list: $this->list,
+            email: $email,
+            purposes: $purposes,
+            source: $source,
+            consentedAt: $consentedAt,
             context: $context,
             project: $this->project,
         );
@@ -206,6 +251,71 @@ class ScopedWaitlist
     public function count(): int
     {
         return $this->entries()->count();
+    }
+
+    /**
+     * The confirmed addresses, rounded down to a multiple of 10 and null below
+     * 10, cached briefly in the default cache store. Answers whether or not the
+     * list publishes its count; that switch is for the HTTP route.
+     */
+    public function publicCount(): ?int
+    {
+        $key = 'waitlist:public-count:'.hash('sha256', (string) json_encode([$this->project, $this->list]));
+        // Wrapped, as some stores hand a plain number back as a string.
+        $cached = Cache::get($key);
+
+        if (is_array($cached) && is_int($cached['count'] ?? null)) {
+            return $cached['count'];
+        }
+
+        $confirmed = $this->entries()->where('status', EntryStatus::Confirmed->value)->count();
+        $rounded = intdiv($confirmed, self::PUBLIC_COUNT_STEP) * self::PUBLIC_COUNT_STEP;
+
+        if ($rounded === 0) {
+            return null;
+        }
+
+        // Only counts worth showing are stored, so made-up names on a "*" list
+        // leave nothing behind in the cache.
+        Cache::put($key, ['count' => $rounded], self::PUBLIC_COUNT_CACHE_SECONDS);
+
+        return $rounded;
+    }
+
+    /**
+     * The entry's place among the confirmed addresses of this list, in the
+     * order their current cycles were confirmed, 1 for the earliest; within
+     * the same second, the cycle that started first. Null when the entry is
+     * not on this list or not confirmed and on it, also when it was erased.
+     * Answers whether or not the list publishes positions; that switch is for
+     * the HTTP route.
+     */
+    public function position(WaitlistEntry $entry): ?int
+    {
+        $entry = $entry->fresh(['latestSubscription']);
+        $mine = $entry?->latestSubscription;
+
+        if ($entry === null || $mine === null || $entry->project !== $this->project || $entry->list !== $this->list
+            || $entry->status !== EntryStatus::Confirmed || ! $mine->isOpen() || ! $mine->isConfirmed()) {
+            return null;
+        }
+
+        $entries = $entry->getTable();
+        $cycles = $mine->getTable();
+        $confirmedAt = $mine->getRawOriginal('confirmed_at');
+
+        $ahead = $this->entries()
+            ->where("{$entries}.status", EntryStatus::Confirmed->value)
+            ->join($cycles, "{$cycles}.id", '=', "{$entries}.latest_subscription_id")
+            ->whereNull("{$cycles}.ended_at")
+            ->where(fn (Builder $query) => $query
+                ->where("{$cycles}.confirmed_at", '<', $confirmedAt)
+                ->orWhere(fn (Builder $query) => $query
+                    ->where("{$cycles}.confirmed_at", $confirmedAt)
+                    ->where("{$cycles}.id", '<', $mine->getKey())))
+            ->count();
+
+        return $ahead + 1;
     }
 
     /**

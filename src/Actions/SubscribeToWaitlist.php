@@ -150,11 +150,22 @@ class SubscribeToWaitlist
         $current = $entry->currentSubscription;
 
         if ($current !== null) {
-            return $current->isConfirmed() && ! $current->awaitsReconfirmation()
-                ? new SubscribeResult($entry, $current, SubscribeOutcome::AlreadyConfirmed)
-                : new SubscribeResult($entry, $current, $this->resend->resend($current, $context)
-                    ? SubscribeOutcome::ConfirmationResent
-                    : SubscribeOutcome::ResendSuppressed);
+            if ($current->isConfirmed() && ! $current->awaitsReconfirmation()) {
+                return new SubscribeResult($entry, $current, SubscribeOutcome::AlreadyConfirmed);
+            }
+
+            $resent = $this->resend->resend($current, $context);
+
+            // Ended or erased on the way, by a prune's expiry for example: the
+            // address has nothing left to confirm, so it signs up again
+            // rather than being suppressed.
+            if (! $resent && ! $retried && ! $this->stillOpen($entry, $current)) {
+                return $this->findAndAct($policy, $doubleOptIn, $email, $metadata, $wordings, $context, retried: true);
+            }
+
+            return new SubscribeResult($entry, $current, $resent
+                ? SubscribeOutcome::ConfirmationResent
+                : SubscribeOutcome::ResendSuppressed);
         }
 
         $deferred = $doubleOptIn && $this->resend->addressSaturated($policy->project, $email);
@@ -180,11 +191,18 @@ class SubscribeToWaitlist
                 throw $exception;
             }
 
-            if ($retried) {
-                throw new UnknownWaitlistException('The waitlist entry could not get a new cycle.');
+            if (! $retried) {
+                return $this->findAndAct($policy, $doubleOptIn, $email, $metadata, $wordings, $context, retried: true);
             }
 
-            return $this->findAndAct($policy, $doubleOptIn, $email, $metadata, $wordings, $context, retried: true);
+            // A retry that found the entry ended, by a prune's expiry for
+            // example, saw it erased before its cycle: only a new entry is
+            // left, and the unique index keeps that to one.
+            try {
+                return $this->createWithCycle($policy, $doubleOptIn, $email, $metadata, $wordings, $context);
+            } catch (UniqueConstraintViolationException) {
+                throw new UnknownWaitlistException('The waitlist entry could not get a new cycle.');
+            }
         } catch (UniqueConstraintViolationException) {
             // A concurrent request opened the new cycle first; act on theirs,
             // once: a violation that persists is no race.
@@ -196,6 +214,20 @@ class SubscribeToWaitlist
         }
 
         return new SubscribeResult($entry, $subscription, $deferred ? SubscribeOutcome::ConfirmationDeferred : SubscribeOutcome::Resubscribed);
+    }
+
+    /**
+     * The entry first, as every step locks it before its cycle.
+     */
+    protected function stillOpen(WaitlistEntry $entry, WaitlistSubscription $cycle): bool
+    {
+        if (! $this->stillStored($entry)) {
+            return false;
+        }
+
+        $query = static::subscriptionModelClass()::query()->whereKey($cycle->getKey())->whereNull('ended_at');
+
+        return (static::waitlistConnection()->transactionLevel() > 0 ? $query->lockForUpdate() : $query)->value($cycle->getKeyName()) !== null;
     }
 
     /**

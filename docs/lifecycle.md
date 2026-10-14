@@ -119,7 +119,7 @@ comparison; they cannot both pass a counter.
 | | Confirm token | Unsubscribe token | Manage token |
 | --- | --- | --- | --- |
 | Belongs to | one cycle | the entry | the entry |
-| Can | confirm, or answer a request to confirm again | unsubscribe, withdraw a purpose, ask for a manage link | read the data, set the purposes, leave, erase |
+| Can | confirm, or answer a request to confirm again | unsubscribe, withdraw a purpose, ask for a manage link, read the place in line where the list [publishes it](reference/http-api.md#count-and-position) | read the data, set the purposes, leave, erase |
 | Issued | when a cycle starts, rotated on every resend and when a confirmed cycle is asked to confirm again | once, on the first signup | on request, mailed to the address |
 | Plain form | `EntrySubscribed`, `ReconfirmationRequested` | every mail: event payloads, `unsubscribeToken()`, `unsubscribeUrl()` | `ManageLinkRequested`, `manageLink()` |
 | Stored as | SHA-256 hash | SHA-256 hash plus an encrypted copy | SHA-256 hash only |
@@ -130,9 +130,11 @@ Three consequences worth knowing:
 - **An unsubscribe link from the first mail still works years later.** Nothing
   rotates it, not a resend, not a re-subscribe; only a token that cannot be
   decrypted is replaced, see [Encryption and keys](encryption-and-keys.md#rotating-app_key). A broken unsubscribe link is
-  worse than a long-lived one, and the link only ever removes someone. It can ask
+  worse than a long-lived one, and the link never changes anything but removing
+  someone. It can ask
   for a manage link, but that goes to the mailbox, never to whoever holds the
-  link.
+  link. On a list that publishes positions, it also reads the person's place in
+  line, which names nobody else.
 - **The preference page needs fresh proof of the mailbox.** A manage token is
   never part of an ordinary mail, so a forwarded newsletter or a mail provider
   reading the `List-Unsubscribe` header never gets access to the data.
@@ -255,10 +257,16 @@ Waitlist::listUnsubscribeHeaders($entry, 'newsletter');  // RFC 8058 one-click, 
 | that request answered | `reconfirmed` | — |
 | that request unanswered when its link expired (retention) | `lapsed` | `SubscriptionLapsed` |
 | erased | `erased` | `EntryForgotten` |
+| imported with the time of consent | `subscribed`, `imported` (with source), `confirmed` | `EntryImported` |
+| imported without it | `subscribed`, `confirmation_requested`, `imported` (with source) | `EntrySubscribed` (`isNewCycle: true`) |
 
 With double opt-in disabled a cycle starts confirmed: `subscribed` and
 `confirmed` are logged together, no confirm token is issued, and both
 `EntrySubscribed` and `EntryConfirmed` fire.
+
+An import adds only addresses the list does not hold, in any status, so it
+never brings back someone who left; see
+[Importing existing subscribers](gdpr.md#importing-existing-subscribers).
 
 When the address already got `max_pending_per_address` confirmation requests
 for unconfirmed lists of the project within the last day, a new cycle starts

@@ -8,6 +8,7 @@ listeners do. Which transition fires which event, and what it logs, is in the
 | --- | --- | --- |
 | `EntrySubscribed` | A cycle starts, or a confirmation request goes out later (a resend, or the held-back first one of a deferred cycle); a deferred start fires nothing | `entry`, `subscription`, `confirmToken`, `unsubscribeToken`, `confirmUrl`, `unsubscribeUrl`, `requiresConfirmation`, `isNewCycle` |
 | `EntryConfirmed` | Double opt-in completed, or a cycle started on a list without it | `entry`, `subscription`, `unsubscribeToken`, `unsubscribeUrl` |
+| `EntryImported` | An address was imported with the time it consented elsewhere and is on the list; fired instead of `EntrySubscribed` and `EntryConfirmed` ([Importing existing subscribers](../gdpr.md#importing-existing-subscribers)) | `entry`, `subscription`, `source` |
 | `ConsentGranted` | An optional purpose was added to a running cycle | `entry`, `subscription`, `consent` |
 | `ConsentWithdrawn` | An optional purpose was withdrawn; the cycle continues | `entry`, `subscription`, `consent` |
 | `EntryUnsubscribed` | Someone left a list | `entry`, `subscription` |
@@ -41,7 +42,7 @@ What to do with them:
 | Preference page link | `ManageLinkRequested` | [Mail](../mail.md#the-preference-page-link) |
 | Welcome mail | `EntryConfirmed` | [Mail](../mail.md#a-welcome-mail) |
 | Still interested? | `ReconfirmationRequested` | [Mail](../mail.md#asking-again-after-a-while) |
-| Newsletter tool sync | `EntryConfirmed`, `ConsentGranted`, `ConsentWithdrawn`, `EntryUnsubscribed`, `SubscriptionLapsed`, `EntryForgotten` | [Sync to your email provider](../email-provider-sync.md) |
+| Newsletter tool sync | `EntryConfirmed`, `EntryImported`, `ConsentGranted`, `ConsentWithdrawn`, `EntryUnsubscribed`, `SubscriptionLapsed`, `EntryForgotten` | [Sync to your email provider](../email-provider-sync.md) |
 | Copies you keep elsewhere | `EntryForgotten`: delete the copy for that entry; a copy shared across lists only once no entry of the address is left | [GDPR in practice](../gdpr.md#your-listeners) |
 
 `php artisan waitlist:privacy` lists the listeners registered for package events,

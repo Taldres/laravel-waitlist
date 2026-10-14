@@ -6,6 +6,7 @@ namespace Taldres\Waitlist\Console\Commands;
 
 use Closure;
 use Illuminate\Console\Command;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
@@ -16,12 +17,15 @@ use Taldres\Waitlist\Actions\ResendConfirmation;
 use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
+use Taldres\Waitlist\Definitions\ProjectDefinitions;
+use Taldres\Waitlist\Enums\ActivityType;
 use Taldres\Waitlist\Enums\Page;
 use Taldres\Waitlist\Enums\WaitlistLimiter;
 use Taldres\Waitlist\Events\ConsentGranted;
 use Taldres\Waitlist\Events\ConsentWithdrawn;
 use Taldres\Waitlist\Events\EntryConfirmed;
 use Taldres\Waitlist\Events\EntryForgotten;
+use Taldres\Waitlist\Events\EntryImported;
 use Taldres\Waitlist\Events\EntrySubscribed;
 use Taldres\Waitlist\Events\EntryUnsubscribed;
 use Taldres\Waitlist\Events\ManageLinkRequested;
@@ -31,13 +35,19 @@ use Taldres\Waitlist\Events\SubscriptionLapsed;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Exceptions\MissingWordingException;
 use Taldres\Waitlist\Http\Limiters;
+use Taldres\Waitlist\Models\WaitlistActivity;
 use Taldres\Waitlist\Support\AuthenticatedProjectResolver;
+use Taldres\Waitlist\Support\ListPolicy;
+use Taldres\Waitlist\Support\PublishableKeyResolver;
 use Taldres\Waitlist\Support\PurposeRegistry;
+use Taldres\Waitlist\Support\ResolvesModel;
 use Taldres\Waitlist\Support\SetupAudit;
 use Taldres\Waitlist\WaitlistManager;
 
 class PrivacyCommand extends Command
 {
+    use ResolvesModel;
+
     protected $signature = 'waitlist:privacy
         {--project= : Only describe this project}';
 
@@ -46,6 +56,7 @@ class PrivacyCommand extends Command
     protected const array EVENTS = [
         EntrySubscribed::class,
         EntryConfirmed::class,
+        EntryImported::class,
         EntryUnsubscribed::class,
         SubscriptionExpired::class,
         ReconfirmationRequested::class,
@@ -71,6 +82,7 @@ class PrivacyCommand extends Command
             '',
             ...$this->data($catalog, $projects),
             ...$this->purposes($registry, $catalog, $projects),
+            ...$this->sources($projects),
             ...$this->retention($catalog, $projects),
             ...$this->measures($catalog, $projects),
             ...$this->recipients(),
@@ -99,6 +111,7 @@ class PrivacyCommand extends Command
             "| Email address | waitlist_entries.email | {$protection}; looked up by a keyed hash |",
             '| Consent per purpose: wording, version, granted and withdrawn at | waitlist_consents | Wording frozen at the moment of consent |',
             '| Lifecycle log: step, purpose, date, reference of the mail your listener sent | waitlist_activity | Stripped to project, list, step, purpose, the status a departure left and date on erasure, so counts survive; one row per step, so not anonymous in a small list |',
+            "| Source of an imported entry and when it was imported | waitlist_activity (the imported step) | {$protection}; cleared on erasure |",
         ];
 
         foreach ($projects as $project) {
@@ -193,6 +206,65 @@ class PrivacyCommand extends Command
         }
 
         return [...$lines, '', 'The package records consent choices per purpose, each withdrawable on its own. The operator must determine the lawful basis and assess whether consent is valid; storing a record does not establish this.', ''];
+    }
+
+    /**
+     * Where the addresses came from. The sources of imports are read from the
+     * log, where each is stored encrypted with the entries it brought; a log
+     * that cannot be read is reported as a line instead of failing the record.
+     *
+     * @param  list<string>  $projects
+     * @return list<string>
+     */
+    protected function sources(array $projects): array
+    {
+        $lines = [
+            '## Sources',
+            '',
+            '- Signups: from the person, through your forms and your own calls of the PHP API',
+        ];
+
+        try {
+            $imports = $this->imports($projects);
+        } catch (InvalidConfigurationException|QueryException $exception) {
+            return [...$lines, '- Imports: the log cannot be read ('.class_basename($exception).'); run waitlist:check', ''];
+        }
+
+        if ($imports === []) {
+            return [...$lines, '- Imports: none held', ''];
+        }
+
+        $lines[] = '- Imports, consent given elsewhere; consents keep the time it was given there, each entry its source until it is erased:';
+
+        foreach ($imports as $source => $count) {
+            $lines[] = "  - {$source}: {$count} ".($count === 1 ? 'entry' : 'entries');
+        }
+
+        return [...$lines, ''];
+    }
+
+    /**
+     * @param  list<string>  $projects
+     * @return array<string, int> "[project] source" => entries
+     */
+    protected function imports(array $projects): array
+    {
+        $imports = [];
+
+        static::activityModelClass()::query()
+            ->whereIn('project', $projects)
+            ->where('type', ActivityType::Imported)
+            ->whereNotNull('reference')
+            ->lazyById(500)
+            ->each(function (WaitlistActivity $activity) use (&$imports): void {
+                $source = rescue(fn (): ?string => $activity->reference, null, report: false) ?? 'a source that cannot be decrypted';
+                $key = "[{$activity->project}] ".str_replace(["\r\n", "\n", "\r"], ' ', $source);
+                $imports[$key] = ($imports[$key] ?? 0) + 1;
+            });
+
+        ksort($imports);
+
+        return $imports;
     }
 
     /**
@@ -308,6 +380,8 @@ class PrivacyCommand extends Command
         $cooldown = ResendConfirmation::cooldown();
         $cap = ResendConfirmation::maxConfirmations();
         [$offering, $without] = $this->manageLinkProjects($catalog, $projects);
+        $token = '- Mails carry an unsubscribe token that can only remove'
+            .($this->positionLists($catalog, $projects) === [] ? '' : ', and read the place in line on the lists that publish positions');
 
         return [
             '## Technical and organisational measures (Art. 32)',
@@ -318,9 +392,9 @@ class PrivacyCommand extends Command
             '- Addresses looked up by an HMAC-SHA256 hash with a subkey of the '.$this->encryptedWith().' key, never by the address itself',
             '- Tokens stored as SHA-256 hashes, the unsubscribe token additionally encrypted; none exported',
             match (true) {
-                $without === [] => '- Mails carry an unsubscribe token that can only remove; access to the data and erasure needs a manage link that is mailed to the address on request and expires after '.$this->manageTtl(),
-                $offering === [] => '- Mails carry an unsubscribe token that can only remove; no manage links are sent, so access to the data and erasure go through you (waitlist:export, waitlist:forget)',
-                default => '- Mails carry an unsubscribe token that can only remove; access to the data and erasure needs a manage link that is mailed to the address on request and expires after '.$this->manageTtl()
+                $without === [] => $token.'; access to the data and erasure needs a manage link that is mailed to the address on request and expires after '.$this->manageTtl(),
+                $offering === [] => $token.'; no manage links are sent, so access to the data and erasure go through you (waitlist:export, waitlist:forget)',
+                default => $token.'; access to the data and erasure needs a manage link that is mailed to the address on request and expires after '.$this->manageTtl()
                     .'; projects without manage links ('.implode(', ', $without).') handle both through you (waitlist:export, waitlist:forget)',
             },
             '- Confirmation mails limited to one per '.($cooldown !== null ? "{$cooldown} minutes" : 'request')
@@ -334,6 +408,8 @@ class PrivacyCommand extends Command
                     .'; GET never changes state'
                 : '- No public endpoints (package routes disabled)',
             ...$this->servers(),
+            ...$this->publishedFigures($catalog, $projects),
+            ...$this->publishableKeys($catalog, $projects),
             '- Consent records immutable; lifecycle log rows never deleted, only stripped on erasure',
             '- Erasure strips the log: only project, list, step, purpose, the status a departure left and date remain',
             '- No mail sent and no outbound requests made by the package',
@@ -373,6 +449,46 @@ class PrivacyCommand extends Command
         }
 
         return $lines;
+    }
+
+    /**
+     * A publishable key ships in every page that sends it, so the record must
+     * not read it as access control. Only the package's own resolver is known
+     * to take keys from the definitions alone; a subclass may reach any project.
+     *
+     * @param  list<string>  $projects
+     * @return list<string>
+     */
+    protected function publishableKeys(ProjectCatalog $catalog, array $projects): array
+    {
+        $resolver = WaitlistConfig::routesEnabled() ? rescue(fn (): mixed => app(ProjectResolver::class), null, report: false) : null;
+
+        if (! $resolver instanceof PublishableKeyResolver) {
+            return [];
+        }
+
+        $exact = $resolver::class === PublishableKeyResolver::class;
+        $open = [];
+        $keyless = [];
+
+        foreach ($projects as $project) {
+            if ($catalog->lists($project) === []) {
+                continue;
+            }
+
+            if ($exact && rescue(fn (): ?string => app(ProjectDefinitions::class)->get($project)?->getPublishableKey(), null, report: false) === null) {
+                $keyless[] = $project;
+            } elseif ($catalog->origins($project) === []) {
+                $open[] = $project;
+            }
+        }
+
+        return [
+            '- Signups, the wording and manage links by address pick their project by a publishable key in the `'.$resolver::HEADER.'` header. The key is public, shown by every page that sends it: it authorizes nothing and keeps nobody out. Who may call is decided by the useWaitlist gate, authentication.required and any auth middleware on the signup; which websites a browser may call from is decided by each project\'s origins'
+                .($open !== [] ? ' (none set for '.implode(', ', $open).', so any website may)' : '')
+                .'; a script outside a browser can send any key and any origin'
+                .($keyless !== [] ? '. Projects without a key ('.implode(', ', $keyless).') cannot be reached this way' : ''),
+        ];
     }
 
     /**
@@ -581,6 +697,63 @@ class PrivacyCommand extends Command
         }
 
         return [$offering, $without];
+    }
+
+    /**
+     * Lists that answer the count or the position over HTTP: neither names
+     * anyone, but a position is exact.
+     *
+     * @param  list<string>  $projects
+     * @return list<string>
+     */
+    protected function publishedFigures(ProjectCatalog $catalog, array $projects): array
+    {
+        if (! WaitlistConfig::routesEnabled()) {
+            return [];
+        }
+
+        $counts = $this->publishingLists($catalog, $projects, fn (ListPolicy $policy): bool => $policy->publishesCount());
+        $positions = $this->positionLists($catalog, $projects);
+
+        return [
+            ...($counts === [] ? [] : ['- Public count of confirmed addresses ('.implode(', ', $counts).'): rounded down to a multiple of 10, withheld below 10, cached for 60 seconds']),
+            ...($positions === [] ? [] : ['- The unsubscribe token also reads the person\'s exact place among the confirmed addresses of their list ('.implode(', ', $positions).'); it names no one else, but tells how many are ahead']),
+        ];
+    }
+
+    /**
+     * Empty while the routes are off: the switch is for the route.
+     *
+     * @param  list<string>  $projects
+     * @return list<string>
+     */
+    protected function positionLists(ProjectCatalog $catalog, array $projects): array
+    {
+        return WaitlistConfig::routesEnabled()
+            ? $this->publishingLists($catalog, $projects, fn (ListPolicy $policy): bool => $policy->publishesPosition())
+            : [];
+    }
+
+    /**
+     * @param  list<string>  $projects
+     * @param  Closure(ListPolicy): bool  $publishes
+     * @return list<string> project/list labels
+     */
+    protected function publishingLists(ProjectCatalog $catalog, array $projects, Closure $publishes): array
+    {
+        $labels = [];
+
+        foreach ($projects as $project) {
+            foreach ($catalog->lists($project) as $list) {
+                $policy = $catalog->policy($project, $list);
+
+                if ($policy !== null && $publishes($policy)) {
+                    $labels[] = $list === '*' ? "{$project}/any other list" : "{$project}/{$list}";
+                }
+            }
+        }
+
+        return $labels;
     }
 
     protected function manageTtl(): string

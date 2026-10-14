@@ -57,8 +57,23 @@ DKIM and DMARC records, or confirmation mails end up in spam.
 The double opt-in mail. Without it, nobody on a list with double opt-in ever
 reaches `confirmed`.
 
+The short path is the scaffold:
+
+```bash
+php artisan waitlist:install --mail
+```
+
+It writes the three files below into your app, with your application's
+namespace, and leaves any that exist untouched, so it can run again. They are
+yours from then on: change the subject, the text and the sender, and keep the
+`confirmationMailed()` reference in step with the mail. The wording the person
+agrees to comes from the consents the package stored, and the links from the
+event, so the mail carries no legal text of its own. Do not register the
+listener again (see [below](#the-listener-is-yours-to-wire)). The rest of this
+section explains what the files do.
+
 ```php
-// app/Mail/ConfirmWaitlistMail.php
+// app/Mail/ConfirmWaitlistMail.php (written by --mail)
 namespace App\Mail;
 
 use Illuminate\Bus\Queueable;
@@ -92,7 +107,7 @@ class ConfirmWaitlistMail extends Mailable
 ```
 
 ```blade
-{{-- resources/views/mail/waitlist/confirm.blade.php --}}
+{{-- resources/views/mail/waitlist/confirm.blade.php (written by --mail) --}}
 <x-mail::message>
 # One more step
 
@@ -112,7 +127,7 @@ You can also [unsubscribe]({{ $unsubscribeUrl }}) right away.
 ```
 
 ```php
-// app/Listeners/SendWaitlistConfirmationMail.php
+// app/Listeners/SendWaitlistConfirmationMail.php (written by --mail)
 namespace App\Listeners;
 
 use App\Mail\ConfirmWaitlistMail;
@@ -122,8 +137,9 @@ use Illuminate\Support\Facades\Mail;
 use LogicException;
 use Taldres\Waitlist\Events\EntrySubscribed;
 use Taldres\Waitlist\Facades\Waitlist;
+use Throwable;
 
-class SendWaitlistConfirmationMail implements ShouldQueue, ShouldBeEncrypted
+class SendWaitlistConfirmationMail implements ShouldBeEncrypted, ShouldQueue
 {
     public function handle(EntrySubscribed $event): void
     {
@@ -131,23 +147,39 @@ class SendWaitlistConfirmationMail implements ShouldQueue, ShouldBeEncrypted
             return;
         }
 
-        // Null only while the project sets no confirm page and the package
-        // routes are off: fail loudly rather than mail a confirmation without a link.
-        $confirmUrl = $event->confirmUrl ?? throw new LogicException('Set the confirm page in urls() or enable the package routes.');
+        // Erased since the event: a retried job must not mail the address again.
+        if ($event->entry->fresh() === null) {
+            return;
+        }
 
-        Mail::to($event->entry->email)->send(new ConfirmWaitlistMail(
-            $confirmUrl,
-            $event->unsubscribeUrl,
-            $event->subscription->consents->pluck('text')->all(),
-        ));
+        // Report only a send that did not happen. After the mail is out, a
+        // failure must not free the cooldown, so it is not reported. A
+        // MessageSent listener that throws counts as a failed send.
+        try {
+            // Null only while the project sets no confirm page and the package
+            // routes are off: fail loudly rather than mail a confirmation without a link.
+            $confirmUrl = $event->confirmUrl ?? throw new LogicException('Set the confirm page in urls() or enable the package routes.');
 
-        // The reference of what you sent, e.g. template and version.
-        Waitlist::confirmationMailed($event, 'confirm-mail@2026-10');
+            Mail::to($event->entry->email)->send(new ConfirmWaitlistMail(
+                $confirmUrl,
+                $event->unsubscribeUrl,
+                // A withdrawn optional purpose stays on a pending cycle.
+                $event->subscription->consents->reject(fn ($consent) => $consent->isWithdrawn())->pluck('text')->values()->all(),
+            ));
+        } catch (Throwable $exception) {
+            // The exception's class, never its message: that may hold the address.
+            Waitlist::confirmationFailed($event, class_basename($exception));
+
+            throw $exception;
+        }
+
+        // The reference of what you sent: bump the version when the mail changes.
+        Waitlist::confirmationMailed($event, 'confirm-mail@1');
     }
 }
 ```
 
-Laravel discovers the listener in `app/Listeners` by itself.
+Laravel discovers the listener in `app/Listeners` by its `handle()` type hint.
 
 - **Resends.** The same event carries every later confirmation request, with
   `isNewCycle` false. Do not throttle in the listener: a repeat signup only
@@ -159,22 +191,22 @@ Laravel discovers the listener in `app/Listeners` by itself.
   version of the mail.
   See [GDPR in practice](gdpr.md#proof-of-the-double-opt-in).
 - **A mail that could not be sent.** A request counts against the resend cooldown
-  and the caps as soon as it is issued, before any mail exists. When your queued
-  listener gives up, report it from its `failed()` method:
-
-  ```php
-  public function failed(EntrySubscribed $event, Throwable $exception): void
-  {
-      // The provider's error code, never the address or its message.
-      Waitlist::confirmationFailed($event, 'http-429');
-  }
-  ```
+  and the caps as soon as it is issued, before any mail exists. The listener
+  reports a send that threw with `confirmationFailed()` and rethrows, so the queue
+  still retries. The reference is what you want in the log, such as the
+  provider's error code (the scaffold uses the exception's class), never the
+  address or the provider's message. It reports nothing once the mail is out: an
+  exception after the send, from `confirmationMailed()` for example, is not a
+  failed mail, and a retry of the job sends it again. An exception from a
+  `MessageSent` listener happens inside the send, so it counts as a failed send
+  and the retry mails again. A job killed by a timeout or by its maximum attempts
+  reports nothing, so the request keeps the cooldown until it runs out.
 
   The request stops counting, so the person's own retry gets a mail, and the log
   shows `confirmation_failed`.
 
   Report with the event itself: its confirm token names the request, which a new
-  request replaces. Hand the event as a whole to a job of your own, not
+  request replaces. If you report from a job of your own, hand it the event as a whole, not
   `$event->subscription`: a job with `SerializesModels` loads the model afresh,
   with the latest request. The event carries the plain tokens, so make that job
   `ShouldBeEncrypted`, like the listener. Each request takes one report, and the first one
@@ -189,6 +221,17 @@ Laravel discovers the listener in `app/Listeners` by itself.
     the cooldown and the count back.
   - A cycle that was confirmed or has ended, an entry that was erased, and a
     cycle that started without a request have nothing to fail.
+- **The wording in the mail.** The list shows the stored text of each purpose
+  still held; a purpose withdrawn while the request was pending is left out. The
+  view renders the lines as Markdown, so keep the wording plain text.
+- **Erased in between.** The listener returns when the entry no longer exists, so
+  retrying an old job does not mail an erased address.
+- **The listener is yours to wire.** Event discovery must be on for the app (it
+  is by default; `shouldDiscoverEvents()` or a `withEvents(discover: [...])` that
+  leaves out `app/Listeners` turns it off), and with `php artisan event:cache`
+  you re-cache after adding the file. `waitlist:install --mail` writes no
+  listener when `EntrySubscribed` already has one, since a second would send every
+  mail twice: it replaces a confirmation listener, it does not add to one.
 - **The link.** `confirmUrl` points at your confirm page, the `confirm` page of
   the project's [`urls()`](projects.md#pages), or at the package route. A plain
   GET must never confirm, since mail scanners follow every link: the page posts
@@ -196,7 +239,8 @@ Laravel discovers the listener in `app/Listeners` by itself.
 
 ## The preference page link
 
-The link in every mail can only remove someone. To change purposes, download or
+The link in every mail can only remove someone, and read their place in line
+where a list [publishes it](reference/http-api.md#count-and-position). To change purposes, download or
 erase their data, people use the preference page, which opens with a short-lived
 manage link. It is mailed to the address on request, so it stands in for a login:
 whoever asks for it never sees it.
@@ -244,6 +288,8 @@ privacy notice, and `waitlist:export` and `waitlist:forget` answer them.
 
 Optional: a mail once the double opt-in is completed. Check the rules that apply
 to your messages; this example is no statement that sending them is lawful.
+An address [imported](gdpr.md#importing-existing-subscribers) with its time of
+consent fires `EntryImported` instead, so it gets no welcome mail.
 
 ```php
 // app/Listeners/SendWaitlistWelcomeMail.php
@@ -419,7 +465,8 @@ providers offer their own unsubscribe handling instead; see their documentation.
 
 ## Several projects
 
-Each project is its own product, usually with its own sender. Listeners see the
+`waitlist:install --mail` writes one listener for every project. To pick the sender
+per project, change it as below. Each project is its own product, usually with its own sender. Listeners see the
 project on the entry and pick sender, template and mailer from it:
 
 ```php
@@ -431,24 +478,18 @@ return [
 ```
 
 ```php
-// in SendWaitlistConfirmationMail
-public function handle(EntrySubscribed $event): void
-{
-    if (! $event->requiresConfirmation) {
-        return;
-    }
+// in SendWaitlistConfirmationMail, instead of the Mail::to() call inside the try
+$product = config("products.{$event->entry->project}");
 
-    $product = config("products.{$event->entry->project}");
-    $confirmUrl = $event->confirmUrl ?? throw new LogicException("Set the confirm page of {$event->entry->project} in urls() or enable the package routes.");
+$mail = (new ConfirmWaitlistMail($confirmUrl, $event->unsubscribeUrl, $agreedTo))
+    ->from($product['from'], $product['name']);
 
-    $mail = (new ConfirmWaitlistMail($confirmUrl, $event->unsubscribeUrl, $event->subscription->consents->pluck('text')->all()))
-        ->from($product['from'], $product['name']);
-
-    Mail::mailer($product['mailer'])->to($event->entry->email)->send($mail);
-
-    Waitlist::confirmationMailed($event, "confirm-mail@{$event->entry->project}-2026-10");
-}
+Mail::mailer($product['mailer'])->to($event->entry->email)->send($mail);
 ```
+
+Keep the `try`, the `confirmationFailed()` report and the rethrow around it, and
+make the reference per product: `Waitlist::confirmationMailed($event, "confirm-mail@{$event->entry->project}-1")`.
+`$agreedTo` is the list of held wordings the scaffold builds inline.
 
 Send from each product's own domain, with its own SPF and DKIM records. `ManageLinkRequested`,
 `EntryConfirmed` and `recipients()` give you the entry, and so the project, the
