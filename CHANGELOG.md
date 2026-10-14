@@ -60,6 +60,7 @@
 - The confirm and unsubscribe links have a route for GET, which only reports, and a route for POST (`confirm.store`, `unsubscribe.store`), which acts; the URLs and answers are unchanged, so run `php artisan route:cache` again if you cache routes
 - Breaking: `Waitlist::verifySpamUsing()` and `Waitlist::spamProtector()` are gone, bind a `SpamProtector` (`ClosureSpamProtector` wraps a closure); the `ConfirmationUrlGenerator` contract is now `LinkGenerator` and `DefaultConfirmationUrlGenerator` is `DefaultLinkGenerator`; `ListPolicy::doubleOptIn` is a method, `doubleOptIn()`
 - Purposes and versions may be up to 255 characters, the length of their columns; `waitlist_wordings.project` holds the 100 characters a project name may have, which keeps the unique index within what MySQL holds, and wording for a longer project name is refused. `widen_waitlist_wordings_table` widens a table that `v0.1.1` created, and on MySQL and MariaDB first shrinks `project` to 100 characters, so a project name longer than that makes it fail
+- A Boost guideline (`resources/boost/guidelines/core.blade.php`) is installed with the bundled skills, so the conventions that matter in every task are loaded upfront
 
 ## [v0.1.1](https://github.com/taldres/laravel-waitlist/commits/main/compare/v0.1.0...v0.1.1) - 2026-10-14
 
