@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Actions;
 
+use Closure;
 use Illuminate\Database\Eloquent\Collection;
 use Taldres\Waitlist\Config\ConfigFallback;
 use Taldres\Waitlist\Enums\EndReason;
@@ -44,15 +45,25 @@ class WithdrawConsent
      * can still be withdrawn and a repeat changes nothing. One transaction for
      * all lists: the events wait for the commit, so a failing listener cannot
      * leave the purpose withdrawn on some lists only.
+     *
+     * @throws InvalidTokenException when the entry was erased meanwhile
      */
     public function withdraw(WaitlistEntry $entry, string $purpose, ?RequestContext $context = null): WaitlistEntry
     {
         $context ??= RequestContext::none();
 
-        static::waitlistConnection()->transaction(function () use ($entry, $purpose, $context): void {
-            $primaryHere = $this->isPrimaryOf($entry, $purpose);
+        $this->forAddress($entry, function (Collection $holders) use ($entry, $purpose, $context): void {
+            $self = $holders->first(fn (WaitlistEntry $holder): bool => $holder->is($entry));
 
-            foreach ($this->entriesOfAddress($entry) as $holder) {
+            // Erased meanwhile: its primary purpose can no longer be read, and
+            // guessing would end the address's other waitlists.
+            if ($self === null) {
+                return;
+            }
+
+            $primaryHere = $this->isPrimaryOf($self, $purpose);
+
+            foreach ($holders as $holder) {
                 $cycle = $holder->currentSubscription;
                 $consent = $cycle === null ? null : $this->liveConsent($cycle, $purpose);
 
@@ -68,7 +79,39 @@ class WithdrawConsent
             }
         });
 
-        return $entry->refresh();
+        // Erased meanwhile: the token names nothing any more.
+        return $entry->fresh() ?? throw InvalidTokenException::make();
+    }
+
+    /**
+     * Runs a step on the address's entries in the entry's project, locked in
+     * key order before anything is read: a withdrawal reaches every list of
+     * the address, and two that lock them in different orders would deadlock.
+     * The entries are found first, outside the transaction, so the reads that
+     * decide come after the lock, also under a snapshot that a plain read
+     * would fix. An entry erased meanwhile is left out.
+     *
+     * @internal
+     *
+     * @template TReturn
+     *
+     * @param  Closure(Collection<int, WaitlistEntry>): TReturn  $step
+     * @return TReturn
+     */
+    public function forAddress(WaitlistEntry $entry, Closure $step): mixed
+    {
+        $keys = $this->entriesOfAddress($entry)->modelKeys();
+
+        return static::waitlistConnection()->transaction(function () use ($entry, $keys, $step): mixed {
+            $holders = static::modelClass()::query()
+                ->whereKey($keys)
+                ->orderBy($entry->getKeyName())
+                ->lockForUpdate()
+                ->get()
+                ->load('currentSubscription');
+
+            return $step($holders);
+        }, attempts: 3);
     }
 
     /**
@@ -114,7 +157,6 @@ class WithdrawConsent
 
         return ConfigFallback::read(
             fn (): Collection => static::modelClass()::query()
-                ->with('currentSubscription')
                 ->inProject($entry->project)
                 ->forEmail($email)
                 ->get(),
@@ -128,7 +170,6 @@ class WithdrawConsent
     protected function entriesOfHash(WaitlistEntry $entry): Collection
     {
         $entries = static::modelClass()::query()
-            ->with('currentSubscription')
             ->inProject($entry->project)
             ->where('email_hash', $entry->email_hash)
             ->get();

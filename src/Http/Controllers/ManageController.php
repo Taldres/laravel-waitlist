@@ -12,6 +12,7 @@ use Taldres\Waitlist\Actions\SyncPurposes;
 use Taldres\Waitlist\Actions\UnsubscribeEntry;
 use Taldres\Waitlist\Enums\ApiError;
 use Taldres\Waitlist\Enums\Page;
+use Taldres\Waitlist\Exceptions\InvalidTokenException;
 use Taldres\Waitlist\Exceptions\MissingConsentException;
 use Taldres\Waitlist\Exceptions\UnknownPurposeException;
 use Taldres\Waitlist\Exceptions\UnknownWaitlistException;
@@ -108,7 +109,12 @@ class ManageController
             return $this->redirectFor(Page::Expired->value, $entry) ?? $this->expired();
         }
 
-        $entry = $unsubscribe->unsubscribe($entry, RequestContext::fromRequest($request));
+        try {
+            $entry = $unsubscribe->unsubscribe($entry, RequestContext::fromRequest($request));
+        } catch (InvalidTokenException) {
+            // Erased by a request that crossed this one.
+            return $this->redirectFor(Page::Invalid->value) ?? $this->invalid();
+        }
 
         return $this->redirectFor(Page::Unsubscribed->value, $entry) ?? new WaitlistEntryResource($entry);
     }

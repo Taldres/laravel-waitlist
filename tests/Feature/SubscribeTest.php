@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Str;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Enums\ActivityType;
 use Taldres\Waitlist\Enums\ConfigKey;
@@ -166,6 +168,17 @@ it('caps how many lists an address can be waiting on, so made-up list names cann
     Event::assertDispatchedTimes(EntrySubscribed::class, 4);
     // The held-back request is the cycle's first, not a reminder.
     Event::assertDispatched(EntrySubscribed::class, fn (EntrySubscribed $event) => $event->entry->is($third->entry) && $event->isNewCycle);
+    assertWaitlistInvariants();
+});
+
+it('lets a listener\'s missing model escape from a resubscribe instead of starting another entry', function () {
+    $tokens = subscribeAndCapture('beta', 'user@example.com');
+    Waitlist::unsubscribe($tokens['unsubscribe']);
+    Event::listen(EntrySubscribed::class, fn () => WaitlistEntry::query()->whereKey((string) Str::uuid())->firstOrFail());
+
+    expect(fn () => Waitlist::subscribe('beta', 'user@example.com', waitlistConsent()))->toThrow(ModelNotFoundException::class)
+        ->and(WaitlistEntry::query()->count())->toBe(1);
+
     assertWaitlistInvariants();
 });
 

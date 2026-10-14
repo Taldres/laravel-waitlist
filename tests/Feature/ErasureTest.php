@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Taldres\Waitlist\Actions\EraseEntry;
 use Taldres\Waitlist\Enums\ActivityType;
 use Taldres\Waitlist\Enums\ConfigKey;
+use Taldres\Waitlist\Enums\EntryStatus;
 use Taldres\Waitlist\Events\EntryForgotten;
+use Taldres\Waitlist\Exceptions\InvalidTokenException;
 use Taldres\Waitlist\Facades\Waitlist;
 use Taldres\Waitlist\Models\WaitlistActivity;
 use Taldres\Waitlist\Models\WaitlistEntry;
@@ -91,4 +94,43 @@ it('announces an erasure for a plain model delete too', function () {
     WaitlistEntry::factory()->confirmed()->create()->delete();
 
     Event::assertDispatchedTimes(EntryForgotten::class, 1);
+});
+
+it('ends no other list when the entry a withdrawal names is erased on its way', function () {
+    $left = subscribeAndCapture('alpha', 'user@example.com');
+    Waitlist::confirm($left['confirm']);
+    $stays = subscribeAndCapture('beta', 'user@example.com');
+    Waitlist::confirm($stays['confirm']);
+
+    $erased = false;
+    // Between finding the address's entries and locking them.
+    DB::connection()->beforeExecuting(function (string $query) use (&$erased, $left) {
+        // SQLite leaves out the FOR UPDATE, so the lock is told by its order.
+        if (! $erased && preg_match('/^select .*waitlist_entries.* in \(.*\) order by/i', $query) === 1) {
+            $erased = true;
+            app(EraseEntry::class)($left['entry']);
+        }
+    });
+
+    expect(fn () => Waitlist::unsubscribe($left['unsubscribe']))->toThrow(InvalidTokenException::class)
+        ->and($erased)->toBeTrue()
+        ->and(WaitlistEntry::query()->sole()->status)->toBe(EntryStatus::Confirmed);
+
+    assertWaitlistInvariants();
+});
+
+it('answers an unsubscribe by address whose entry was erased on its way as not on the list', function () {
+    $tokens = subscribeAndCapture('alpha', 'user@example.com');
+
+    $erased = false;
+    DB::connection()->beforeExecuting(function (string $query) use (&$erased, $tokens) {
+        if (! $erased && preg_match('/^select .*waitlist_entries.* in \(.*\) order by/i', $query) === 1) {
+            $erased = true;
+            app(EraseEntry::class)($tokens['entry']);
+        }
+    });
+
+    expect(Waitlist::for('alpha')->unsubscribe('user@example.com'))->toBeNull()
+        ->and($erased)->toBeTrue()
+        ->and(WaitlistEntry::query()->count())->toBe(0);
 });

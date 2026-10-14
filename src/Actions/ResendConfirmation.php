@@ -57,8 +57,13 @@ class ResendConfirmation
             return false;
         }
 
-        /** @var WaitlistEntry $entry */
-        $entry = $subscription->entry()->firstOrFail();
+        $entry = $subscription->entry()->first();
+
+        // Erased meanwhile: nobody left to mail.
+        if ($entry === null) {
+            return false;
+        }
+
         $email = $entry->readableEmail();
 
         if ($email !== null && $this->addressSaturated($entry->project, $email, except: $subscription)) {

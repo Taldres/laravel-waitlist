@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Taldres\Waitlist\Actions\EraseEntry;
 use Taldres\Waitlist\Actions\ResendConfirmation;
@@ -11,6 +12,7 @@ use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\ConfirmationOutcome;
 use Taldres\Waitlist\Enums\EndReason;
 use Taldres\Waitlist\Enums\EntryStatus;
+use Taldres\Waitlist\Enums\SubscribeOutcome;
 use Taldres\Waitlist\Events\ConsentGranted;
 use Taldres\Waitlist\Events\ConsentWithdrawn;
 use Taldres\Waitlist\Events\EntryConfirmed;
@@ -303,3 +305,54 @@ it('settles a mail report and a failure report that cross on the first of them',
 
     assertWaitlistInvariants();
 })->with(['mailed first' => 'mailed', 'failed first' => 'failed']);
+
+it('keeps a link that another client replaced from confirming', function () {
+    config()->set(ConfigKey::ResendCooldown->value, null);
+
+    $tokens = subscribeAndCapture('beta', 'user@example.com');
+
+    $stale = $this->as('a', fn () => Waitlist::findByConfirmToken($tokens['confirm']));
+
+    $this->as('b', fn () => Waitlist::resendConfirmation('beta', 'user@example.com'));
+
+    Event::fake([EntryConfirmed::class]);
+
+    $won = $this->as('a', fn () => app(SubscriptionLifecycle::class)->confirm($stale, RequestContext::none()));
+
+    expect($won)->toBeFalse()
+        ->and(WaitlistEntry::query()->firstOrFail()->status)->toBe(EntryStatus::Pending);
+
+    Event::assertNotDispatched(EntryConfirmed::class);
+    assertWaitlistInvariants();
+});
+
+it('acts on a signup committed after the snapshot of an application transaction', function () {
+    config()->set(ConfigKey::MaxPendingPerAddress->value, null);
+
+    // A read fixes the snapshot on MySQL and MariaDB; the other client signs
+    // up after it. MariaDB's snapshot isolation refuses the locking read of
+    // the changed row instead, which the application's retry takes care of.
+    $outcome = $this->as('a', fn () => DB::connection('waitlist_a')->transaction(function () {
+        WaitlistEntry::query()->count();
+        $this->as('b', fn () => Waitlist::subscribe('beta', 'user@example.com', waitlistConsent()));
+
+        return Waitlist::subscribe('beta', 'user@example.com', waitlistConsent())->outcome;
+    }, attempts: 3));
+
+    expect($outcome)->toBe(SubscribeOutcome::ResendSuppressed);
+    assertWaitlistInvariants();
+});
+
+it('reports a confirm that another client made after the snapshot of an application transaction as done', function () {
+    $tokens = subscribeAndCapture('beta', 'user@example.com');
+
+    $entry = $this->as('a', fn () => DB::connection('waitlist_a')->transaction(function () use ($tokens) {
+        WaitlistEntry::query()->count();
+        $this->as('b', fn () => Waitlist::confirm($tokens['confirm']));
+
+        return Waitlist::confirm($tokens['confirm']);
+    }, attempts: 3));
+
+    expect($entry->getKey())->toBe($tokens['entry']->getKey())
+        ->and(WaitlistEntry::query()->firstOrFail()->status)->toBe(EntryStatus::Confirmed);
+});

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Events\ManageLinkRequested;
@@ -38,6 +39,25 @@ it('mints a fresh unsubscribe token when the stored one cannot be decrypted', fu
     expect($token)->not->toBeEmpty()
         ->and(WaitlistEntry::query()->firstOrFail()->unsubscribe_token_hash)->toBe(WaitlistEntry::hashToken($token))
         ->and(WaitlistEntry::query()->firstOrFail()->unsubscribe_token_hash)->not->toBe($oldHash);
+});
+
+it('hands out one token when two requests mint it at once', function () {
+    $entry = WaitlistEntry::factory()->pending()->create();
+    WaitlistEntry::query()->whereKey($entry->getKey())->update(['unsubscribe_token' => 'not-decryptable']);
+
+    $other = null;
+    DB::connection()->beforeExecuting(function (string $query) use (&$other, $entry) {
+        if ($other === null && preg_match('/^update \W?waitlist_entries\W? set \W?unsubscribe_token_hash/i', $query) === 1) {
+            $other = false;
+            $other = Waitlist::unsubscribeToken($entry->fresh())->token;
+        }
+    });
+
+    $token = Waitlist::unsubscribeToken($entry->fresh())->token;
+
+    expect($token)->toBe($other)
+        ->and(WaitlistEntry::query()->firstOrFail()->unsubscribe_token_hash)->toBe(WaitlistEntry::hashToken($token))
+        ->and(WaitlistEntry::query()->firstOrFail()->plainUnsubscribeToken())->toBe($token);
 });
 
 it('builds no unsubscribe url when routes are disabled and no pattern is set', function () {

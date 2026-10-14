@@ -32,6 +32,7 @@ class GrantConsent
      * @throws ExpiredTokenException
      * @throws UnknownWaitlistException
      * @throws UnknownPurposeException
+     * @throws InvalidTokenException when the entry was erased meanwhile
      */
     public function __invoke(string $plainToken, string $purpose, string $version, ?string $locale = null, ?RequestContext $context = null): WaitlistEntry
     {
@@ -50,6 +51,7 @@ class GrantConsent
      *
      * @throws UnknownWaitlistException
      * @throws UnknownPurposeException
+     * @throws InvalidTokenException when the entry was erased meanwhile
      */
     public function grant(WaitlistEntry $entry, string $purpose, string $version, ?string $locale = null, ?RequestContext $context = null): WaitlistEntry
     {
@@ -60,6 +62,7 @@ class GrantConsent
             $this->lifecycle->grant($current, $wording, $context ?? RequestContext::none());
         }
 
-        return $entry->refresh();
+        // Erased meanwhile: the token names nothing any more.
+        return $entry->fresh() ?? throw InvalidTokenException::make();
     }
 }

@@ -20,6 +20,7 @@ use Taldres\Waitlist\Actions\UnsubscribeEntry;
 use Taldres\Waitlist\Actions\WithdrawConsent;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Exceptions\InvalidEmailException;
+use Taldres\Waitlist\Exceptions\InvalidTokenException;
 use Taldres\Waitlist\Exceptions\ManageLinksDisabledException;
 use Taldres\Waitlist\Exceptions\MissingConsentException;
 use Taldres\Waitlist\Exceptions\UnknownPurposeException;
@@ -128,25 +129,34 @@ class ScopedWaitlist
     /**
      * Withdraws the list's primary purpose, which also withdraws that purpose
      * where it is optional elsewhere in the project. For mail links use
-     * Waitlist::unsubscribe($token).
+     * Waitlist::unsubscribe($token). Null, too, when an erasure removed the
+     * address on the way.
      */
     public function unsubscribe(string $email, ?RequestContext $context = null): ?WaitlistEntry
     {
         $entry = $this->find($email);
 
-        return $entry ? app(UnsubscribeEntry::class)->unsubscribe($entry, $context) : null;
+        try {
+            return $entry ? app(UnsubscribeEntry::class)->unsubscribe($entry, $context) : null;
+        } catch (InvalidTokenException) {
+            return null;
+        }
     }
 
     /**
      * The list's primary purpose ends this list only; an optional purpose is
      * withdrawn on every list of the project and ends the lists that exist only
-     * for it.
+     * for it. Null, too, when an erasure removed the address on the way.
      */
     public function withdraw(string $email, string $purpose, ?RequestContext $context = null): ?WaitlistEntry
     {
         $entry = $this->find($email);
 
-        return $entry ? app(WithdrawConsent::class)->withdraw($entry, $purpose, $context) : null;
+        try {
+            return $entry ? app(WithdrawConsent::class)->withdraw($entry, $purpose, $context) : null;
+        } catch (InvalidTokenException) {
+            return null;
+        }
     }
 
     /**

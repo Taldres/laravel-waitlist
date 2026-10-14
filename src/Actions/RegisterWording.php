@@ -45,6 +45,24 @@ class RegisterWording
             throw WordingConflictException::mixed($purpose, $version);
         }
 
+        try {
+            return $this->registerAll($project, $purpose, $version, $texts);
+        } catch (UniqueConstraintViolationException) {
+            // Another deploy registered the version first; check against theirs.
+            return $this->registerAll($project, $purpose, $version, $texts);
+        }
+    }
+
+    /**
+     * @param  array<array-key, string>  $texts
+     *
+     * @throws WordingConflictException
+     * @throws UniqueConstraintViolationException
+     */
+    private function registerAll(string $project, string $purpose, string $version, array $texts): int
+    {
+        // Two deploys registering a new version at once deadlock on MySQL and
+        // MariaDB (gap locks) and violate the unique index on PostgreSQL.
         return static::waitlistConnection()->transaction(function () use ($project, $purpose, $version, $texts): int {
             $registered = WaitlistWording::query()
                 ->where('project', $project)
@@ -82,7 +100,7 @@ class RegisterWording
             }
 
             return $written;
-        });
+        }, attempts: 3);
     }
 
     /**

@@ -27,6 +27,6 @@ class EraseEntry
             $locked = ($stillApplies === null ? $query : $stillApplies($query))->lockForUpdate()->first();
 
             return $locked !== null && $locked->delete() === true;
-        });
+        }, attempts: 3);
     }
 }

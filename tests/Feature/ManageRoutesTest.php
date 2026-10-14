@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Taldres\Waitlist\Actions\EraseEntry;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\EntryStatus;
@@ -111,6 +113,24 @@ describe('with routes enabled', function () {
 
         defineDefaultProject(fn (ProjectDefinition $project) => $project->urls(unsubscribed: 'https://app.test/goodbye'));
         $this->post("/waitlist/manage/{$this->manage}/unsubscribe")->assertRedirect('https://app.test/goodbye');
+    });
+
+    it('answers an unsubscribe whose entry an erasure removed on the way as an invalid link', function () {
+        $erased = false;
+        // SQLite leaves out the FOR UPDATE, so the lock is told by its order.
+        DB::connection()->beforeExecuting(function (string $query) use (&$erased) {
+            if (! $erased && preg_match('/^select .*waitlist_entries.* in \(.*\) order by/i', $query) === 1) {
+                $erased = true;
+                app(EraseEntry::class)(WaitlistEntry::query()->sole());
+            }
+        });
+
+        $this->postJson("/waitlist/manage/{$this->manage}/unsubscribe")
+            ->assertNotFound()
+            ->assertJsonPath('error', 'invalid_token');
+
+        expect($erased)->toBeTrue()
+            ->and(WaitlistEntry::query()->count())->toBe(0);
     });
 
     it('answers 410 once the manage link has expired', function () {

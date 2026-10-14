@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Actions;
 
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Str;
 use Taldres\Waitlist\Contracts\EmailNormalizer;
@@ -80,18 +81,34 @@ class SubscribeToWaitlist
 
         $metadata = self::scrub($metadata);
 
-        $entry = $this->find($policy, $email);
+        return $this->findAndAct($policy, $doubleOptIn, $email, $metadata, $wordings, $context);
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     * @param  list<PurposeWording>  $wordings
+     */
+    protected function findAndAct(ListPolicy $policy, bool $doubleOptIn, string $email, array $metadata, array $wordings, RequestContext $context, bool $retried = false): SubscribeResult
+    {
+        $entry = $this->find($policy, $email, current: $retried);
 
         if ($entry === null) {
             try {
                 return $this->createWithCycle($policy, $doubleOptIn, $email, $metadata, $wordings, $context);
             } catch (UniqueConstraintViolationException) {
-                // A concurrent request created the address first.
-                $entry = $this->find($policy, $email) ?? throw new UnknownWaitlistException('The waitlist entry vanished mid-request.');
+                // A concurrent request created the address first, or erased
+                // it again since: then the address is new once more.
+                $entry = $this->find($policy, $email, current: true);
+
+                if ($entry === null) {
+                    return $retried
+                        ? throw new UnknownWaitlistException('The waitlist entry vanished mid-request.')
+                        : $this->findAndAct($policy, $doubleOptIn, $email, $metadata, $wordings, $context, retried: true);
+                }
             }
         }
 
-        return $this->continueExisting($policy, $doubleOptIn, $entry, $email, $metadata, $wordings, $context);
+        return $this->continueExisting($policy, $doubleOptIn, $entry, $email, $metadata, $wordings, $context, $retried);
     }
 
     /**
@@ -118,7 +135,7 @@ class SubscribeToWaitlist
             ]);
 
             return [$entry, $this->lifecycle->start($entry, $wordings, $context, $doubleOptIn, $confirmToken)];
-        });
+        }, attempts: 3);
 
         return new SubscribeResult($entry, $subscription, $deferred ? SubscribeOutcome::ConfirmationDeferred : SubscribeOutcome::Started);
     }
@@ -154,7 +171,19 @@ class SubscribeToWaitlist
                 }
 
                 return $subscription;
-            });
+            }, attempts: 3);
+        } catch (ModelNotFoundException $exception) {
+            // Erased while this request was on its way: the address is new
+            // again. Anything else, such as a listener's lookup, is not ours.
+            if ($this->stillStored($entry)) {
+                throw $exception;
+            }
+
+            if ($retried) {
+                throw new UnknownWaitlistException('The waitlist entry could not get a new cycle.');
+            }
+
+            return $this->findAndAct($policy, $doubleOptIn, $email, $metadata, $wordings, $context, retried: true);
         } catch (UniqueConstraintViolationException) {
             // A concurrent request opened the new cycle first; act on theirs,
             // once: a violation that persists is no race.
@@ -162,19 +191,59 @@ class SubscribeToWaitlist
                 throw new UnknownWaitlistException('The waitlist entry could not get a new cycle.');
             }
 
-            return $this->continueExisting($policy, $doubleOptIn, $entry->refresh(), $email, [], $wordings, $context, retried: true);
+            return $this->findAndAct($policy, $doubleOptIn, $email, $metadata, $wordings, $context, retried: true);
         }
 
         return new SubscribeResult($entry, $subscription, $deferred ? SubscribeOutcome::ConfirmationDeferred : SubscribeOutcome::Resubscribed);
     }
 
-    protected function find(ListPolicy $policy, string $email): ?WaitlistEntry
+    /**
+     * Read past a snapshot the application's transaction may hold, as find()
+     * does with $current. A plain select, as a lock clause inside EXISTS is
+     * not portable.
+     */
+    protected function stillStored(WaitlistEntry $entry): bool
     {
-        return static::modelClass()::query()
-            ->with(['currentSubscription', 'latestSubscription'])
+        $query = static::modelClass()::query()->whereKey($entry->getKey());
+
+        return (static::waitlistConnection()->transactionLevel() > 0 ? $query->lockForUpdate() : $query)->value($entry->getKeyName()) !== null;
+    }
+
+    /**
+     * With $current inside a transaction of the application, what a
+     * concurrent request has just committed is seen, though the transaction's
+     * snapshot may predate it (MySQL's REPEATABLE READ): only a locking read
+     * reads past it. The cycle is then read by its key, as only the latest one
+     * can be open, so no index range of other entries is locked. Outside a
+     * transaction, a plain read already sees it.
+     */
+    protected function find(ListPolicy $policy, string $email, bool $current = false): ?WaitlistEntry
+    {
+        if (! $current || static::waitlistConnection()->transactionLevel() === 0) {
+            return static::modelClass()::query()
+                ->with(['currentSubscription', 'latestSubscription'])
+                ->onList($policy->list, $policy->project)
+                ->forEmail($email)
+                ->first();
+        }
+
+        $entry = static::modelClass()::query()
             ->onList($policy->list, $policy->project)
             ->forEmail($email)
+            ->lockForUpdate()
             ->first();
+
+        if ($entry === null) {
+            return null;
+        }
+
+        $latest = $entry->latest_subscription_id === null ? null : static::subscriptionModelClass()::query()
+            ->whereKey($entry->latest_subscription_id)
+            ->lockForUpdate()
+            ->first();
+
+        return $entry->setRelation('latestSubscription', $latest)
+            ->setRelation('currentSubscription', $latest !== null && $latest->isOpen() ? $latest : null);
     }
 
     /**
