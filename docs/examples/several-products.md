@@ -177,24 +177,20 @@ return [
 ];
 ```
 
+`php artisan waitlist:install --mail` writes the listener; change it as follows.
+
 ```php
-// app/Listeners/SendWaitlistConfirmationMail.php
-public function handle(EntrySubscribed $event): void
-{
-    if (! $event->requiresConfirmation) {
-        return;
-    }
+// app/Listeners/SendWaitlistConfirmationMail.php, instead of the Mail::to() call inside the try
+$product = config("products.{$event->entry->project}");
 
-    $product = config("products.{$event->entry->project}");
+$mail = (new ConfirmWaitlistMail($confirmUrl, $event->unsubscribeUrl, $agreedTo))
+    ->from($product['from'], $product['name']);
 
-    $mail = (new ConfirmWaitlistMail($event->confirmUrl, $event->unsubscribeUrl, $event->subscription->consents->pluck('text')->all()))
-        ->from($product['from'], $product['name']);
-
-    Mail::mailer($product['mailer'])->to($event->entry->email)->send($mail);
-
-    Waitlist::confirmationMailed($event, "confirm-mail@{$event->entry->project}-2026-10");
-}
+Mail::mailer($product['mailer'])->to($event->entry->email)->send($mail);
 ```
+
+Keep the `try` with its `confirmationFailed()` report and rethrow, and give the
+reference the product: `Waitlist::confirmationMailed($event, "confirm-mail@{$event->entry->project}-1")`.
 
 `ConfirmWaitlistMail` and the queued listener around it are in
 [Mail](../mail.md#the-confirmation-mail); the preference page link works the same

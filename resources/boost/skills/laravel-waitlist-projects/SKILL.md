@@ -116,6 +116,15 @@ $this->app->bind(\Taldres\Waitlist\Contracts\ProjectResolver::class, \App\Waitli
   before the body is validated: the project decides which fields are accepted,
   and a refused request answers `401`/`403` unread.
 - An unknown project from the resolver: signup `422`, wording `404`.
+- Pages that call from the browser: bind `PublishableKeyResolver`, give each
+  project `$project->publishableKey(config('services.<key>.waitlist_key'))` and
+  `origins([...])`, and let the page send the key in `X-Waitlist-Key` (allowed in
+  `config/cors.php`). A missing or unknown key answers `403`; a key two projects
+  share is a configuration error, and `waitlist:check` names such projects and
+  definitions that cannot be built. The key is public: it picks the project and
+  authorizes nothing, so the `useWaitlist` gate, `waitlist.authentication.required`
+  and `origins()` keep deciding who may call. A server acting for a project
+  (`HasWaitlistProject`) sends the key too and is kept to its own project (`404`).
 - Own controllers need no resolver; they call `Waitlist::project(...)` directly.
 - Never authenticate in `waitlist.routes.middleware`; it also guards token links.
 
@@ -187,7 +196,8 @@ For projects that come and go at runtime, or manage their own lists and wording,
 bind a `ProjectCatalog` in a provider's `register()`, usually extending
 `StoredWordingCatalog`, with `policy()`, `fields()` (field => rules; stored rules
 can only be strings), `urlPattern()`, `manageLinks()`, `origins()` (a list, empty for any), `periods()` (a `ProjectPeriods`, `new ProjectPeriods` for none), `projects()` (must include
-`default`) and `lists()`, plus a resolver that maps a publishable key to a project. A catalog of
+`default`) and `lists()`, plus a resolver that maps a publishable key to a project: extend
+`PublishableKeyResolver` and override `project(string $key): ?string` to read your table. A catalog of
 your own replaces the definitions. Projects register wording with
 `Waitlist::project($key)->registerWording()`.
 
@@ -218,7 +228,8 @@ your own replaces the definitions. Projects register wording with
   signup goes to `default`.
 - Relying on the default gate to close an API: without
   `waitlist.authentication.required` or `AuthenticatedProjectResolver`, a caller
-  that leaves out its token is a guest, and guests may.
+  that leaves out its token is a guest, and guests may. A publishable key does
+  not close it either: anyone can copy it from the page.
 - Calling `Waitlist::for($list)` for a product that has a project of its own.
 - Expecting a project to inherit the purposes, lists, fields or pages of the
   default project.

@@ -25,8 +25,10 @@ class WaitlistServiceProvider extends ServiceProvider
         // Which project a signup, the wording and a manage link requested by
         // address are for, by the site the form is on for example; see
         // "Several products in one app" in docs/projects.md. Token links need
-        // none. Servers that call with credentials of their own, such as a
-        // Sanctum token, bind \Taldres\Waitlist\Support\AuthenticatedProjectResolver.
+        // none. Pages that send a project's publishableKey() in the
+        // X-Waitlist-Key header bind \Taldres\Waitlist\Support\PublishableKeyResolver;
+        // servers that call with credentials of their own, such as a Sanctum
+        // token, bind \Taldres\Waitlist\Support\AuthenticatedProjectResolver.
         // $this->app->bind(\Taldres\Waitlist\Contracts\ProjectResolver::class, \App\Waitlist\SiteResolver::class);
 
         // Read the wording registered with waitlist:wording --project, or sent
@@ -83,6 +85,11 @@ class WaitlistServiceProvider extends ServiceProvider
 
             // The websites that may use this project from a browser.
             // $project->origins(['https://rocket.example']);
+
+            // The key its pages send with PublishableKeyResolver. It is
+            // public and only picks the project; origins() above keeps
+            // other websites from using it.
+            // $project->publishableKey(config('services.rocket.waitlist_key'));
         });
 
         Waitlist::define('anvil', function (ProjectDefinition $project): void {

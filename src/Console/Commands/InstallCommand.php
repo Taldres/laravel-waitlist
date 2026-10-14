@@ -5,16 +5,19 @@ declare(strict_types=1);
 namespace Taldres\Waitlist\Console\Commands;
 
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
+use Taldres\Waitlist\Events\EntrySubscribed;
 
 class InstallCommand extends Command
 {
     protected $signature = 'waitlist:install
-        {--projects : Start the provider with several named projects instead of the default one}';
+        {--projects : Start the provider with several named projects instead of the default one}
+        {--mail : Also write the confirmation mail: a mailable, its view and a queued listener for EntrySubscribed}';
 
-    protected $description = 'Publish the waitlist service provider, config and migrations, and register the provider';
+    protected $description = 'Publish the waitlist service provider, config and migrations, register the provider, and optionally scaffold the confirmation mail';
 
     public function handle(): int
     {
@@ -40,6 +43,10 @@ class InstallCommand extends Command
         $this->components->task('Publishing the migrations', fn (): bool => $this->callSilent('vendor:publish', ['--tag' => 'waitlist-migrations']) === self::SUCCESS);
 
         $this->registerProvider();
+
+        if ($this->option('mail') && ! $this->scaffoldMail()) {
+            return self::FAILURE;
+        }
 
         if (! $projects || $existed) {
             $this->components->info('Describe your waitlist in app/Providers/WaitlistServiceProvider.php, then run php artisan migrate.');
@@ -67,6 +74,71 @@ class InstallCommand extends Command
         File::ensureDirectoryExists(dirname($path));
 
         return File::copy(dirname(__DIR__, 3).'/stubs/WaitlistServiceProvider.projects.stub', $path);
+    }
+
+    /**
+     * Written once and owned by the app afterwards, so an existing file is
+     * left as it is. Laravel discovers the listener in app/Listeners by the
+     * type hint of handle(); a second listener for the event would send every
+     * mail twice, so --mail replaces an existing confirmation listener rather
+     * than adding one.
+     *
+     * A wildcard listener (Telescope registers one) does not count: only a
+     * listener registered for the event itself.
+     *
+     * @return bool false when a file could not be written
+     */
+    protected function scaffoldMail(): bool
+    {
+        $namespace = Str::replaceLast('\\', '', $this->laravel->getNamespace());
+        $listener = $this->laravel->path('Listeners/SendWaitlistConfirmationMail.php');
+
+        $files = [
+            'ConfirmWaitlistMail' => [$this->laravel->path('Mail/ConfirmWaitlistMail.php'), 'app/Mail/ConfirmWaitlistMail.php'],
+            'SendWaitlistConfirmationMail' => [$listener, 'app/Listeners/SendWaitlistConfirmationMail.php'],
+            'confirm.blade' => [$this->laravel->resourcePath('views/mail/waitlist/confirm.blade.php'), 'resources/views/mail/waitlist/confirm.blade.php'],
+        ];
+
+        $written = [];
+
+        foreach ($files as $stub => [$path, $label]) {
+            if (is_file($path)) {
+                $this->components->warn("{$label} already exists and was left as it is.");
+
+                continue;
+            }
+
+            if ($path === $listener && (Event::getRawListeners()[EntrySubscribed::class] ?? []) !== []) {
+                $this->components->warn("EntrySubscribed already has a listener, so {$label} was not written: --mail replaces an existing confirmation listener, it does not add a second one. Send app/Mail/ConfirmWaitlistMail.php from your own listener, or remove that listener and run this again.");
+
+                continue;
+            }
+
+            File::ensureDirectoryExists(dirname($path));
+
+            $contents = str_replace('{{ namespace }}', $namespace, (string) file_get_contents(dirname(__DIR__, 3)."/stubs/mail/{$stub}.stub"));
+            $ok = File::put($path, $contents) !== false;
+
+            $this->components->task("Writing {$label}", fn (): bool => $ok);
+
+            if (! $ok) {
+                $this->components->error("Could not write {$label}.");
+
+                return false;
+            }
+
+            $written[] = $path;
+        }
+
+        if (in_array($listener, $written, true) && ! in_array($this->laravel->path('Mail/ConfirmWaitlistMail.php'), $written, true)) {
+            $this->components->warn('The listener was written next to a ConfirmWaitlistMail that already existed: check that its constructor takes the confirm URL, the unsubscribe URL and the list of wordings.');
+        }
+
+        if ($written !== []) {
+            $this->components->info('The confirmation mail is yours now: review its text and sender, and set the confirm page in urls() or enable the package routes. See docs/mail.md.');
+        }
+
+        return true;
     }
 
     /**

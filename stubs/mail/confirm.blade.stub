@@ -1,0 +1,16 @@
+<x-mail::message>
+# One more step
+
+Please confirm that you asked us to:
+
+@foreach ($agreedTo as $text)
+- {{ $text }}
+@endforeach
+
+<x-mail::button :url="$confirmUrl">Confirm</x-mail::button>
+
+If you didn't sign up, ignore this mail and nothing happens.
+@if ($unsubscribeUrl)
+You can also [unsubscribe]({{ $unsubscribeUrl }}) right away.
+@endif
+</x-mail::message>

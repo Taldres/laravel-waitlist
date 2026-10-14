@@ -466,9 +466,12 @@ reject a request with `abort()`. It runs once per request, first, then the
 validated: the project decides which fields are accepted, and a refused request
 answers without its body being looked at. A project it returns that is not
 defined is treated like an unknown list: the signup answers `422`, the wording
-`404`. When the projects' servers authenticate, the
+`404`. The package ships two resolvers: the
+[`PublishableKeyResolver`](#pages-that-call-from-the-browser-publishablekeyresolver)
+takes the project from a key the page sends, and when the projects' servers
+authenticate, the
 [`AuthenticatedProjectResolver`](#servers-with-credentials-authenticatedprojectresolver)
-takes the project from their credentials instead.
+takes it from their credentials.
 
 Two more things per project:
 
@@ -481,6 +484,61 @@ Two more things per project:
 
 Your own controllers need no resolver: they name the project themselves with
 `Waitlist::project('anvil')`.
+
+### Pages that call from the browser: `PublishableKeyResolver`
+
+When the sites' pages call the API straight from the browser, give each project
+a publishable key and let the page send it in the `X-Waitlist-Key` header:
+
+```php
+Waitlist::define('anvil', function (ProjectDefinition $project): void {
+    // ...
+    $project->publishableKey(config('services.anvil.waitlist_key'));
+    $project->origins(['https://anvil.example']);
+});
+```
+
+```php
+// app/Providers/WaitlistServiceProvider.php, in register()
+$this->app->bind(\Taldres\Waitlist\Contracts\ProjectResolver::class, \Taldres\Waitlist\Support\PublishableKeyResolver::class);
+```
+
+**The key is public**: it ships in the page, and anyone can copy it. It only
+picks the project, the way the site's address would, and authorizes nothing.
+Who may call is still decided by the
+[`useWaitlist` gate](#who-may-call-the-usewaitlist-gate) and
+`authentication.required`, and from which websites a browser may call by the
+project's [`origins()`](#websites-that-may-use-a-project), so list them: without
+origins, any website can use a copied key. A script outside a browser can send
+any key and any `Origin`; bots are the
+[spam protector's](securing-the-endpoints.md#bot-protection-via-spamprotector)
+job. Never use a secret, such as an API token, as a publishable key.
+
+- A request without a key, or with one no project has, answers `403`
+  ("Unknown waitlist key."), before the body is validated. Keys are compared in
+  constant time and case-sensitively, and two projects that share a key are a
+  configuration error rather than one of them winning. A definition that throws
+  is reported and skipped, so the other projects keep taking signups and its key
+  answers `403` ("Unknown waitlist key."), also when the cause is passing, such as
+  a database outage in its callback, so that `403` can mean "try again later" too; while it is broken, a key it shares with another project goes
+  to that one. `waitlist:check` names both, a definition that cannot be built
+  and projects that share a key, by project, never by key.
+- A key is 1 to 255 visible ASCII characters without spaces; whitespace around
+  it, such as the line break a secret file ends with, is dropped. Null, an
+  empty or a blank value sets none, so a project whose environment variable is
+  unset is not reachable by key. To change a key, deploy the pages with the new one as you
+  switch it: a project has one key at a time.
+- A server that calls with credentials of its own and acts for a project
+  (`HasWaitlistProject`) sends the key too: the key picks the project, and the
+  default gate keeps the server to its own, answering `404` for another
+  project's key. A server that should not need the key takes the
+  [`AuthenticatedProjectResolver`](#servers-with-credentials-authenticatedprojectresolver).
+- The header is a custom one, so a page on another website needs it in
+  `allowed_headers` of [`config/cors.php`](securing-the-endpoints.md#cors).
+- With a [`ProjectCatalog` of your own](#when-the-projects-live-in-a-database),
+  the definitions hold no keys: extend the resolver and override
+  `project(string $key): ?string`, see
+  [A central waitlist API](examples/central-waitlist-api.md#3-signups-from-the-sites).
 
 ### Mail per project
 
@@ -504,7 +562,7 @@ job in them, and every other combination is possible.
 | | A public form (architecture A) | Only your app's signed-in users | Only your projects' servers (architecture C) |
 | --- | --- | --- | --- |
 | Who calls | anyone, as a guest; a server with credentials may too, and is recognised | your users, signed in with the app's own login | each site's server, with a token of its own |
-| `ProjectResolver` binding | the default (one project), or your own from a publishable key or the Origin | the default (one project), or your own; your users act for no project | `AuthenticatedProjectResolver`: the project follows from the caller |
+| `ProjectResolver` binding | the default (one project), `PublishableKeyResolver`, or your own, from the Origin for example | the default (one project), or your own; your users act for no project | `AuthenticatedProjectResolver`: the project follows from the caller |
 | `authentication.guards` | not needed; name a guard to recognise servers that call with credentials | leave it at `[null]`: the guard `auth:` signed the user in with becomes the default | the guard that authenticates the server, such as `sanctum` |
 | `routes.group_middleware.signup` | your form checks only | `auth:sanctum`: guests get `401`; a session login also needs `web` here, which brings CSRF | your form checks only; or `auth:sanctum` instead of `required` |
 | `authentication.required` | off | off: it would refuse your users with `403`, as they act for no project | on: guests get `401`, callers without a project `403` |
@@ -655,7 +713,8 @@ and it may send the wording along with a signup
 Definitions in code suit a handful of products that ship with the app. When
 projects come and go at runtime, or their teams manage their own lists and
 wording, implement a `ProjectCatalog` that reads your tables, and a resolver
-that maps a publishable key to a project. [A central waitlist API](examples/central-waitlist-api.md)
+that maps a publishable key to a project, a `PublishableKeyResolver` that reads
+the keys from your tables. [A central waitlist API](examples/central-waitlist-api.md)
 shows both. A catalog of your own replaces the definitions entirely, the fields
 included: its `fields($project, $list)` returns the rules the HTTP signup applies,
 `urlPattern($project, $action)` is asked for a page by its

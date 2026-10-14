@@ -239,8 +239,11 @@ the `422` names `list`. See [Fields](../projects.md#fields).
 
 The signup, the wording and a manage link requested by address act for the
 project the bound `ProjectResolver` picks. The default always picks `default`;
-with several projects, bind your own, see
+with several projects, bind another, see
 [Projects, lists and fields](../projects.md#over-http-tell-the-package-which-project-a-signup-is-for).
+With `PublishableKeyResolver`, a client sends the project's publishable key in
+`X-Waitlist-Key`; a missing or unknown key answers `403`. The key is public and
+authorizes nothing.
 Token links need none, since every token belongs to an entry.
 
 Then the `useWaitlist` gate decides whether the caller may act for that project

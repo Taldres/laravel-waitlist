@@ -80,7 +80,9 @@ php artisan migrate
 
 `waitlist:install` publishes the migrations, the config and
 `app/Providers/WaitlistServiceProvider.php`, where you describe your waitlist,
-and registers that provider.
+and registers that provider. `--mail` also writes the double opt-in
+confirmation mail, its view and its queued listener into your app, see
+[Mail](docs/mail.md#the-confirmation-mail).
 
 Addresses are encrypted with `APP_KEY`: back it up apart from the database, and
 keep the old key in `APP_PREVIOUS_KEYS` when you rotate it. See
@@ -137,32 +139,11 @@ $result = Waitlist::for('default')->add('jane@example.com', [
 ]);
 ```
 
-The package sends no mail. Your listener sends the confirmation:
-
-```php
-use Illuminate\Contracts\Queue\ShouldBeEncrypted;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Taldres\Waitlist\Events\EntrySubscribed;
-
-class SendWaitlistConfirmationMail implements ShouldQueue, ShouldBeEncrypted
-{
-    public function handle(EntrySubscribed $event): void
-    {
-        if (! $event->requiresConfirmation) {
-            return;
-        }
-
-        // ConfirmWaitlistMail is yours: see docs/mail.md for one
-        Mail::to($event->entry->email)->send(new ConfirmWaitlistMail(
-            $event->confirmUrl,
-            $event->unsubscribeUrl,
-            $event->subscription->consents->pluck('text')->all(),
-        ));
-
-        Waitlist::confirmationMailed($event, 'confirm-mail@2026-10');
-    }
-}
-```
+The package sends no mail. A queued listener for `EntrySubscribed` sends the
+confirmation and reports it with `Waitlist::confirmationMailed()`, or a failed
+send with `Waitlist::confirmationFailed()`. `php artisan waitlist:install --mail`
+writes the Mailable, its view and that listener into your app; see
+[Mail](docs/mail.md#the-confirmation-mail) for what they do.
 
 Your pages post the token back:
 

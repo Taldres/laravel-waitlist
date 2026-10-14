@@ -17,6 +17,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
+use Taldres\Waitlist\Definitions\ProjectDefinitions;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\WaitlistLimiter;
 use Taldres\Waitlist\Events\EntryForgotten;
@@ -24,6 +25,7 @@ use Taldres\Waitlist\Events\ManageLinkRequested;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Facades\Waitlist;
 use Taldres\Waitlist\Support\AuthenticatedProjectResolver;
+use Taldres\Waitlist\Support\PublishableKeyResolver;
 use Taldres\Waitlist\Support\StoredWordingCatalog;
 use Taldres\Waitlist\Tests\TestCase;
 use Taldres\Waitlist\WaitlistServiceProvider;
@@ -246,6 +248,47 @@ it('states the limits per server only where a caller can act for a project', fun
     'signed-in users only' => [[ConfigKey::SignupMiddleware->value => ['auth:sanctum']], false, false],
     'servers recognised on a public form' => [[ConfigKey::AuthenticationGuards->value => ['sanctum']], false, true],
     'servers only, by auth middleware and their resolver' => [[ConfigKey::SignupMiddleware->value => ['auth:sanctum']], true, true],
+]);
+
+it('describes a publishable key as public, not as access control', function () {
+    config()->set(ConfigKey::RoutesEnabled->value, true);
+    config()->set('app.url', 'https://api.example.com');
+    app()->bind(ProjectResolver::class, PublishableKeyResolver::class);
+
+    Waitlist::define('acme', fn (ProjectDefinition $project) => TestCase::defineTestProject($project->publishableKey('pk_acme')->origins(['https://acme.example'])));
+    Waitlist::define('rocket', fn (ProjectDefinition $project) => TestCase::defineTestProject($project->publishableKey('pk_rocket')));
+
+    expect(privacyRecord())
+        ->toContain('- Signups, the wording and manage links by address pick their project by a publishable key in the `X-Waitlist-Key` header. The key is public, shown by every page that sends it: it authorizes nothing and keeps nobody out.')
+        ->toContain("Who may call is decided by the useWaitlist gate, authentication.required and any auth middleware on the signup; which websites a browser may call from is decided by each project's origins (none set for rocket, so any website may); a script outside a browser can send any key and any origin. Projects without a key (default) cannot be reached this way")
+        ->not->toContain('pk_acme')
+        ->not->toContain('pk_rocket');
+});
+
+it('counts every project without origins as open when a subclass reads the keys', function () {
+    config()->set(ConfigKey::RoutesEnabled->value, true);
+    config()->set('app.url', 'https://api.example.com');
+    app()->bind(ProjectResolver::class, fn () => new class(app(ProjectDefinitions::class), app(ProjectCatalog::class)) extends PublishableKeyResolver {});
+
+    Waitlist::define('rocket', fn (ProjectDefinition $project) => TestCase::defineTestProject($project->publishableKey('pk_rocket')));
+
+    expect(privacyRecord())
+        ->toContain("is decided by each project's origins (none set for default, rocket, so any website may); a script outside a browser can send any key and any origin")
+        ->not->toContain('cannot be reached this way');
+});
+
+it('says nothing of publishable keys with another resolver or without routes', function (bool $routes, bool $keys) {
+    config()->set(ConfigKey::RoutesEnabled->value, $routes);
+    config()->set('app.url', 'https://api.example.com');
+
+    if ($keys) {
+        app()->bind(ProjectResolver::class, PublishableKeyResolver::class);
+    }
+
+    expect(privacyRecord())->not->toContain('publishable key');
+})->with([
+    'the default resolver' => [true, false],
+    'routes disabled' => [false, true],
 ]);
 
 it('still writes the record while the signup middleware does not read', function () {

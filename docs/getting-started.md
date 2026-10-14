@@ -22,7 +22,9 @@ php artisan migrate
 
 `waitlist:install` publishes the migrations, `config/waitlist.php` and
 `app/Providers/WaitlistServiceProvider.php`, and registers the provider in
-`bootstrap/providers.php`. Back up `APP_KEY` apart from the database: addresses
+`bootstrap/providers.php`. With double opt-in, add `--mail` to also write the
+confirmation mail, its view and its queued listener into your app, see
+[Mail](mail.md#the-confirmation-mail). Back up `APP_KEY` apart from the database: addresses
 are encrypted with it.
 
 ## 2. Define the purposes and the list
@@ -169,33 +171,20 @@ Say the same for a new and a known address, so the form reveals nobody.
 
 ## 5. Send the confirmation mail and confirm
 
-The package sends no mail. A listener sends the confirmation and records a mail
-reference alongside the consent wording:
+The package sends no mail. A queued listener for `EntrySubscribed` sends the
+confirmation and records a mail reference alongside the consent wording
+(`confirmationMailed()`), or reports a send that failed (`confirmationFailed()`).
+The short path:
 
-```php
-use Illuminate\Contracts\Queue\ShouldBeEncrypted;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Taldres\Waitlist\Events\EntrySubscribed;
-
-class SendWaitlistConfirmationMail implements ShouldQueue, ShouldBeEncrypted
-{
-    public function handle(EntrySubscribed $event): void
-    {
-        if (! $event->requiresConfirmation) {
-            return;
-        }
-
-        Mail::to($event->entry->email)->send(new ConfirmWaitlistMail(
-            $event->confirmUrl,
-            $event->unsubscribeUrl,
-            $event->subscription->consents->pluck('text')->all(),   // what is being confirmed
-        ));
-        Waitlist::confirmationMailed($event, 'confirm-mail@2026-10');
-    }
-}
+```bash
+php artisan waitlist:install --mail
 ```
 
-The Mailable, its template and the mailer setup are in
+This writes the Mailable, its Markdown view and the listener into your app, and
+leaves files that exist alone. They are yours to edit. Laravel discovers the
+listener, so you register nothing, and the command writes no listener while
+`EntrySubscribed` already has one. What the files do, how to set the mailer and
+how to send from a sender per project are in
 [Mail](mail.md#the-confirmation-mail). The link leads to your confirm page, which
 posts the token back. A plain GET on it must not confirm: mail scanners follow
 every link.

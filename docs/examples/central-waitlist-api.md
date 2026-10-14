@@ -17,7 +17,7 @@ Four things stay apart:
 | Technical settings: connection, retention | `config/waitlist.php` |
 | Which catalog and which resolver | bindings in a service provider |
 | Projects, lists, fields, wording versions, frontend URLs | your database, behind a `ProjectCatalog` |
-| Which project a signup is for | a `ProjectResolver`, e.g. from a publishable key |
+| Which project a signup is for | a `ProjectResolver`, e.g. `PublishableKeyResolver` reading your keys |
 | The wording a person agreed to | the consent snapshot the package stores |
 
 ## 1. A catalog in your database
@@ -155,27 +155,33 @@ sends it. See [Wording sent by your servers](../purposes-and-wording.md#wording-
 Enable the package routes and tell the package which project a request is for.
 A `ProjectResolver` maps whatever identifies a site to a project. A signup form
 is public, so a publishable key is enough: it only decides which lists, fields and
-wording apply, which anyone could learn by visiting the site anyway.
+wording apply, which anyone could learn by visiting the site anyway. The page
+sends it in the `X-Waitlist-Key` header. The package's `PublishableKeyResolver`
+reads the keys from the definitions; extend it to read them from your table:
 
 ```php
-use Illuminate\Http\Request;
-use Taldres\Waitlist\Contracts\ProjectResolver;
+use Taldres\Waitlist\Support\PublishableKeyResolver;
 
-class PublishableKeyResolver implements ProjectResolver
+class ProjectKeyResolver extends PublishableKeyResolver
 {
-    public function resolve(Request $request): string
+    protected function project(string $key): ?string
     {
-        $key = (string) $request->header('X-Waitlist-Key');
-
-        return Project::query()->where('publishable_key', $key)->value('key') ?? abort(401);
+        return Project::query()->where('publishable_key', $key)->value('key');
     }
 }
 ```
 
 ```php
 // app/Providers/WaitlistServiceProvider.php, in register()
-$this->app->bind(\Taldres\Waitlist\Contracts\ProjectResolver::class, \App\Waitlist\PublishableKeyResolver::class);
+$this->app->bind(\Taldres\Waitlist\Contracts\ProjectResolver::class, \App\Waitlist\ProjectKeyResolver::class);
 ```
+
+A missing key, one your table does not have and a project your catalog's
+`projects()` does not list all answer `403`. Give `publishable_key` a unique
+index, so two projects can never share a key; `waitlist:check` only compares the
+keys of definitions. The key authorizes nothing: the `useWaitlist` gate and each site's
+`origins()` still decide who may call, see
+[Pages that call from the browser](../projects.md#pages-that-call-from-the-browser-publishablekeyresolver).
 
 ```dotenv
 WAITLIST_ROUTES_ENABLED=true
@@ -206,7 +212,8 @@ and where browsers land afterwards, come from its `urlPattern()`; the
 since the one-click request has to reach the package.
 
 Keep the key check out of `routes.middleware`: it applies to the token links
-too. List the sites together in `config/cors.php`, and return each site's origins
+too. List the sites together in `config/cors.php`, with `X-Waitlist-Key` in its
+`allowed_headers`, and return each site's origins
 from `origins($project)` of your catalog: they refuse other sites' browsers for
 that project. Configure trusted proxies so the rate limiter sees real client IPs.
 

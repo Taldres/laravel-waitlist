@@ -143,7 +143,9 @@ invitation and a macro that invites the next people in line.
 The table above, with each contract bound in the container, your own models, the
 events and the macros are the supported extension points. A change to one of
 them is a breaking change and is called out in the changelog. `DefinedProjectCatalog` and `StoredWordingCatalog` count
-among them as base classes for a catalog of your own, as
+among them as base classes for a catalog of your own, and `PublishableKeyResolver`
+as the base class of a resolver that reads the keys from elsewhere: its
+constructor, its `project(string $key): ?string` and its `HEADER` constant, as
 [A central waitlist API](examples/central-waitlist-api.md) shows.
 
 Other public classes with behavior, such as the actions, `SubscriptionLifecycle`,
