@@ -4,20 +4,24 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Console\Commands;
 
+use Illuminate\Console\Attributes\Description;
+use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Illuminate\Contracts\Console\PromptsForMissingInput;
+use Taldres\Waitlist\Console\Concerns\ReadsStringOptions;
 use Taldres\Waitlist\Enums\EntryStatus;
 use Taldres\Waitlist\Exports\CsvExporter;
 use Taldres\Waitlist\Models\WaitlistEntry;
 
-class ExportCommand extends Command
-{
-    protected $signature = 'waitlist:export
+#[Signature('waitlist:export
         {list : The waitlist key to export}
         {--project=default : The project the list belongs to}
         {--status= : Only export entries with this status (pending, confirmed, unsubscribed)}
-        {--path= : Target CSV file path (defaults to waitlist-{list}.csv in the current directory)}';
-
-    protected $description = 'Export waitlist entries to a CSV file';
+        {--path= : Target CSV file path (defaults to waitlist-{list}.csv in the current directory)}')]
+#[Description('Export waitlist entries to a CSV file')]
+class ExportCommand extends Command implements PromptsForMissingInput
+{
+    use ReadsStringOptions;
 
     public function handle(CsvExporter $exporter): int
     {
@@ -28,9 +32,9 @@ class ExportCommand extends Command
         }
 
         $status = null;
-        $statusOption = $this->option('status');
+        $statusOption = $this->stringOption('status');
 
-        if (is_string($statusOption) && $statusOption !== '') {
+        if ($statusOption !== null) {
             $status = EntryStatus::tryFrom($statusOption);
 
             if (! $status) {
@@ -38,14 +42,9 @@ class ExportCommand extends Command
             }
         }
 
-        $pathOption = $this->option('path');
-        $path = (is_string($pathOption) && $pathOption !== '')
-            ? $pathOption
-            : getcwd()."/waitlist-{$list}.csv";
+        $path = $this->stringOption('path') ?? getcwd()."/waitlist-{$list}.csv";
 
-        $project = $this->option('project');
-
-        $rows = $exporter->export(list: $list, status: $status, path: $path, project: is_string($project) && $project !== '' ? $project : WaitlistEntry::DEFAULT_PROJECT);
+        $rows = $exporter->export(list: $list, status: $status, path: $path, project: $this->stringOption('project') ?? WaitlistEntry::DEFAULT_PROJECT);
 
         $this->info("Exported {$rows} entries to {$path}.");
 

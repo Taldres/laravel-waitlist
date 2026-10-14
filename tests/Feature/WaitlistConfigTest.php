@@ -218,9 +218,7 @@ describe('a mistake in one setting', function () {
     });
 
     it('never keeps a person from unsubscribing over the routes either', function () {
-        config()->set(ConfigKey::RoutesEnabled->value, true);
-        config()->set(ConfigKey::RoutesMiddleware->value, []);
-        require __DIR__.'/../../routes/waitlist.php';
+        enableWaitlistRoutes();
 
         $tokens = subscribeAndCapture('beta', 'user@example.com');
 

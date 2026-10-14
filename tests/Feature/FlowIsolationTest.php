@@ -8,7 +8,6 @@ use Taldres\Waitlist\Contracts\EmailNormalizer;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Contracts\SpamProtector;
-use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\EntryStatus;
 use Taldres\Waitlist\Events\ManageLinkRequested;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
@@ -23,10 +22,7 @@ use Taldres\Waitlist\Models\WaitlistEntry;
  */
 
 beforeEach(function () {
-    config()->set(ConfigKey::RoutesEnabled->value, true);
-    config()->set(ConfigKey::RoutesMiddleware->value, []);
-
-    require __DIR__.'/../../routes/waitlist.php';
+    enableWaitlistRoutes();
 });
 
 /**

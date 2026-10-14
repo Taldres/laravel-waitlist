@@ -13,10 +13,18 @@ return new class extends Migration
         return is_string($connection) && $connection !== '' ? $connection : null;
     }
 
+    /**
+     * Guarded, so an application that published the migrations of an earlier
+     * release and publishes them all again does not fail on the tables it has.
+     */
     public function up(): void
     {
+        if (Schema::hasTable('waitlist_consents')) {
+            return;
+        }
+
         Schema::create('waitlist_consents', function (Blueprint $table) {
-            $table->bigIncrements('id');
+            $table->id();
             $table->foreignId('waitlist_subscription_id')
                 ->constrained('waitlist_subscriptions')
                 ->cascadeOnDelete();

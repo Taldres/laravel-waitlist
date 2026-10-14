@@ -15,6 +15,8 @@ use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
  * waitlist.authentication.guards that authenticates the request, or null for a
  * guest. The project resolver and the useWaitlist gate both ask here, so they
  * always see the same caller. Kept on the request, which never outlives it.
+ *
+ * @internal
  */
 final class WaitlistCaller
 {

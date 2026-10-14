@@ -118,7 +118,7 @@ accepting it; stored consents keep their wording. A purpose defined with no
 versions is retired: lists stop offering it, and stored consents can still be
 withdrawn.
 
-Defining a purpose again replaces it. Names and versions are at most 100
+Defining a purpose again replaces it. Names and versions are at most 255
 characters, locales at most 35. More in
 [Purposes and wording](purposes-and-wording.md), including wording that a CMS or
 your frontend registers instead.

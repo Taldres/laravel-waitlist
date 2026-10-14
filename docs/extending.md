@@ -4,11 +4,11 @@ Add your own columns, methods and integrations without forking the package.
 
 | You want to | Use |
 | --- | --- |
-| point mail links at a page per list or locale | `ConfirmationUrlGenerator`, see [the SPA example](examples/landing-page-spa.md#2-point-the-mail-links-at-your-pages); one page per project needs only [`urls()`](projects.md#pages) |
+| point mail links at a page per list or locale | `LinkGenerator`, see [the SPA example](examples/landing-page-spa.md#2-point-the-mail-links-at-your-pages); one page per project needs only [`urls()`](projects.md#pages) |
 | decide which project an HTTP signup is for | `ProjectResolver`, see [Projects, lists and fields](projects.md#over-http-tell-the-package-which-project-a-signup-is-for) |
 | decide who may sign up, read the wording or request a manage link, per project and list | the `useWaitlist` gate, see [Who may call](projects.md#who-may-call-the-usewaitlist-gate) |
 | keep projects, lists, fields, pages and wording in your database | `ProjectCatalog`, see [A central waitlist API](examples/central-waitlist-api.md) |
-| check signups for bots | `SpamProtector` or `Waitlist::verifySpamUsing()`, see [Securing the endpoints](securing-the-endpoints.md#bot-protection-via-spamprotector) |
+| check signups for bots | `SpamProtector`, see [Securing the endpoints](securing-the-endpoints.md#bot-protection-via-spamprotector) |
 | decide which spellings are the same address | `EmailNormalizer`, see [Encryption and keys](encryption-and-keys.md#the-email-normalizer) |
 | encrypt with a key of your own | `Model::encryptUsing()` for the whole app, `Waitlist::encryptUsing()` for the package only, see [Encryption and keys](encryption-and-keys.md#your-own-encrypter) |
 | put the tables on another database | `waitlist.connection` |
@@ -33,10 +33,7 @@ public function register(): void
 Use `bind()`. The package binds its defaults with `bindIf()` when it registers,
 which Laravel does before your providers: your `bind()` then replaces the
 default, while a `bindIf()` of yours would find the contract bound and leave the
-default in place. A binding made before the package registers is kept. On the
-signup and the manage link by address, a closure from `Waitlist::verifySpamUsing()`
-wins over the bound `SpamProtector`, which is then not even built;
-`app(SpamProtector::class)` still resolves the bound class.
+default in place. A binding made before the package registers is kept.
 
 ## Your own models
 

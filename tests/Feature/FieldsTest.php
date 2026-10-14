@@ -10,7 +10,6 @@ use Illuminate\Validation\Rule;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
-use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Exceptions\UnknownWaitlistException;
 use Taldres\Waitlist\Facades\Waitlist;
 use Taldres\Waitlist\Models\WaitlistEntry;
@@ -93,10 +92,7 @@ function defineFieldsTestProductProject(): void
 beforeEach(function () {
     // The provider registers routes at boot, before this flag is set, so register them again.
     // Middleware is cleared: the testbench skeleton defines no "api" group.
-    config()->set(ConfigKey::RoutesEnabled->value, true);
-    config()->set(ConfigKey::RoutesMiddleware->value, []);
-
-    require __DIR__.'/../../routes/waitlist.php';
+    enableWaitlistRoutes();
 });
 
 describe('a project without fields', function () {

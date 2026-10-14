@@ -7,6 +7,7 @@ namespace Taldres\Waitlist\Exports;
 use BackedEnum;
 use DateTimeInterface;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Str;
 use RuntimeException;
 use Stringable;
 use Taldres\Waitlist\Config\WaitlistConfig;
@@ -42,9 +43,7 @@ class CsvExporter
     {
         $handle = fopen($path, 'w');
 
-        if ($handle === false) {
-            throw new RuntimeException("Unable to open [{$path}] for writing.");
-        }
+        throw_if($handle === false, RuntimeException::class, "Unable to open [{$path}] for writing.");
 
         try {
             return $this->write(handle: $handle, list: $list, status: $status, project: $project);
@@ -105,6 +104,6 @@ class CsvExporter
      */
     private function neutralizeFormula(string $value): string
     {
-        return $value !== '' && str_contains("=+-@\t\r", $value[0]) ? "'".$value : $value;
+        return Str::startsWith($value, ['=', '+', '-', '@', "\t", "\r"]) ? "'".$value : $value;
     }
 }

@@ -5,18 +5,13 @@ declare(strict_types=1);
 namespace Taldres\Waitlist\Support;
 
 use Closure;
-use Error;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 
-/**
- * @property-read bool $doubleOptIn whether a signup starts with a confirmation; only a signup that starts a
- *                                  cycle reads it
- */
 final readonly class ListPolicy
 {
     /**
      * @param  list<string>  $optional
-     * @param  bool|Closure(): bool  $doubleOptIn  a closure runs each time the property is read, so a policy built
+     * @param  bool|Closure(): bool  $doubleOptIn  a closure runs each time doubleOptIn() is called, so a policy built
      *                                             to withdraw a purpose does not depend on a setting that only a
      *                                             signup needs
      * @param  bool  $publicCount  whether GET /count answers for the list
@@ -33,19 +28,13 @@ final readonly class ListPolicy
         public bool $publicPosition = false,
     ) {}
 
-    // The property is private so that reading it from outside lands here.
-    public function __get(string $name): bool
+    /**
+     * Whether a signup starts with a confirmation; only a signup that starts a
+     * cycle asks.
+     */
+    public function doubleOptIn(): bool
     {
-        if ($name !== 'doubleOptIn') {
-            throw new Error('Undefined property: '.self::class.'::$'.$name);
-        }
-
         return $this->doubleOptIn instanceof Closure ? ($this->doubleOptIn)() : $this->doubleOptIn;
-    }
-
-    public function __isset(string $name): bool
-    {
-        return $name === 'doubleOptIn';
     }
 
     /**
@@ -80,7 +69,7 @@ final readonly class ListPolicy
     private function confirmsByMail(): bool
     {
         try {
-            return $this->doubleOptIn instanceof Closure ? ($this->doubleOptIn)() : $this->doubleOptIn;
+            return $this->doubleOptIn();
         } catch (InvalidConfigurationException) {
             return false;
         }

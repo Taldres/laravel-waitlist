@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Routing\RouteCollection;
 use Illuminate\Support\Facades\Event;
-use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
+use Taldres\Waitlist\Contracts\LinkGenerator;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\EntryStatus;
@@ -17,10 +17,7 @@ use Taldres\Waitlist\Tests\Fixtures\RequireFormCheck;
 beforeEach(function () {
     // The provider registers routes at boot, before this flag is set, so register them again.
     // Middleware is cleared: the testbench skeleton defines no "api" group.
-    config()->set(ConfigKey::RoutesEnabled->value, true);
-    config()->set(ConfigKey::RoutesMiddleware->value, []);
-
-    require __DIR__.'/../../routes/waitlist.php';
+    enableWaitlistRoutes();
 
     $this->tokens = function (): array {
         $tokens = [];
@@ -461,7 +458,7 @@ it('serves the routes and builds the mail links under any prefix and name', func
 
     expect($confirmUrl)->toBe("{$root}{$base}/confirm/{$confirm}")
         ->and($unsubscribeUrl)->toBe("{$root}{$base}/unsubscribe/{$unsubscribe}")
-        ->and(app(ConfirmationUrlGenerator::class)->manageUrl(WaitlistEntry::query()->firstOrFail(), 'token'))->toBe("{$root}{$base}/manage/token");
+        ->and(app(LinkGenerator::class)->manageUrl(WaitlistEntry::query()->firstOrFail(), 'token'))->toBe("{$root}{$base}/manage/token");
 
     $this->post("{$base}/unsubscribe/{$unsubscribe}", ['List-Unsubscribe' => 'One-Click'])->assertOk();
 

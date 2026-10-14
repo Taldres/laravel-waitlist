@@ -13,11 +13,19 @@ return new class extends Migration
         return is_string($connection) && $connection !== '' ? $connection : null;
     }
 
+    /**
+     * Guarded, so an application that published the migrations of an earlier
+     * release and publishes them all again does not fail on the tables it has.
+     */
     public function up(): void
     {
+        if (Schema::hasTable('waitlist_subscriptions')) {
+            return;
+        }
+
         Schema::create('waitlist_subscriptions', function (Blueprint $table) {
             // Numeric PK, so rows order without a database-specific uuid function.
-            $table->bigIncrements('id');
+            $table->id();
             $table->foreignUuid('waitlist_entry_id')
                 ->constrained('waitlist_entries')
                 ->cascadeOnDelete();

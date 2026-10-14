@@ -193,10 +193,10 @@ describe('purposes', function () {
 
         expect(fn () => app(ProjectCatalog::class)->versions('default', 'waitlist'))->toThrow(InvalidArgumentException::class, $message);
     })->with([
-        'empty purpose' => [fn (ProjectDefinition $project) => $project->purpose('', ['v1' => 'Text.']), 'must be named with 1 to 100 characters, [] is not'],
-        'long purpose' => [fn (ProjectDefinition $project) => $project->purpose(str_repeat('p', 101), ['v1' => 'Text.']), 'must be named with 1 to 100 characters'],
-        'empty version' => [fn (ProjectDefinition $project) => $project->purpose('waitlist', ['' => 'Text.']), 'must be 1 to 100 characters long, [] is not'],
-        'long version' => [fn (ProjectDefinition $project) => $project->purpose('waitlist', [str_repeat('v', 101) => 'Text.']), 'must be 1 to 100 characters long'],
+        'empty purpose' => [fn (ProjectDefinition $project) => $project->purpose('', ['v1' => 'Text.']), 'must be named with 1 to 255 characters, [] is not'],
+        'long purpose' => [fn (ProjectDefinition $project) => $project->purpose(str_repeat('p', 256), ['v1' => 'Text.']), 'must be named with 1 to 255 characters'],
+        'empty version' => [fn (ProjectDefinition $project) => $project->purpose('waitlist', ['' => 'Text.']), 'must be 1 to 255 characters long, [] is not'],
+        'long version' => [fn (ProjectDefinition $project) => $project->purpose('waitlist', [str_repeat('v', 256) => 'Text.']), 'must be 1 to 255 characters long'],
     ]);
 
     it('ignores purposes no list offers', function () {
@@ -219,11 +219,11 @@ describe('lists', function () {
     it('follows the configured double opt-in when the list does not say, read on every use', function () {
         $catalog = app(ProjectCatalog::class);
 
-        expect($catalog->policy('default', 'beta')->doubleOptIn)->toBeTrue();
+        expect($catalog->policy('default', 'beta')->doubleOptIn())->toBeTrue();
 
         config()->set(ConfigKey::DoubleOptIn->value, false);
 
-        expect($catalog->policy('default', 'beta')->doubleOptIn)->toBeFalse();
+        expect($catalog->policy('default', 'beta')->doubleOptIn())->toBeFalse();
     });
 
     it('lets an explicit double opt-in win over a global switch that is off', function () {
@@ -295,7 +295,7 @@ describe('lists', function () {
     })->with([
         'primary' => [fn (ProjectDefinition $project) => $project->list('beta', purpose: '')],
         'optional' => [fn (ProjectDefinition $project) => $project->list('beta', purpose: 'waitlist')->optional('')],
-    ])->throws(InvalidArgumentException::class, 'must be named with 1 to 100 characters');
+    ])->throws(InvalidArgumentException::class, 'must be named with 1 to 255 characters');
 
     it('still reports a primary purpose without wording when the list is used', function () {
         defineDefaultProject(fn (ProjectDefinition $project) => $project->list('beta', purpose: 'undefined'));

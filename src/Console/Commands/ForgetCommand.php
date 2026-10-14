@@ -4,30 +4,30 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Console\Commands;
 
+use Illuminate\Console\Attributes\Description;
+use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Taldres\Waitlist\Actions\ForgetEmail;
+use Taldres\Waitlist\Console\Concerns\ReadsStringOptions;
 use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\ScopedWaitlist;
 
-class ForgetCommand extends Command
-{
-    protected $signature = 'waitlist:forget
+#[Signature('waitlist:forget
         {email? : The email address to erase}
         {--list= : Only erase from this waitlist (of the default project unless --project is given)}
         {--project= : Only erase from this project}
         {--all : Erase every entry on --list instead of one address}
-        {--force : Erase every entry on --list without asking}';
-
-    protected $description = 'Permanently delete all entries for an email address, or a whole list (right to erasure)';
+        {--force : Erase every entry on --list without asking}')]
+#[Description('Permanently delete all entries for an email address, or a whole list (right to erasure)')]
+class ForgetCommand extends Command
+{
+    use ReadsStringOptions;
 
     public function handle(ForgetEmail $forget): int
     {
         $email = $this->argument('email');
-        $list = $this->option('list');
-        $project = $this->option('project');
-        $project = is_string($project) && $project !== '' ? $project : null;
-
-        $list = is_string($list) && $list !== '' ? $list : null;
+        $list = $this->stringOption('list');
+        $project = $this->stringOption('project');
 
         if ($this->option('all')) {
             if (is_string($email) && $email !== '') {

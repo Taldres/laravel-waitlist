@@ -48,9 +48,7 @@ it('can require a hash for every choice', function () {
 });
 
 it('answers a mismatch over HTTP with a 422 on the purpose', function () {
-    config()->set(ConfigKey::RoutesEnabled->value, true);
-    config()->set(ConfigKey::RoutesMiddleware->value, []);
-    require __DIR__.'/../../routes/waitlist.php';
+    enableWaitlistRoutes();
 
     $this->postJson('/waitlist', [
         'email' => 'user@example.com',

@@ -5,13 +5,10 @@ declare(strict_types=1);
 namespace Taldres\Waitlist\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
-use Taldres\Waitlist\Auth\WaitlistGate;
-use Taldres\Waitlist\Config\WaitlistConfig;
-use Taldres\Waitlist\Contracts\ProjectResolver;
+use Taldres\Waitlist\Contracts\SpamProtector;
 use Taldres\Waitlist\Enums\ApiError;
-use Taldres\Waitlist\Enums\WaitlistAction;
 use Taldres\Waitlist\Exceptions\UnknownWaitlistException;
+use Taldres\Waitlist\Http\Requests\PurposesRequest;
 use Taldres\Waitlist\Support\PurposeWording;
 use Taldres\Waitlist\Support\TimeTrapSpamProtector;
 use Taldres\Waitlist\WaitlistManager;
@@ -23,27 +20,15 @@ class PurposesController
      * stored as consent. With the time trap as the spam protector, the answer
      * also carries the challenge the form sends back with the signup.
      */
-    public function __invoke(Request $request, WaitlistManager $waitlist, ProjectResolver $projects): JsonResponse
+    public function __invoke(PurposesRequest $request, WaitlistManager $waitlist, SpamProtector $protector): JsonResponse
     {
-        $project = $projects->resolve($request);
-        $list = $request->query('list');
-        $list = match (true) {
-            $list === null || $list === '' => WaitlistConfig::defaultList(),
-            is_string($list) => $list,
-            default => '',
-        };
-        $locale = $request->query('locale');
-
-        WaitlistGate::inspect($request, $project, WaitlistAction::ViewPurposes, $list)->authorize();
-
         try {
-            $purposes = $waitlist->project($project)->purposes($list, is_string($locale) && $locale !== '' ? $locale : null);
+            $purposes = $waitlist->project($request->project())->purposes($request->effectiveList(), $request->locale());
         } catch (UnknownWaitlistException) {
-            return new JsonResponse(['message' => 'Not found.', 'error' => ApiError::UnknownList->value], 404);
+            return ApiError::UnknownList->response();
         }
 
         $body = ['data' => array_map(fn (PurposeWording $wording) => $wording->toArray(), $purposes)];
-        $protector = $waitlist->spamProtector();
 
         if (! $protector instanceof TimeTrapSpamProtector) {
             return new JsonResponse($body);

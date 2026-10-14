@@ -170,11 +170,13 @@ the test, so the guest request would still see the server.
 ### 6. Bot checks and erasure
 
 ```php
+use Taldres\Waitlist\Contracts\SpamProtector;
 use Taldres\Waitlist\Events\EntryForgotten;
+use Taldres\Waitlist\Support\ClosureSpamProtector;
 
-Waitlist::verifySpamUsing(fn () => true);    // bypass Turnstile & co. in tests, without building it
-Waitlist::verifySpamUsing(fn () => false);   // assert the 422 with `error: spam_check_failed`
-Waitlist::verifySpamUsing(null);             // back to the bound protector
+app()->instance(SpamProtector::class, new ClosureSpamProtector(fn () => true));   // bypass Turnstile & co. in tests, without building it
+app()->instance(SpamProtector::class, new ClosureSpamProtector(fn () => false));  // assert the 422 with `error: spam_check_failed`
+app()->forgetInstance(SpamProtector::class);                                      // back to the bound protector
 
 Event::fake([EntryForgotten::class]);
 Waitlist::allProjects()->forget('jane@example.com');

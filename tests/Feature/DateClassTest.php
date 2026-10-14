@@ -5,7 +5,6 @@ declare(strict_types=1);
 use Carbon\Carbon as BaseCarbon;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
-use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\EntryStatus;
 use Taldres\Waitlist\Facades\Waitlist;
 
@@ -20,10 +19,7 @@ dataset('date classes', [
 ]);
 
 beforeEach(function () {
-    config()->set(ConfigKey::RoutesEnabled->value, true);
-    config()->set(ConfigKey::RoutesMiddleware->value, []);
-
-    require __DIR__.'/../../routes/waitlist.php';
+    enableWaitlistRoutes();
 });
 
 afterEach(fn () => Date::useDefault());

@@ -102,7 +102,7 @@ class WithdrawConsent
     {
         $keys = $this->entriesOfAddress($entry)->modelKeys();
 
-        return static::waitlistConnection()->transaction(function () use ($entry, $keys, $step): mixed {
+        return static::waitlistTransaction(function () use ($entry, $keys, $step): mixed {
             $holders = static::modelClass()::query()
                 ->whereKey($keys)
                 ->orderBy($entry->getKeyName())
@@ -111,7 +111,7 @@ class WithdrawConsent
                 ->load('currentSubscription');
 
             return $step($holders);
-        }, attempts: 3);
+        });
     }
 
     /**

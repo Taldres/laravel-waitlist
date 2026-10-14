@@ -218,7 +218,7 @@ there is no such link: building one throws `InvalidConfigurationException`, and
 the signup is undone, rather than falling back to the request's host.
 
 Need more logic than a pattern, a landing page per list or locale for example?
-Bind your own `ConfirmationUrlGenerator`, see
+Bind your own `LinkGenerator`, see
 [the SPA example](../examples/landing-page-spa.md#2-point-the-mail-links-at-your-pages).
 
 ## Metadata

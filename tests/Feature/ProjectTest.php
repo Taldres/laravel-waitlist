@@ -6,7 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
-use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
+use Taldres\Waitlist\Contracts\LinkGenerator;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
@@ -181,7 +181,7 @@ it('takes lists, wording and links from a bound catalog', function () {
 
     expect($result->entry->status)->toBe(EntryStatus::Confirmed)
         ->and($result->subscription->consents[0]->text)->toBe('Tell me when it is back in stock.')
-        ->and(app(ConfirmationUrlGenerator::class)->confirmUrl($result->entry, 'abc'))->toBe('https://shop.test/confirm/abc');
+        ->and(app(LinkGenerator::class)->confirmUrl($result->entry, 'abc'))->toBe('https://shop.test/confirm/abc');
 
     Artisan::call('waitlist:privacy');
 

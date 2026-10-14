@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Support;
 
+use Closure;
 use Illuminate\Database\Connection;
 use Illuminate\Support\Facades\DB;
 use Taldres\Waitlist\Config\WaitlistConfig;
@@ -21,7 +22,20 @@ trait ResolvesModel
     protected static function waitlistConnection(): Connection
     {
         /** @var Connection */
-        return DB::connection(WaitlistEntry::waitlistConnection());
+        return DB::connection(WaitlistConfig::connection());
+    }
+
+    /**
+     * A deadlock victim is run again; the callbacks are written for that.
+     *
+     * @template TReturn
+     *
+     * @param  Closure(): TReturn  $callback
+     * @return TReturn
+     */
+    protected static function waitlistTransaction(Closure $callback): mixed
+    {
+        return static::waitlistConnection()->transaction($callback, attempts: 3);
     }
 
     /**

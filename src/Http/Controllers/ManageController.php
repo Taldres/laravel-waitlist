@@ -17,9 +17,9 @@ use Taldres\Waitlist\Exceptions\MissingConsentException;
 use Taldres\Waitlist\Exceptions\UnknownPurposeException;
 use Taldres\Waitlist\Exceptions\UnknownWaitlistException;
 use Taldres\Waitlist\Http\Controllers\Concerns\RedirectsToFrontend;
-use Taldres\Waitlist\Http\Controllers\Concerns\ValidatesAsJson;
+use Taldres\Waitlist\Http\Requests\EraseRequest;
+use Taldres\Waitlist\Http\Requests\SyncPurposesRequest;
 use Taldres\Waitlist\Http\Resources\WaitlistEntryResource;
-use Taldres\Waitlist\Http\Rules\PurposeChoice;
 use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Support\PersonalData;
 use Taldres\Waitlist\Support\RequestContext;
@@ -33,7 +33,6 @@ class ManageController
 {
     use RedirectsToFrontend;
     use ResolvesModel;
-    use ValidatesAsJson;
 
     public function show(string $token): WaitlistEntryResource|JsonResponse|RedirectResponse
     {
@@ -63,13 +62,10 @@ class ManageController
         ]);
     }
 
-    public function purposes(Request $request, string $token, SyncPurposes $sync): WaitlistEntryResource|JsonResponse
+    public function purposes(SyncPurposesRequest $request, string $token, SyncPurposes $sync): WaitlistEntryResource|JsonResponse
     {
-        /** @var array{purposes: array<string, mixed>} $validated */
-        $validated = $this->validateAsJson($request, [
-            'purposes' => ['required', 'array', 'max:20'],
-            'purposes.*' => ['required', new PurposeChoice],
-        ]);
+        /** @var array<string, mixed> $purposes */
+        $purposes = $request->safe()->array('purposes');
 
         $entry = $this->entry($token);
 
@@ -78,16 +74,16 @@ class ManageController
         }
 
         if ($entry->currentSubscription === null) {
-            return new JsonResponse(['message' => 'Not subscribed.', 'error' => ApiError::NotSubscribed->value], 409);
+            return ApiError::NotSubscribed->response();
         }
 
         try {
-            $entry = $sync($entry, $validated['purposes'], RequestContext::fromRequest($request));
+            $entry = $sync($entry, $purposes, RequestContext::fromRequest($request));
         } catch (MissingConsentException|UnknownPurposeException $exception) {
             return new JsonResponse(['message' => $exception->getMessage(), 'errors' => ['purposes' => [$exception->getMessage()]]], 422);
         } catch (UnknownWaitlistException) {
             // The list was removed from the catalog; leaving still works.
-            return new JsonResponse(['message' => 'This list is no longer available.', 'error' => ApiError::ListUnavailable->value], 409);
+            return ApiError::ListUnavailable->response();
         }
 
         return new WaitlistEntryResource($entry);
@@ -119,10 +115,8 @@ class ManageController
         return $this->redirectFor(Page::Unsubscribed->value, $entry) ?? new WaitlistEntryResource($entry);
     }
 
-    public function erase(Request $request, string $token, EraseEntry $erase): JsonResponse|RedirectResponse
+    public function erase(EraseRequest $request, string $token, EraseEntry $erase): JsonResponse|RedirectResponse
     {
-        $this->validateAsJson($request, ['confirm' => ['accepted']]);
-
         $entry = static::modelClass()::findByManageToken($token);
 
         if ($entry === null) {
@@ -151,11 +145,11 @@ class ManageController
 
     private function invalid(): JsonResponse
     {
-        return new JsonResponse(['message' => 'Invalid token.', 'error' => ApiError::InvalidToken->value], 404);
+        return ApiError::InvalidToken->response();
     }
 
     private function expired(): JsonResponse
     {
-        return new JsonResponse(['message' => 'This link has expired.', 'error' => ApiError::ExpiredToken->value], 410);
+        return ApiError::ExpiredToken->response();
     }
 }

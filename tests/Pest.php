@@ -2,11 +2,14 @@
 
 declare(strict_types=1);
 
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Event;
 use Taldres\Waitlist\Config\WaitlistConfig;
+use Taldres\Waitlist\Contracts\SpamProtector;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Enums\ActivityType;
+use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\ConfirmationOutcome;
 use Taldres\Waitlist\Enums\EntryStatus;
 use Taldres\Waitlist\Events\EntrySubscribed;
@@ -16,10 +19,11 @@ use Taldres\Waitlist\Models\WaitlistActivity;
 use Taldres\Waitlist\Models\WaitlistConsent;
 use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Models\WaitlistSubscription;
+use Taldres\Waitlist\Support\ClosureSpamProtector;
 use Taldres\Waitlist\Support\PurposeRegistry;
 use Taldres\Waitlist\Tests\TestCase;
 
-uses(TestCase::class)->in(__DIR__);
+pest()->extend(TestCase::class)->in(__DIR__);
 
 /**
  * Reads every setting and throws the first that does not read, the way the
@@ -61,6 +65,37 @@ function defineDefaultProject(?Closure $extend = null, bool $lists = true): void
             $extend($project);
         }
     });
+}
+
+/**
+ * Turns the package routes on and registers them: the provider booted before
+ * the test set the switch, so it did not.
+ *
+ * @param  list<string>  $middleware  the testbench skeleton defines no "api" group
+ */
+function enableWaitlistRoutes(array $middleware = []): void
+{
+    config()->set(ConfigKey::RoutesEnabled->value, true);
+    config()->set(ConfigKey::RoutesMiddleware->value, $middleware);
+
+    require __DIR__.'/../routes/waitlist.php';
+}
+
+/**
+ * Binds a protector that asks the closure, or the package's default again for
+ * null.
+ *
+ * @param  (Closure(Request): bool)|null  $callback
+ */
+function useSpamCheck(?Closure $callback): void
+{
+    if ($callback === null) {
+        app()->forgetInstance(SpamProtector::class);
+
+        return;
+    }
+
+    app()->instance(SpamProtector::class, new ClosureSpamProtector($callback));
 }
 
 /**

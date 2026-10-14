@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\DB;
 use Taldres\ImmutableAttributes\Exceptions\ImmutableAttributeException;
+use Taldres\Waitlist\Actions\RegisterWording;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Exceptions\UnknownPurposeException;
@@ -141,8 +142,12 @@ it('registers for a project and warns when the catalog does not read registered 
 });
 
 it('refuses names too long to register', function () {
-    Waitlist::registerWording('waitlist', str_repeat('v', 101), 'Wording.');
-})->throws(InvalidArgumentException::class, 'up to 100 characters');
+    Waitlist::registerWording('waitlist', str_repeat('v', 256), 'Wording.');
+})->throws(InvalidArgumentException::class, 'up to 255');
+
+it('refuses a project name the wording table cannot hold', function () {
+    app(RegisterWording::class)(str_repeat('p', 101), 'waitlist', 'v1', 'Wording.');
+})->throws(InvalidArgumentException::class, 'Projects take up to 100 characters');
 
 it('reads the wording of a project in one query per signup', function () {
     Waitlist::registerWording('waitlist', 'v1', 'Waitlist wording.');

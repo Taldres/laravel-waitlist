@@ -79,7 +79,7 @@ it('throws a MissingWordingException for a list whose primary purpose has no wor
 })->throws(MissingWordingException::class, 'The purpose [waitlist] of the waitlist [default/beta] has no wording.');
 
 it('keeps the input checks of registered wording apart from setup mistakes', function () {
-    expect(fn () => Waitlist::registerWording(str_repeat('p', 101), 'v1', 'Text.'))
+    expect(fn () => Waitlist::registerWording(str_repeat('p', 256), 'v1', 'Text.'))
         ->toThrow(fn (InvalidArgumentException $exception) => expect($exception)->not->toBeInstanceOf(InvalidConfigurationException::class));
 });
 

@@ -13,8 +13,8 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Taldres\Waitlist\Config\WaitlistConfig;
-use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
 use Taldres\Waitlist\Contracts\EmailNormalizer;
+use Taldres\Waitlist\Contracts\LinkGenerator;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Contracts\SpamProtector;
@@ -23,7 +23,6 @@ use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Http\RouteRegistration;
 use Taldres\Waitlist\Models\WaitlistWording;
-use Taldres\Waitlist\WaitlistManager;
 use Throwable;
 
 /**
@@ -37,7 +36,7 @@ final class SetupAudit
 {
     private const array CONTRACTS = [
         ProjectCatalog::class,
-        ConfirmationUrlGenerator::class,
+        LinkGenerator::class,
         ProjectResolver::class,
         EmailNormalizer::class,
         SpamProtector::class,
@@ -227,7 +226,7 @@ final class SetupAudit
      */
     private static function resolve(string $contract): mixed
     {
-        return $contract === SpamProtector::class ? app(WaitlistManager::class)->spamProtector() : app($contract);
+        return app($contract);
     }
 
     /**

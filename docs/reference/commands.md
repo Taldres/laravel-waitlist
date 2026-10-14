@@ -7,10 +7,10 @@ php artisan waitlist:check [--strict]                       # settings and table
 php artisan waitlist:show {email} [--list=] [--project=] [--json|--pretty]  # right of access
 php artisan waitlist:forget {email} [--list=] [--project=] # right to erasure
 php artisan waitlist:forget --list= [--project=] --all [--force]  # erase a whole list
-php artisan waitlist:prune [--list=] [--project=]          # apply the retention periods
+php artisan waitlist:prune [--list=] [--project=] [--isolated]  # apply the retention periods
 php artisan waitlist:export {list} [--project=] [--status=] [--path=]  # streaming CSV export
-php artisan waitlist:rekey                                 # move everything onto the current key
-php artisan waitlist:wording {file} | --from-definitions [--project=] [--retire-missing]  # register wording, e.g. on deploy
+php artisan waitlist:rekey [--isolated]                    # move everything onto the current key
+php artisan waitlist:wording {file} | --from-definitions [--project=] [--retire-missing] [--isolated]  # register wording, e.g. on deploy
 php artisan waitlist:import {file} --source= --with-consent|--request-confirmation [--list=] [--project=] [--limit=] [--from-line=]  # import existing subscribers
 ```
 
@@ -27,6 +27,14 @@ say where they looked.
 
 ## Notes
 
+- **Missing arguments.** In a terminal, `waitlist:show`, `waitlist:export` and `waitlist:import` ask
+  for a required argument that was left out; without a terminal they fail as before.
+- **`--isolated`** on `waitlist:prune`, `waitlist:rekey` and `waitlist:wording` runs the
+  command under an atomic cache lock, so a second run started while one is
+  active, on any server sharing the cache, exits without doing anything. It
+  needs a cache store with atomic locks, see
+  [Isolatable commands](https://laravel.com/docs/artisan#isolatable-commands).
+  Without the option nothing changes.
 - **`waitlist:install`** publishes `app/Providers/WaitlistServiceProvider.php`
   (tag `waitlist-provider`), `config/waitlist.php` (`waitlist-config`) and the
   migrations (`waitlist-migrations`), and adds the provider to

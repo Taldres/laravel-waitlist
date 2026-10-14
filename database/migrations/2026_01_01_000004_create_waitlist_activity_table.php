@@ -13,10 +13,18 @@ return new class extends Migration
         return is_string($connection) && $connection !== '' ? $connection : null;
     }
 
+    /**
+     * Guarded, so an application that published the migrations of an earlier
+     * release and publishes them all again does not fail on the tables it has.
+     */
     public function up(): void
     {
+        if (Schema::hasTable('waitlist_activity')) {
+            return;
+        }
+
         Schema::create('waitlist_activity', function (Blueprint $table) {
-            $table->bigIncrements('id');
+            $table->id();
             // Both keys are nulled on erasure (by the database or
             // RecordActivity::erased()); project, list, type, purpose and
             // occurred_on survive, which keeps historical counts intact.

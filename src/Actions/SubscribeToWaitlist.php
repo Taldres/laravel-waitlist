@@ -71,7 +71,7 @@ class SubscribeToWaitlist
         $policy = $this->registry->policy($project, $list);
         // Decided before anything is registered or looked up: a setting that
         // does not read must refuse every signup alike, a known address too.
-        $doubleOptIn = $policy->doubleOptIn;
+        $doubleOptIn = $policy->doubleOptIn();
         $wordings = $this->registry->resolve($policy, $purposes, acceptWording: true, caller: $context->caller);
 
         $email = $this->normalizer->normalize($email);
@@ -123,7 +123,7 @@ class SubscribeToWaitlist
         $confirmToken = $doubleOptIn && ! $deferred ? Str::random(64) : null;
         $unsubscribeToken = Str::random(64);
 
-        [$entry, $subscription] = static::waitlistConnection()->transaction(function () use ($model, $policy, $doubleOptIn, $email, $metadata, $wordings, $context, $confirmToken, $unsubscribeToken): array {
+        [$entry, $subscription] = static::waitlistTransaction(function () use ($model, $policy, $doubleOptIn, $email, $metadata, $wordings, $context, $confirmToken, $unsubscribeToken): array {
             /** @var WaitlistEntry $entry */
             $entry = $model::query()->create([
                 'project' => $policy->project,
@@ -136,7 +136,7 @@ class SubscribeToWaitlist
             ]);
 
             return [$entry, $this->lifecycle->start($entry, $wordings, $context, $doubleOptIn, $confirmToken)];
-        }, attempts: 3);
+        });
 
         return new SubscribeResult($entry, $subscription, $deferred ? SubscribeOutcome::ConfirmationDeferred : SubscribeOutcome::Started);
     }
@@ -172,7 +172,7 @@ class SubscribeToWaitlist
         $confirmToken = $doubleOptIn && ! $deferred ? Str::random(64) : null;
 
         try {
-            $subscription = static::waitlistConnection()->transaction(function () use ($doubleOptIn, $entry, $metadata, $wordings, $context, $confirmToken): WaitlistSubscription {
+            $subscription = static::waitlistTransaction(function () use ($doubleOptIn, $entry, $metadata, $wordings, $context, $confirmToken): WaitlistSubscription {
                 $subscription = $this->lifecycle->start($entry, $wordings, $context, $doubleOptIn, $confirmToken);
 
                 // Only a new opt-in brings metadata: a repeat on a running cycle
@@ -183,7 +183,7 @@ class SubscribeToWaitlist
                 }
 
                 return $subscription;
-            }, attempts: 3);
+            });
         } catch (ModelNotFoundException $exception) {
             // Erased while this request was on its way: the address is new
             // again. Anything else, such as a listener's lookup, is not ours.

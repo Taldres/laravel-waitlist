@@ -32,6 +32,7 @@
         </include>
     </source>
     <php>
+        <ini name="memory_limit" value="512M"/>
         <env name="CACHE_STORE" value="array"/>
     </php>
 </phpunit>

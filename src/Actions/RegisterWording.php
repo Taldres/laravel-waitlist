@@ -6,6 +6,7 @@ namespace Taldres\Waitlist\Actions;
 
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use Taldres\Waitlist\Events\WordingRegistered;
 use Taldres\Waitlist\Exceptions\WordingConflictException;
@@ -31,9 +32,7 @@ class RegisterWording
     {
         $texts = is_string($wording) ? ['' => $wording] : $wording;
 
-        if (mb_strlen($purpose) > 100 || mb_strlen($version) > 100 || max(array_map(mb_strlen(...), array_map('strval', array_keys($texts))) ?: [0]) > 35) {
-            throw new InvalidArgumentException('Purposes and versions take up to 100 characters, locales up to 35.');
-        }
+        $this->assertWithinLimits($project, $purpose, $version, max(array_map(mb_strlen(...), array_map('strval', array_keys($texts))) ?: [0]));
 
         if ($texts === [] || in_array('', array_map(trim(...), $texts), true)) {
             throw WordingConflictException::empty($purpose, $version);
@@ -63,14 +62,8 @@ class RegisterWording
     {
         // Two deploys registering a new version at once deadlock on MySQL and
         // MariaDB (gap locks) and violate the unique index on PostgreSQL.
-        return static::waitlistConnection()->transaction(function () use ($project, $purpose, $version, $texts): int {
-            $registered = WaitlistWording::query()
-                ->where('project', $project)
-                ->where('purpose', $purpose)
-                ->where('version', $version)
-                ->lockForUpdate()
-                ->get()
-                ->keyBy('locale');
+        return static::waitlistTransaction(function () use ($project, $purpose, $version, $texts): int {
+            $registered = $this->lockVersion($project, $purpose, $version);
 
             if ($registered->isNotEmpty() && $registered->has('') !== array_key_exists('', $texts)) {
                 throw WordingConflictException::mixed($purpose, $version);
@@ -100,7 +93,7 @@ class RegisterWording
             }
 
             return $written;
-        }, attempts: 3);
+        });
     }
 
     /**
@@ -114,9 +107,7 @@ class RegisterWording
      */
     public function fromCaller(string $project, string $purpose, string $version, ?string $locale, string $text, ?string $caller = null): bool
     {
-        if (mb_strlen($purpose) > 100 || mb_strlen($version) > 100 || mb_strlen((string) $locale) > 35) {
-            throw new InvalidArgumentException('Purposes and versions take up to 100 characters, locales up to 35.');
-        }
+        $this->assertWithinLimits($project, $purpose, $version, mb_strlen((string) $locale));
 
         if (trim($text) === '') {
             throw WordingConflictException::empty($purpose, $version);
@@ -153,14 +144,8 @@ class RegisterWording
     {
         // Concurrent first signups of a version deadlock on MySQL and MariaDB
         // (gap locks) and violate the unique index on PostgreSQL.
-        return static::waitlistConnection()->transaction(function () use ($project, $purpose, $version, $locale, $text, $caller): bool {
-            $registered = WaitlistWording::query()
-                ->where('project', $project)
-                ->where('purpose', $purpose)
-                ->where('version', $version)
-                ->lockForUpdate()
-                ->get()
-                ->keyBy('locale');
+        return static::waitlistTransaction(function () use ($project, $purpose, $version, $locale, $text, $caller): bool {
+            $registered = $this->lockVersion($project, $purpose, $version);
 
             if ($registered->isNotEmpty() && $registered->has('') !== ($locale === '')) {
                 throw WordingConflictException::mixed($purpose, $version);
@@ -187,6 +172,33 @@ class RegisterWording
             ]));
 
             return true;
-        }, attempts: 3);
+        });
+    }
+
+    /**
+     * @throws InvalidArgumentException
+     */
+    private function assertWithinLimits(string $project, string $purpose, string $version, int $longestLocale): void
+    {
+        if (mb_strlen($project) > WaitlistWording::PROJECT_LENGTH || mb_strlen($purpose) > WaitlistWording::KEY_LENGTH || mb_strlen($version) > WaitlistWording::KEY_LENGTH || $longestLocale > 35) {
+            throw new InvalidArgumentException('Projects take up to '.WaitlistWording::PROJECT_LENGTH.' characters, purposes and versions up to '.WaitlistWording::KEY_LENGTH.', locales up to 35.');
+        }
+    }
+
+    /**
+     * The texts of a version, locked, by locale.
+     *
+     * @return Collection<string, WaitlistWording>
+     */
+    private function lockVersion(string $project, string $purpose, string $version): Collection
+    {
+        /** @var Collection<string, WaitlistWording> */
+        return WaitlistWording::query()
+            ->where('project', $project)
+            ->where('purpose', $purpose)
+            ->where('version', $version)
+            ->lockForUpdate()
+            ->get()
+            ->keyBy('locale');
     }
 }

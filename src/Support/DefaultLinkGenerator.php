@@ -7,13 +7,13 @@ namespace Taldres\Waitlist\Support;
 use Illuminate\Routing\UrlGenerator;
 use Symfony\Component\Routing\Exception\RouteNotFoundException;
 use Taldres\Waitlist\Config\WaitlistConfig;
-use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
+use Taldres\Waitlist\Contracts\LinkGenerator;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Enums\Page;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Models\WaitlistEntry;
 
-class DefaultConfirmationUrlGenerator implements ConfirmationUrlGenerator
+class DefaultLinkGenerator implements LinkGenerator
 {
     public function confirmUrl(WaitlistEntry $entry, string $plainToken): ?string
     {

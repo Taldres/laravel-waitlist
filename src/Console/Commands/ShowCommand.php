@@ -4,23 +4,27 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Console\Commands;
 
+use Illuminate\Console\Attributes\Description;
+use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Illuminate\Contracts\Console\PromptsForMissingInput;
 use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Output\OutputInterface;
 use Taldres\Waitlist\Actions\ExportPersonalData;
+use Taldres\Waitlist\Console\Concerns\ReadsStringOptions;
 use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Support\PersonalData;
 
-class ShowCommand extends Command
-{
-    protected $signature = 'waitlist:show
+#[Signature('waitlist:show
         {email : The email address to look up}
         {--list= : Only show entries on this waitlist (of the default project unless --project is given)}
         {--project= : Only show entries of this project}
         {--json : Output as JSON (suitable for data access requests)}
-        {--pretty : Output as a human-readable summary}';
-
-    protected $description = 'Show all personal data stored for an email address (right of access)';
+        {--pretty : Output as a human-readable summary}')]
+#[Description('Show all personal data stored for an email address (right of access)')]
+class ShowCommand extends Command implements PromptsForMissingInput
+{
+    use ReadsStringOptions;
 
     public function handle(ExportPersonalData $export): int
     {
@@ -30,10 +34,8 @@ class ShowCommand extends Command
             $this->fail('An email address is required.');
         }
 
-        $list = $this->option('list');
-        $list = is_string($list) && $list !== '' ? $list : null;
-        $project = $this->option('project');
-        $project = is_string($project) && $project !== '' ? $project : null;
+        $list = $this->stringOption('list');
+        $project = $this->stringOption('project');
 
         $data = $export(email: $email, list: $list, project: $project);
 

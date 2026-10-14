@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Models;
 
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 use RuntimeException;
 use Taldres\ImmutableAttributes\Attributes\Immutable;
 use Taldres\ImmutableAttributes\Concerns\GuardsImmutableAttributes;
+use Taldres\Waitlist\Models\Concerns\UsesWaitlistConnection;
 use Taldres\Waitlist\Support\ResolvesModel;
 
 /**
@@ -36,31 +39,23 @@ use Taldres\Waitlist\Support\ResolvesModel;
     'required',
     'granted_at',
 ])]
+#[Table('waitlist_consents', timestamps: false)]
+#[Fillable([
+    'waitlist_subscription_id',
+    'purpose',
+    'version',
+    'locale',
+    'text',
+    'required',
+    'granted_at',
+    'withdrawn_at',
+    'active',
+])]
 class WaitlistConsent extends Model
 {
     use GuardsImmutableAttributes;
     use ResolvesModel;
-
-    public $timestamps = false;
-
-    protected $table = 'waitlist_consents';
-
-    protected $fillable = [
-        'waitlist_subscription_id',
-        'purpose',
-        'version',
-        'locale',
-        'text',
-        'required',
-        'granted_at',
-        'withdrawn_at',
-        'active',
-    ];
-
-    public function getConnectionName(): ?string
-    {
-        return WaitlistEntry::waitlistConnection() ?? parent::getConnectionName();
-    }
+    use UsesWaitlistConnection;
 
     protected function casts(): array
     {

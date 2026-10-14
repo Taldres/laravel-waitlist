@@ -6,7 +6,7 @@ namespace Taldres\Waitlist\Actions;
 
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Str;
-use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
+use Taldres\Waitlist\Contracts\LinkGenerator;
 use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Support\ResolvesModel;
 use Taldres\Waitlist\Support\UnsubscribeToken;
@@ -27,7 +27,7 @@ class GetUnsubscribeToken
     {
         $token = $entry->plainUnsubscribeToken() ?? $this->mint($entry);
 
-        return new UnsubscribeToken(token: $token, url: app(ConfirmationUrlGenerator::class)->unsubscribeUrl($entry, $token));
+        return new UnsubscribeToken(token: $token, url: app(LinkGenerator::class)->unsubscribeUrl($entry, $token));
     }
 
     /**

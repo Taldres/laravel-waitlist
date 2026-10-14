@@ -7,8 +7,8 @@ use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Facade;
 use Illuminate\Support\Facades\RateLimiter;
-use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
 use Taldres\Waitlist\Contracts\EmailNormalizer;
+use Taldres\Waitlist\Contracts\LinkGenerator;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Contracts\SpamProtector;
@@ -62,7 +62,7 @@ it('keeps a binding of a contract that the app made first', function (string $co
 })->with([
     'the spam protector' => SpamProtector::class,
     'the email normalizer' => EmailNormalizer::class,
-    'the url generator' => ConfirmationUrlGenerator::class,
+    'the url generator' => LinkGenerator::class,
     'the catalog' => ProjectCatalog::class,
     'the project resolver' => ProjectResolver::class,
 ]);

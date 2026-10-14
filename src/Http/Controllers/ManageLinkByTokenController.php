@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Taldres\Waitlist\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
+use Taldres\Waitlist\Enums\ApiError;
 use Taldres\Waitlist\Exceptions\ManageLinksDisabledException;
 use Taldres\Waitlist\WaitlistManager;
 
@@ -24,7 +25,7 @@ class ManageLinkByTokenController
         try {
             $waitlist->requestManageLink($token);
         } catch (ManageLinksDisabledException) {
-            return ManageLinkController::disabled();
+            return ApiError::ManageLinksDisabled->response();
         }
 
         return new JsonResponse(['message' => 'Requested.'], 202);

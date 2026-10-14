@@ -18,8 +18,8 @@ use Taldres\Waitlist\Models\WaitlistSubscription;
  *
  * Each accessor reads the config anew and checks only what it returns, so a
  * mistake in one setting stops the feature that needs it, and no other. The
- * settings of a group also come as one object, which check() reads; a step
- * reads only the ones it uses.
+ * settings of a group also come as one object; a step reads only the ones it
+ * uses.
  *
  * @internal
  */

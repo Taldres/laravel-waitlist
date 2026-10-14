@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Console\Commands;
 
+use Illuminate\Console\Attributes\Description;
+use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
@@ -11,14 +13,12 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Taldres\Waitlist\Events\EntrySubscribed;
 
+#[Signature('waitlist:install
+        {--projects : Start the provider with several named projects instead of the default one}
+        {--mail : Also write the confirmation mail: a mailable, its view and a queued listener for EntrySubscribed}')]
+#[Description('Publish the waitlist service provider, config and migrations, register the provider, and optionally scaffold the confirmation mail')]
 class InstallCommand extends Command
 {
-    protected $signature = 'waitlist:install
-        {--projects : Start the provider with several named projects instead of the default one}
-        {--mail : Also write the confirmation mail: a mailable, its view and a queued listener for EntrySubscribed}';
-
-    protected $description = 'Publish the waitlist service provider, config and migrations, register the provider, and optionally scaffold the confirmation mail';
-
     public function handle(): int
     {
         $projects = (bool) $this->option('projects');

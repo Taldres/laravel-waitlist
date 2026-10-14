@@ -8,6 +8,7 @@ use Closure;
 use Illuminate\Support\Str;
 use Taldres\Waitlist\Enums\Page;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
+use Taldres\Waitlist\Models\WaitlistWording;
 use Taldres\Waitlist\Support\OriginPolicy;
 use Taldres\Waitlist\Support\ProjectPeriods;
 
@@ -88,8 +89,8 @@ final class ProjectDefinition
         foreach ($versions as $version => $wording) {
             $version = (string) $version;
 
-            if ($version === '' || mb_strlen($version) > 100) {
-                throw new InvalidConfigurationException("The versions of the purpose [{$name}] in the project [{$this->name}] must be 1 to 100 characters long, [{$version}] is not.");
+            if ($version === '' || mb_strlen($version) > WaitlistWording::KEY_LENGTH) {
+                throw new InvalidConfigurationException("The versions of the purpose [{$name}] in the project [{$this->name}] must be 1 to ".WaitlistWording::KEY_LENGTH." characters long, [{$version}] is not.");
             }
 
             if (! self::wellFormed($wording)) {
@@ -428,8 +429,8 @@ final class ProjectDefinition
      */
     public static function assertPurposeName(string $project, string $purpose): void
     {
-        if ($purpose === '' || mb_strlen($purpose) > 100) {
-            throw new InvalidConfigurationException("The purposes of the project [{$project}] must be named with 1 to 100 characters, [{$purpose}] is not.");
+        if ($purpose === '' || mb_strlen($purpose) > WaitlistWording::KEY_LENGTH) {
+            throw new InvalidConfigurationException("The purposes of the project [{$project}] must be named with 1 to ".WaitlistWording::KEY_LENGTH." characters, [{$purpose}] is not.");
         }
     }
 

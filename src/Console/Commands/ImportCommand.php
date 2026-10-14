@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Taldres\Waitlist\Console\Commands;
 
+use Illuminate\Console\Attributes\Description;
+use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Illuminate\Contracts\Console\PromptsForMissingInput;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -12,6 +15,7 @@ use LogicException;
 use RuntimeException;
 use SplFileObject;
 use Taldres\Waitlist\Actions\ImportEntry;
+use Taldres\Waitlist\Console\Concerns\ReadsStringOptions;
 use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
 use Taldres\Waitlist\Exceptions\InvalidEmailException;
 use Taldres\Waitlist\Exceptions\MissingConsentException;
@@ -23,11 +27,7 @@ use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Support\SubscribeResult;
 use Throwable;
 
-class ImportCommand extends Command
-{
-    protected const array COLUMNS = ['email', 'purposes', 'list', 'locale', 'consented_at'];
-
-    protected $signature = 'waitlist:import
+#[Signature('waitlist:import
         {file : CSV with a header row: email, purposes, and optionally list, locale and consented_at}
         {--source= : Where the addresses come from, recorded with each of them}
         {--with-consent : Put each address on the list without a mail, consented at the time in its consented_at column}
@@ -35,9 +35,13 @@ class ImportCommand extends Command
         {--list= : The list of rows that name none}
         {--project=default : The project the lists belong to}
         {--limit= : Import at most this many addresses, then print the command that resumes}
-        {--from-line= : Resume at this line, as the command printed when it stopped}';
+        {--from-line= : Resume at this line, as the command printed when it stopped}')]
+#[Description('Import addresses that consented elsewhere, with the source and time of their consent')]
+class ImportCommand extends Command implements PromptsForMissingInput
+{
+    use ReadsStringOptions;
 
-    protected $description = 'Import addresses that consented elsewhere, with the source and time of their consent';
+    protected const array COLUMNS = ['email', 'purposes', 'list', 'locale', 'consented_at'];
 
     public function handle(ImportEntry $import): int
     {
@@ -53,15 +57,13 @@ class ImportCommand extends Command
             $this->fail('Pass --source, at most '.ImportEntry::SOURCE_MAX_LENGTH.' characters, e.g. the tool or file the addresses come from.');
         }
 
-        $project = $this->option('project');
-        $project = is_string($project) && $project !== '' ? $project : WaitlistEntry::DEFAULT_PROJECT;
+        $project = $this->stringOption('project') ?? WaitlistEntry::DEFAULT_PROJECT;
 
         if (! Waitlist::hasProject($project)) {
             $this->fail("The project [{$project}] is not defined.");
         }
 
-        $defaultList = $this->option('list');
-        $defaultList = is_string($defaultList) && $defaultList !== '' ? $defaultList : null;
+        $defaultList = $this->stringOption('list');
         $limit = $this->number('limit', minimum: 1);
         $fromLine = $this->number('from-line', minimum: 2) ?? 2;
 

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Taldres\Waitlist\Console\Commands;
 
 use Closure;
+use Illuminate\Console\Attributes\Description;
+use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Arr;
@@ -12,9 +14,8 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
 use ReflectionFunction;
 use Symfony\Component\Console\Output\OutputInterface;
-use Taldres\Waitlist\Actions\IssueManageLink;
-use Taldres\Waitlist\Actions\ResendConfirmation;
 use Taldres\Waitlist\Config\WaitlistConfig;
+use Taldres\Waitlist\Console\Concerns\ReadsStringOptions;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Definitions\ProjectDefinitions;
@@ -44,14 +45,13 @@ use Taldres\Waitlist\Support\ResolvesModel;
 use Taldres\Waitlist\Support\SetupAudit;
 use Taldres\Waitlist\WaitlistManager;
 
+#[Signature('waitlist:privacy
+        {--project= : Only describe this project}')]
+#[Description('Describe what the waitlist stores, why, for how long, and where it flows (input for your record of processing, GDPR Art. 30)')]
 class PrivacyCommand extends Command
 {
+    use ReadsStringOptions;
     use ResolvesModel;
-
-    protected $signature = 'waitlist:privacy
-        {--project= : Only describe this project}';
-
-    protected $description = 'Describe what the waitlist stores, why, for how long, and where it flows (input for your record of processing, GDPR Art. 30)';
 
     protected const array EVENTS = [
         EntrySubscribed::class,
@@ -69,8 +69,8 @@ class PrivacyCommand extends Command
 
     public function handle(PurposeRegistry $registry, ProjectCatalog $catalog): int
     {
-        $project = $this->option('project');
-        $projects = is_string($project) && $project !== '' ? [$project] : $catalog->projects();
+        $project = $this->stringOption('project');
+        $projects = $project !== null ? [$project] : $catalog->projects();
 
         $lines = [
             '# Waitlist processing record',
@@ -184,7 +184,7 @@ class PrivacyCommand extends Command
                             $wording->required ? 'yes' : 'no',
                             $locale === '' ? $wording->version : "{$wording->version} ({$locale})",
                             str_replace(["\r\n", "\n", "\r", '|'], [' ', ' ', ' ', '\|'], $text),
-                            $policy->doubleOptIn ? 'yes' : 'no',
+                            $policy->doubleOptIn() ? 'yes' : 'no',
                         );
                     }
                 }
@@ -199,7 +199,7 @@ class PrivacyCommand extends Command
                         $purpose,
                         $purpose === $policy->primary ? 'yes' : 'no',
                         "None yet: the project's servers send it with the first signup.",
-                        $policy->doubleOptIn ? 'yes' : 'no',
+                        $policy->doubleOptIn() ? 'yes' : 'no',
                     );
                 }
             }
@@ -377,8 +377,8 @@ class PrivacyCommand extends Command
      */
     protected function measures(ProjectCatalog $catalog, array $projects): array
     {
-        $cooldown = ResendConfirmation::cooldown();
-        $cap = ResendConfirmation::maxConfirmations();
+        $cooldown = WaitlistConfig::resendCooldown();
+        $cap = WaitlistConfig::maxConfirmations();
         [$offering, $without] = $this->manageLinkProjects($catalog, $projects);
         $token = '- Mails carry an unsubscribe token that can only remove'
             .($this->positionLists($catalog, $projects) === [] ? '' : ', and read the place in line on the lists that publish positions');
@@ -399,7 +399,7 @@ class PrivacyCommand extends Command
             },
             '- Confirmation mails limited to one per '.($cooldown !== null ? "{$cooldown} minutes" : 'request')
                 .($cap !== null ? " and {$cap} per cycle" : ''),
-            ...(($pending = ResendConfirmation::maxPendingPerAddress()) !== null
+            ...(($pending = WaitlistConfig::maxPendingPerAddress()) !== null
                 ? ["- At most {$pending} confirmation requests per address and day for unconfirmed lists of a project; further ones are held back"]
                 : []),
             WaitlistConfig::routesEnabled()
@@ -758,7 +758,7 @@ class PrivacyCommand extends Command
 
     protected function manageTtl(): string
     {
-        $minutes = IssueManageLink::ttl();
+        $minutes = WaitlistConfig::manageTokenTtl();
 
         return $minutes === 1 ? '1 minute' : "{$minutes} minutes";
     }

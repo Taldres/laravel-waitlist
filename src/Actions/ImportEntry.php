@@ -88,7 +88,7 @@ class ImportEntry
 
         $policy = $this->registry->policy($project, $list);
 
-        if ($consentedAt === null && ! $policy->doubleOptIn) {
+        if ($consentedAt === null && ! $policy->doubleOptIn()) {
             throw new InvalidArgumentException("The list [{$list}] has no double opt-in, so an import needs the time each address consented.");
         }
 
@@ -109,7 +109,7 @@ class ImportEntry
         $model = static::modelClass();
 
         try {
-            [$entry, $subscription] = static::waitlistConnection()->transaction(function () use ($model, $policy, $email, $wordings, $context, $source, $consentedAt, $confirmToken, $unsubscribeToken): array {
+            [$entry, $subscription] = static::waitlistTransaction(function () use ($model, $policy, $email, $wordings, $context, $source, $consentedAt, $confirmToken, $unsubscribeToken): array {
                 /** @var WaitlistEntry $entry */
                 $entry = $model::query()->create([
                     'project' => $policy->project,
@@ -121,7 +121,7 @@ class ImportEntry
                 ]);
 
                 return [$entry, $this->lifecycle->import($entry, $wordings, $context, $source, $consentedAt, $confirmToken)];
-            }, attempts: 3);
+            });
         } catch (UniqueConstraintViolationException $exception) {
             // Caught outside the transaction, which Postgres aborts on the
             // violation. A listener's own violation after the commit is no

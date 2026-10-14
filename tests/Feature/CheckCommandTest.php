@@ -10,8 +10,8 @@ use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Schema;
 use Taldres\Waitlist\Config\PackageConfig;
 use Taldres\Waitlist\Config\WaitlistConfig;
-use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
 use Taldres\Waitlist\Contracts\EmailNormalizer;
+use Taldres\Waitlist\Contracts\LinkGenerator;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Contracts\SpamProtector;
@@ -101,10 +101,7 @@ it('leaves the routes alone while the switch does not read, as that is reported 
 });
 
 it('knows the routes of each group, so the check cannot drift from routes/waitlist.php', function () {
-    config()->set(ConfigKey::RoutesEnabled->value, true);
-    config()->set(ConfigKey::RoutesMiddleware->value, []);
-
-    require __DIR__.'/../../routes/waitlist.php';
+    enableWaitlistRoutes();
     app('router')->getRoutes()->refreshNameLookups();
 
     $registered = collect(app('router')->getRoutes()->getRoutes())
@@ -217,7 +214,7 @@ function checkContracts(): array
 {
     return [
         'the catalog' => ProjectCatalog::class,
-        'the URL generator' => ConfirmationUrlGenerator::class,
+        'the URL generator' => LinkGenerator::class,
         'the project resolver' => ProjectResolver::class,
         'the email normalizer' => EmailNormalizer::class,
         'the spam protector' => SpamProtector::class,
@@ -253,8 +250,7 @@ describe('the bindings', function () {
 
         [$exit, $output] = checkOutput();
 
-        // The manager hands the endpoints only a protector, so its return type refuses the object first.
-        $expected = $contract === SpamProtector::class ? 'stdClass returned' : "{$contract} resolves to stdClass, which does not implement it.";
+        $expected = "{$contract} resolves to stdClass, which does not implement it.";
 
         expect($exit)->toBe(1)
             ->and($output)->toContain($contract)
@@ -263,11 +259,11 @@ describe('the bindings', function () {
 
     it('check the spam protector the endpoints use, and never ask it', function () {
         app()->bind(SpamProtector::class, fn () => throw new RuntimeException('The protector is down.'));
-        Waitlist::verifySpamUsing(fn (Request $request): never => throw new LogicException('The check must not run.'));
+        useSpamCheck(fn (Request $request): never => throw new LogicException('The check must not run.'));
 
         expect(SetupAudit::bindingProblems())->toBe([]);
 
-        Waitlist::verifySpamUsing(null);
+        useSpamCheck(null);
 
         expect(SetupAudit::bindingProblems())->toBe([SpamProtector::class.' cannot be resolved: The protector is down.']);
     });
@@ -372,12 +368,12 @@ it('names the implementations an app binds instead of the classes in the config'
         ->and($about['project_resolver'])->toBe(HeaderProjectResolver::class);
 });
 
-it('names the protector behind verifySpamUsing, and the configured one again once it is cleared', function () {
-    Waitlist::verifySpamUsing(fn (Request $request): bool => true);
+it('names the protector the endpoints use, and the default again once it is cleared', function () {
+    useSpamCheck(fn (Request $request): bool => true);
 
     expect(aboutSection()['spam_protector'])->toBe(ClosureSpamProtector::class);
 
-    Waitlist::verifySpamUsing(null);
+    useSpamCheck(null);
 
     expect(aboutSection()['spam_protector'])->toBe(NullSpamProtector::class);
 });

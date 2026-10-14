@@ -21,12 +21,12 @@ class EraseEntry
      */
     public function __invoke(WaitlistEntry $entry, ?Closure $stillApplies = null): bool
     {
-        return static::waitlistConnection()->transaction(function () use ($entry, $stillApplies): bool {
+        return static::waitlistTransaction(function () use ($entry, $stillApplies): bool {
             $query = static::modelClass()::query()->whereKey($entry->getKey());
 
             $locked = ($stillApplies === null ? $query : $stillApplies($query))->lockForUpdate()->first();
 
             return $locked !== null && $locked->delete() === true;
-        }, attempts: 3);
+        });
     }
 }

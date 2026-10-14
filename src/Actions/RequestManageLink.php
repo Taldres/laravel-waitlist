@@ -44,7 +44,7 @@ class RequestManageLink
         $now = Carbon::now();
 
         // Read before the claim below: a link that cannot be issued must not start the cooldown.
-        IssueManageLink::ttl();
+        WaitlistConfig::manageTokenTtl();
 
         // Found outside the transaction, locked in key order inside it, as a
         // withdrawal does: requests for two lists of the address would
@@ -55,7 +55,7 @@ class RequestManageLink
         // On the waitlist connection, so the event waits for this commit and
         // not for a transaction the application has open on another one; a
         // link that cannot be built takes the claim back.
-        return static::waitlistConnection()->transaction(function () use ($entry, $keys, $cooldown, $now): bool {
+        return static::waitlistTransaction(function () use ($entry, $keys, $cooldown, $now): bool {
             // The cooldown is read from the locked rows: a plain read could
             // see a snapshot the application's transaction took before.
             $locked = static::modelClass()::query()->whereKey($keys)->orderBy($entry->getKeyName())->lockForUpdate()->get();
@@ -91,7 +91,7 @@ class RequestManageLink
             ManageLinkRequested::dispatch($entry, $link->token, $link->url, $link->expiresAt);
 
             return true;
-        }, attempts: 3);
+        });
     }
 
     /**

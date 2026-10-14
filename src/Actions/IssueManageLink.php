@@ -7,7 +7,7 @@ namespace Taldres\Waitlist\Actions;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Taldres\Waitlist\Config\WaitlistConfig;
-use Taldres\Waitlist\Contracts\ConfirmationUrlGenerator;
+use Taldres\Waitlist\Contracts\LinkGenerator;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
 use Taldres\Waitlist\Exceptions\ManageLinksDisabledException;
 use Taldres\Waitlist\Models\WaitlistEntry;
@@ -19,7 +19,7 @@ class IssueManageLink
     use ResolvesModel;
 
     public function __construct(
-        protected ConfirmationUrlGenerator $urls,
+        protected LinkGenerator $urls,
     ) {}
 
     /**
@@ -56,14 +56,5 @@ class IssueManageLink
         if (! app(ProjectCatalog::class)->manageLinks($project)) {
             throw ManageLinksDisabledException::forProject($project);
         }
-    }
-
-    /**
-     * Minutes a manage link stays valid, at least one: a link that never
-     * expires would stand in for a login forever.
-     */
-    public static function ttl(): int
-    {
-        return WaitlistConfig::manageTokenTtl();
     }
 }

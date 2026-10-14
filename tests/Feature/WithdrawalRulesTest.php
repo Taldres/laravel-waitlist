@@ -101,9 +101,7 @@ function expectedAfterWithdrawing(array $lists, string $origin, string $purpose)
 
 beforeEach(function () {
     config()->set(ConfigKey::DoubleOptIn->value, false);
-    config()->set(ConfigKey::RoutesEnabled->value, true);
-    config()->set(ConfigKey::RoutesMiddleware->value, []);
-    require __DIR__.'/../../routes/waitlist.php';
+    enableWaitlistRoutes();
 
     $this->lists = [
         'beta' => ['purpose' => 'waitlist', 'optional' => ['newsletter']],

@@ -14,7 +14,8 @@ use Taldres\Waitlist\Support\ProjectPeriods;
  * Waitlist::define(); bind your own to keep them in a database.
  *
  * The package snapshots the wording a person agreed to, so later catalog
- * changes never touch stored consent.
+ * changes never touch stored consent. Project names are at most 100
+ * characters, as the wording table holds no more.
  */
 interface ProjectCatalog
 {

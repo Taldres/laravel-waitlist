@@ -12,6 +12,8 @@ use Taldres\Waitlist\Exceptions\InvalidConfigurationException;
  * Which websites may use a project's endpoints from a browser. A browser cannot
  * forge its Origin header, a script outside one can, so this keeps other
  * websites and hotlinking out, not bots.
+ *
+ * @internal
  */
 final class OriginPolicy
 {

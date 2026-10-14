@@ -26,11 +26,11 @@ class PositionController
         $entry = $waitlist->findByUnsubscribeToken($token);
 
         if ($entry === null) {
-            return new JsonResponse(['message' => 'Invalid token.', 'error' => ApiError::InvalidToken->value], 404);
+            return ApiError::InvalidToken->response();
         }
 
         if ($catalog->policy($entry->project, $entry->list)?->publishesPosition() !== true) {
-            return new JsonResponse(['message' => 'This list does not publish positions.', 'error' => ApiError::PositionDisabled->value], 404);
+            return ApiError::PositionDisabled->response();
         }
 
         $position = $entry->status === EntryStatus::Confirmed ? $this->position($waitlist, $entry) : null;

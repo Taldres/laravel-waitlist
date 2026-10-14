@@ -6,6 +6,10 @@ namespace Taldres\Waitlist\Models;
 
 use Carbon\CarbonInterface;
 use Illuminate\Contracts\Encryption\DecryptException;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Attributes\Table;
+use Illuminate\Database\Eloquent\Attributes\UseFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Collection;
@@ -18,11 +22,12 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 use Taldres\Waitlist\Actions\RecordActivity;
 use Taldres\Waitlist\Config\TimestampRange;
-use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Contracts\EmailNormalizer;
 use Taldres\Waitlist\Database\Factories\WaitlistEntryFactory;
 use Taldres\Waitlist\Enums\EntryStatus;
 use Taldres\Waitlist\Events\EntryForgotten;
+use Taldres\Waitlist\Models\Concerns\ScopesToProject;
+use Taldres\Waitlist\Models\Concerns\UsesWaitlistConnection;
 use Taldres\Waitlist\Models\Concerns\UsesWaitlistEncrypter;
 use Taldres\Waitlist\Support\BlindIndex;
 use Taldres\Waitlist\Support\ResolvesModel;
@@ -51,6 +56,27 @@ use Taldres\Waitlist\Support\ResolvesModel;
  * @property-read WaitlistSubscription|null $currentSubscription
  * @property-read WaitlistSubscription|null $latestSubscription
  */
+#[Table('waitlist_entries')]
+#[Fillable([
+    'project',
+    'list',
+    'email',
+    'status',
+    'latest_subscription_id',
+    'unsubscribe_token_hash',
+    'unsubscribe_token',
+    'manage_token_hash',
+    'manage_token_expires_at',
+    'manage_link_sent_at',
+    'metadata',
+])]
+#[Hidden([
+    'email_hash',
+    'unsubscribe_token_hash',
+    'unsubscribe_token',
+    'manage_token_hash',
+])]
+#[UseFactory(WaitlistEntryFactory::class)]
 class WaitlistEntry extends Model
 {
     /** @use HasFactory<WaitlistEntryFactory> */
@@ -58,42 +84,11 @@ class WaitlistEntry extends Model
 
     use HasUuids;
     use ResolvesModel;
+    use ScopesToProject;
+    use UsesWaitlistConnection;
     use UsesWaitlistEncrypter;
 
     public const string DEFAULT_PROJECT = 'default';
-
-    protected $table = 'waitlist_entries';
-
-    protected $fillable = [
-        'project',
-        'list',
-        'email',
-        'status',
-        'latest_subscription_id',
-        'unsubscribe_token_hash',
-        'unsubscribe_token',
-        'manage_token_hash',
-        'manage_token_expires_at',
-        'manage_link_sent_at',
-        'metadata',
-    ];
-
-    protected $hidden = [
-        'email_hash',
-        'unsubscribe_token_hash',
-        'unsubscribe_token',
-        'manage_token_hash',
-    ];
-
-    public static function waitlistConnection(): ?string
-    {
-        return WaitlistConfig::connection();
-    }
-
-    public function getConnectionName(): ?string
-    {
-        return static::waitlistConnection() ?? parent::getConnectionName();
-    }
 
     protected function casts(): array
     {
@@ -272,39 +267,6 @@ class WaitlistEntry extends Model
     }
 
     /**
-     * @param  Builder<self>  $query
-     * @return Builder<self>
-     */
-    public function scopeOnList(Builder $query, string $list, string $project = self::DEFAULT_PROJECT): Builder
-    {
-        return $query->where('project', $project)->where('list', $list);
-    }
-
-    /**
-     * @param  Builder<self>  $query
-     * @return Builder<self>
-     */
-    public function scopeInProject(Builder $query, string $project): Builder
-    {
-        return $query->where('project', $project);
-    }
-
-    /**
-     * A list without a project is the default project's list.
-     *
-     * @param  Builder<self>  $query
-     * @return Builder<self>
-     */
-    public function scopeWithin(Builder $query, ?string $list = null, ?string $project = null): Builder
-    {
-        return match (true) {
-            $list !== null => $query->onList($list, $project ?? self::DEFAULT_PROJECT),
-            $project !== null => $query->inProject($project),
-            default => $query,
-        };
-    }
-
-    /**
      * Addresses that may be contacted for a purpose right now.
      *
      * @param  Builder<self>  $query
@@ -395,10 +357,5 @@ class WaitlistEntry extends Model
             ->where('status', EntryStatus::Unsubscribed)
             ->whereHas('latestSubscription', fn (Builder $cycle) => $cycle
                 ->where('ended_at', '<', TimestampRange::daysAgo($days)));
-    }
-
-    protected static function newFactory(): WaitlistEntryFactory
-    {
-        return WaitlistEntryFactory::new();
     }
 }
