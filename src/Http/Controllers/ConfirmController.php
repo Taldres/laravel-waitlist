@@ -22,44 +22,40 @@ class ConfirmController
     use RedirectsToFrontend;
 
     /**
-     * Only POST confirms: link scanners follow GET and probe with HEAD, which
-     * Laravel answers on every GET route, so anything else only reports.
+     * Only the POST confirms: link scanners follow GET and probe with HEAD,
+     * which Laravel answers on every GET route, so a GET only reports.
      */
-    public function __invoke(Request $request, string $token, WaitlistManager $waitlist): WaitlistEntryResource|JsonResponse|RedirectResponse
-    {
-        if (! $request->isMethod('POST')) {
-            return $this->state($token, $waitlist);
-        }
-
-        try {
-            $entry = $waitlist->confirm($token, RequestContext::fromRequest($request));
-        } catch (ExpiredTokenException) {
-            return $this->redirectFor(Page::Expired->value, $this->owner($token, $waitlist))
-                ?? new JsonResponse(['message' => 'This confirmation link has expired.', 'error' => ApiError::ExpiredToken->value], 410);
-        } catch (InvalidTokenException) {
-            return $this->redirectFor(Page::Invalid->value, $this->owner($token, $waitlist))
-                ?? new JsonResponse(['message' => 'Invalid token.', 'error' => ApiError::InvalidToken->value], 404);
-        }
-
-        return $this->redirectFor(Page::Confirmed->value, $entry) ?? new WaitlistEntryResource($entry);
-    }
-
-    protected function state(string $token, WaitlistManager $waitlist): WaitlistEntryResource|JsonResponse|RedirectResponse
+    public function show(string $token, WaitlistManager $waitlist): WaitlistEntryResource|JsonResponse|RedirectResponse
     {
         $subscription = $waitlist->findByConfirmToken($token);
         $entry = $this->owner($token, $waitlist);
 
         if ($subscription === null || $entry === null || ! $subscription->isOpen()) {
             return $this->redirectFor(Page::Invalid->value, $entry)
-                ?? new JsonResponse(['message' => 'Invalid token.', 'error' => ApiError::InvalidToken->value], 404);
+                ?? ApiError::InvalidToken->response();
         }
 
         if ((! $subscription->isConfirmed() || $subscription->awaitsReconfirmation()) && $subscription->hasExpiredToken()) {
             return $this->redirectFor(Page::Expired->value, $entry)
-                ?? new JsonResponse(['message' => 'This confirmation link has expired.', 'error' => ApiError::ExpiredToken->value], 410);
+                ?? ApiError::ExpiredToken->response('This confirmation link has expired.');
         }
 
         return $this->redirectFor(Page::Confirm->value, $entry, $token) ?? new WaitlistEntryResource($entry);
+    }
+
+    public function store(Request $request, string $token, WaitlistManager $waitlist): WaitlistEntryResource|JsonResponse|RedirectResponse
+    {
+        try {
+            $entry = $waitlist->confirm($token, RequestContext::fromRequest($request));
+        } catch (ExpiredTokenException) {
+            return $this->redirectFor(Page::Expired->value, $this->owner($token, $waitlist))
+                ?? ApiError::ExpiredToken->response('This confirmation link has expired.');
+        } catch (InvalidTokenException) {
+            return $this->redirectFor(Page::Invalid->value, $this->owner($token, $waitlist))
+                ?? ApiError::InvalidToken->response();
+        }
+
+        return $this->redirectFor(Page::Confirmed->value, $entry) ?? new WaitlistEntryResource($entry);
     }
 
     protected function owner(string $token, WaitlistManager $waitlist): ?WaitlistEntry

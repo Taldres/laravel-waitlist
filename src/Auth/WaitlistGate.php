@@ -18,6 +18,8 @@ use Taldres\Waitlist\Support\OriginPolicy;
  * the count, or request a manage link by address for a project and list. The package defines
  * a default; define the ability yourself to replace it, with any of Laravel's
  * gate responses, such as Response::denyWithStatus(401) or denyAsNotFound().
+ *
+ * @internal
  */
 final class WaitlistGate
 {

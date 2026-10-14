@@ -27,7 +27,7 @@ class SubscribeController
         $project = $request->project();
 
         if (! $waitlist->spamProtector()->passes($request)) {
-            return new JsonResponse(['message' => 'Spam check failed.', 'error' => ApiError::SpamCheckFailed->value], 422);
+            return ApiError::SpamCheckFailed->response();
         }
 
         $input = $request->safe();

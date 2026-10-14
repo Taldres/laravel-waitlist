@@ -11,6 +11,8 @@ use Taldres\Waitlist\WaitlistManager;
 /**
  * Keyed with a subkey of the waitlist encrypter's key. hashes() covers the
  * previous keys, so a rotation keeps every stored address findable.
+ *
+ * @internal
  */
 final class BlindIndex
 {

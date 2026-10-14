@@ -32,7 +32,7 @@ final class RouteRegistration
      */
     public const array GROUPS = [
         'signup' => ['subscribe', 'purposes', 'count', 'manage-link'],
-        'links' => [Page::Confirm->value, Page::Unsubscribe->value, 'unsubscribe.manage-link', 'unsubscribe.position', Page::Manage->value, 'manage.data', 'manage.purposes', 'manage.unsubscribe', 'manage.erase'],
+        'links' => [Page::Confirm->value, 'confirm.store', Page::Unsubscribe->value, 'unsubscribe.store', 'unsubscribe.manage-link', 'unsubscribe.position', Page::Manage->value, 'manage.data', 'manage.purposes', 'manage.unsubscribe', 'manage.erase'],
     ];
 
     /**

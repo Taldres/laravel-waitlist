@@ -5,23 +5,16 @@ declare(strict_types=1);
 namespace Taldres\Waitlist\Http\Requests;
 
 use Illuminate\Auth\Access\Response;
-use Illuminate\Contracts\Validation\Validator;
-use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Arr;
 use Illuminate\Validation\ValidationException;
 use Taldres\Waitlist\Auth\WaitlistGate;
-use Taldres\Waitlist\Config\WaitlistConfig;
 use Taldres\Waitlist\Contracts\ProjectCatalog;
-use Taldres\Waitlist\Contracts\ProjectResolver;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
 use Taldres\Waitlist\Enums\WaitlistAction;
 use Taldres\Waitlist\Http\Rules\PurposeChoice;
 
-class SubscribeRequest extends FormRequest
+class SubscribeRequest extends WaitlistRequest
 {
-    protected ?string $resolvedProject = null;
-
     /**
      * @var array<string, mixed>|null
      */
@@ -29,15 +22,19 @@ class SubscribeRequest extends FormRequest
 
     protected bool $fieldsResolved = false;
 
+    protected function action(): WaitlistAction
+    {
+        return WaitlistAction::Subscribe;
+    }
+
     /**
-     * The project and the useWaitlist gate come first: the project decides
-     * which fields the request may carry, and a refused request answers with
-     * the resolver's or the gate's status before its body is looked at. A
-     * signup that brings wording also needs the gate's RegisterWording.
+     * The project decides which fields the request may carry, so it and the
+     * useWaitlist gate come first. A signup that brings wording also needs the
+     * gate's RegisterWording.
      */
     public function authorize(): Response
     {
-        $response = WaitlistGate::inspect($this, $this->project(), WaitlistAction::Subscribe, $this->effectiveList());
+        $response = parent::authorize();
 
         if ($response->denied() || ! $this->sendsWording()) {
             return $response;
@@ -51,27 +48,6 @@ class SubscribeRequest extends FormRequest
         $purposes = $this->input('purposes');
 
         return is_array($purposes) && Arr::some($purposes, fn (mixed $choice): bool => is_array($choice) && array_key_exists('text', $choice));
-    }
-
-    /**
-     * The resolver may answer 401 or 403 instead; it runs once per request.
-     */
-    public function project(): string
-    {
-        return $this->resolvedProject ??= app(ProjectResolver::class)->resolve($this);
-    }
-
-    /**
-     * The list the signup is for, as the gate, the fields and the signup see
-     * it. A list that is missing, null or empty means the default list, and
-     * one that is not a string fails validation later; until then the default
-     * list stands in.
-     */
-    public function effectiveList(): string
-    {
-        $list = $this->input('list');
-
-        return is_string($list) && $list !== '' ? $list : WaitlistConfig::defaultList();
     }
 
     /**
@@ -110,23 +86,6 @@ class SubscribeRequest extends FormRequest
     public function reject(string $field, string $message): ValidationException
     {
         return $this->invalid(ValidationException::withMessages([$field => $message])->validator);
-    }
-
-    /**
-     * Always JSON: the routes run without a session, so a redirect back would
-     * lose the errors.
-     */
-    protected function failedValidation(Validator $validator): void
-    {
-        throw $this->invalid($validator);
-    }
-
-    protected function invalid(Validator $validator): ValidationException
-    {
-        return new ValidationException($validator, new JsonResponse([
-            'message' => (new ValidationException($validator))->getMessage(),
-            'errors' => $validator->errors()->messages(),
-        ], 422));
     }
 
     /**

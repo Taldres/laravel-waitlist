@@ -30,17 +30,21 @@ Route::group(RouteRegistration::attributes(), function () {
     if ($links !== null) {
         Route::middleware($links)->group(function () {
             // GET only reports state; POST acts, from your page or an RFC 8058 one-click request.
-            Route::match(['GET', 'POST'], '/confirm/{token}', ConfirmController::class)->name(Page::Confirm->value);
-            Route::match(['GET', 'POST'], '/unsubscribe/{token}', UnsubscribeController::class)->name(Page::Unsubscribe->value);
+            Route::get('/confirm/{token}', [ConfirmController::class, 'show'])->name(Page::Confirm->value);
+            Route::post('/confirm/{token}', [ConfirmController::class, 'store'])->name('confirm.store');
+            Route::get('/unsubscribe/{token}', [UnsubscribeController::class, 'show'])->name(Page::Unsubscribe->value);
+            Route::post('/unsubscribe/{token}', [UnsubscribeController::class, 'store'])->name('unsubscribe.store');
             Route::post('/unsubscribe/{token}/manage-link', ManageLinkByTokenController::class)->name('unsubscribe.manage-link');
             Route::get('/unsubscribe/{token}/position', PositionController::class)->name('unsubscribe.position');
 
             // The short-lived manage token, mailed on request; mails carry the unsubscribe token.
-            Route::get('/manage/{token}', [ManageController::class, 'show'])->name(Page::Manage->value);
-            Route::post('/manage/{token}/data', [ManageController::class, 'data'])->name('manage.data');
-            Route::put('/manage/{token}/purposes', [ManageController::class, 'purposes'])->name('manage.purposes');
-            Route::post('/manage/{token}/unsubscribe', [ManageController::class, 'unsubscribe'])->name('manage.unsubscribe');
-            Route::post('/manage/{token}/erase', [ManageController::class, 'erase'])->name('manage.erase');
+            Route::controller(ManageController::class)->group(function () {
+                Route::get('/manage/{token}', 'show')->name(Page::Manage->value);
+                Route::post('/manage/{token}/data', 'data')->name('manage.data');
+                Route::put('/manage/{token}/purposes', 'purposes')->name('manage.purposes');
+                Route::post('/manage/{token}/unsubscribe', 'unsubscribe')->name('manage.unsubscribe');
+                Route::post('/manage/{token}/erase', 'erase')->name('manage.erase');
+            });
         });
     }
 });
