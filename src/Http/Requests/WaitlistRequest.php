@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Taldres\Waitlist\Http\Requests;
 
 use Illuminate\Auth\Access\Response;
-use Illuminate\Foundation\Http\Attributes\FailOnUnknownFields;
 use Illuminate\Foundation\Http\FormRequest;
 use Taldres\Waitlist\Auth\WaitlistGate;
 use Taldres\Waitlist\Config\WaitlistConfig;
@@ -15,11 +14,8 @@ use Taldres\Waitlist\Http\Requests\Concerns\FailsValidationAsJson;
 
 /**
  * A request that names a project and a list, and asks the useWaitlist gate
- * before its body is looked at. A field the rules do not name, such as a
- * honeypot or a captcha token, is not an error even where the app fails on
- * unknown fields.
+ * before its body is looked at.
  */
-#[FailOnUnknownFields(false)]
 abstract class WaitlistRequest extends FormRequest
 {
     use FailsValidationAsJson;

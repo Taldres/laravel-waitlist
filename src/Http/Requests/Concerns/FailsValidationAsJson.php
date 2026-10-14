@@ -11,6 +11,16 @@ use Illuminate\Validation\ValidationException;
 trait FailsValidationAsJson
 {
     /**
+     * A field the rules do not name, such as a honeypot or a captcha token, is
+     * no error, also where the app turns on FormRequest::failOnUnknownFields().
+     * Laravel before that setting never asks.
+     */
+    protected function shouldFailOnUnknownFields(): bool
+    {
+        return false;
+    }
+
+    /**
      * Always JSON: the routes run without a session, so a redirect back would
      * lose the errors.
      */
