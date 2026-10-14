@@ -44,4 +44,16 @@ trait ScopesToProject
             default => $query,
         };
     }
+
+    /**
+     * Rows of every project but the given ones.
+     *
+     * @param  Builder<static>  $query
+     * @param  list<string>  $projects
+     * @return Builder<static>
+     */
+    public function scopeOutsideProjects(Builder $query, array $projects): Builder
+    {
+        return $projects === [] ? $query : $query->whereNotIn('project', $projects);
+    }
 }
