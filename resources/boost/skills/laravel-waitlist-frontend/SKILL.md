@@ -128,6 +128,9 @@ try {
 
 Over HTTP: `POST /waitlist/confirm/{token}` with `Accept: application/json`
 answers `{"data": {..., "status": "confirmed"}}`, `404` unknown, `410` expired;
+a page that first asks with `GET` must still `POST` when `data.answer_by` is set:
+the address was asked to confirm again (`ReconfirmationRequested`) and only the
+post keeps it on the list, although `status` already reads `confirmed`;
 the package's own refusals name an `error`, e.g. `invalid_token`, and a `404`
 without one means a wrong URL, routes that are off or a `useWaitlist` gate that
 keeps the caller out.

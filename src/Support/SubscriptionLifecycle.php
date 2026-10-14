@@ -24,7 +24,9 @@ use Taldres\Waitlist\Events\EntryConfirmed;
 use Taldres\Waitlist\Events\EntryImported;
 use Taldres\Waitlist\Events\EntrySubscribed;
 use Taldres\Waitlist\Events\EntryUnsubscribed;
+use Taldres\Waitlist\Events\ReconfirmationRequested;
 use Taldres\Waitlist\Events\SubscriptionExpired;
+use Taldres\Waitlist\Events\SubscriptionLapsed;
 use Taldres\Waitlist\Models\WaitlistConsent;
 use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Models\WaitlistSubscription;
@@ -333,12 +335,103 @@ class SubscriptionLifecycle
         ], fn (Builder $query): Builder => $query
             ->whereNull('ended_at')
             // A confirmation that lands before an expiry wins.
-            ->when($reason === EndReason::Expired, fn (Builder $query): Builder => $query->whereNull('confirmed_at')),
+            ->when($reason === EndReason::Expired, fn (Builder $query): Builder => $query->whereNull('confirmed_at'))
+            // So does an answer that lands before a lapse, which clears the
+            // request, and one that can still land: the link has not expired.
+            ->when($reason === EndReason::Lapsed, fn (Builder $query): Builder => $query
+                ->whereNotNull('confirmed_at')
+                ->whereNotNull('reconfirmation_requested_at')
+                ->where('confirm_token_expires_at', '<', Carbon::now())),
             $reason->activityType(), $context,
             fn (WaitlistEntry $entry): object => match ($reason) {
                 EndReason::Unsubscribed => new EntryUnsubscribed($entry, $subscription),
                 EndReason::Expired => new SubscriptionExpired($entry, $subscription),
+                EndReason::Lapsed => new SubscriptionLapsed($entry, $subscription),
             });
+    }
+
+    /**
+     * Asks a confirmed cycle to confirm again with a fresh confirm link that
+     * works until $answerBy. The condition restates that nothing proved
+     * interest since $before and that no request is out, so a cycle is asked
+     * once per period however often pruning runs or retries. False when the
+     * cycle ended or was asked or answered meanwhile.
+     *
+     * The request counts as the cycle's first confirmation request again, so
+     * the resend cooldown and cap apply to it as they did to the signup's.
+     */
+    public function requestReconfirmation(WaitlistSubscription $subscription, string $confirmToken, Carbon $before, Carbon $answerBy, RequestContext $context): bool
+    {
+        $now = Carbon::now();
+        // As stored, so the event and the API name the same moment.
+        $answerBy = $answerBy->copy()->startOfSecond();
+
+        return $this->transition($subscription, [
+            'confirm_token_hash' => static::modelClass()::hashToken($confirmToken),
+            'confirm_token_expires_at' => $answerBy,
+            'reconfirmation_requested_at' => $now,
+            'confirmation_sent_at' => $now,
+            'confirmation_count' => 1,
+            'confirmation_outcome' => null,
+        ], fn (Builder $query): Builder => $query
+            ->whereNotNull('confirmed_at')
+            ->whereNull('ended_at')
+            ->whereNull('reconfirmation_requested_at')
+            ->where(fn (Builder $query): Builder => $query
+                ->where('reconfirmed_at', '<', $before)
+                ->orWhere(fn (Builder $query): Builder => $query
+                    ->whereNull('reconfirmed_at')
+                    ->where('confirmed_at', '<', $before))),
+            ActivityType::ReconfirmationRequested, $context,
+            fn (WaitlistEntry $entry): ReconfirmationRequested => $this->reconfirmationRequested($entry, $subscription, $confirmToken, $answerBy));
+    }
+
+    /**
+     * Mails an unanswered request to confirm again once more, with a fresh
+     * link and the same deadline, for a mail that never arrived. Bound like a
+     * resend to the expected confirmation_count, so two of them collapse into
+     * one; false once the request was answered, the link expired or the cycle
+     * ended.
+     */
+    public function resendReconfirmation(WaitlistSubscription $subscription, string $confirmToken, RequestContext $context): bool
+    {
+        $expected = $subscription->confirmation_count;
+        $now = Carbon::now();
+
+        return $this->transition($subscription, [
+            'confirm_token_hash' => static::modelClass()::hashToken($confirmToken),
+            'confirmation_sent_at' => $now,
+            'confirmation_count' => $expected + 1,
+        ], fn (Builder $query): Builder => $query
+            ->whereNotNull('confirmed_at')
+            ->whereNull('ended_at')
+            ->whereNotNull('reconfirmation_requested_at')
+            ->where('confirm_token_expires_at', '>=', $now)
+            ->where('confirmation_count', $expected),
+            ActivityType::ReconfirmationRequested, $context,
+            fn (WaitlistEntry $entry): ReconfirmationRequested => $this->reconfirmationRequested($entry, $subscription, $confirmToken, $subscription->confirm_token_expires_at ?? $now));
+    }
+
+    /**
+     * The answer to a request to confirm again: the period starts anew. Like a
+     * confirmation, it names the link it was looked up with and its expiry,
+     * so a link that expired or that a lapse cleared changes nothing. False
+     * then, and when another request answered first. Announces nothing: the
+     * address simply stays.
+     */
+    public function reconfirm(WaitlistSubscription $subscription, RequestContext $context): bool
+    {
+        $now = Carbon::now();
+
+        return $this->transition($subscription, [
+            'reconfirmed_at' => $now,
+            'reconfirmation_requested_at' => null,
+        ], fn (Builder $query): Builder => $query
+            ->whereNotNull('confirmed_at')
+            ->whereNull('ended_at')
+            ->whereNotNull('reconfirmation_requested_at')
+            ->where('confirm_token_hash', $subscription->confirm_token_hash)
+            ->where('confirm_token_expires_at', '>=', $now), ActivityType::Reconfirmed, $context);
     }
 
     /**
@@ -555,6 +648,21 @@ class SubscriptionLifecycle
             subscription: $subscription,
             unsubscribeToken: $unsubscribe->token,
             unsubscribeUrl: $unsubscribe->url,
+        );
+    }
+
+    protected function reconfirmationRequested(WaitlistEntry $entry, WaitlistSubscription $subscription, string $confirmToken, Carbon $answerBy): ReconfirmationRequested
+    {
+        $unsubscribe = ($this->unsubscribeToken)($entry);
+
+        return new ReconfirmationRequested(
+            entry: $entry,
+            subscription: $subscription,
+            confirmToken: $confirmToken,
+            confirmUrl: app(ConfirmationUrlGenerator::class)->confirmUrl($entry, $confirmToken),
+            unsubscribeToken: $unsubscribe->token,
+            unsubscribeUrl: $unsubscribe->url,
+            answerBy: $answerBy,
         );
     }
 

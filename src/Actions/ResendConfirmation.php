@@ -23,7 +23,7 @@ class ResendConfirmation
 
     /**
      * Returns the entry when a mail was dispatched, null otherwise: unknown
-     * address, nothing pending, cooldown, or a cap (including
+     * address, nothing pending or asked again, cooldown, or a cap (including
      * max_pending_per_address). The cases are deliberately indistinguishable
      * so a public endpoint reveals nothing.
      */
@@ -50,11 +50,22 @@ class ResendConfirmation
      * unsubscribe links already sent working and stops repeated resends from
      * extending the retention period. Also sends the request a cycle started
      * without, once the address is under max_pending_per_address.
+     *
+     * A confirmed cycle that was asked to confirm again and has not answered
+     * gets that request once more, under the same cooldown and cap, with
+     * the same deadline: a mail that never arrived must not cost the person
+     * their place. max_pending_per_address does not apply, as it bounds new
+     * lists, which a request about an existing one never opens.
      */
     public function resend(WaitlistSubscription $subscription, ?RequestContext $context = null): bool
     {
-        if ($subscription->isConfirmed() || ! $subscription->isOpen() || $this->throttled($subscription)) {
+        if (! $subscription->isOpen() || $this->throttled($subscription)) {
             return false;
+        }
+
+        if ($subscription->isConfirmed()) {
+            return $subscription->awaitsReconfirmation()
+                && $this->lifecycle->resendReconfirmation($subscription, Str::random(64), $context ?? RequestContext::none());
         }
 
         $entry = $subscription->entry()->first();

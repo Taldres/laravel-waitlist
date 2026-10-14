@@ -20,7 +20,7 @@ completed erasure.
 | `EntryImported` | The same, for an address imported with the time it consented |
 | `ConsentGranted` | Add the contact to that purpose's list |
 | `ConsentWithdrawn` | Remove the contact from that purpose's list, unless another list still holds it |
-| `EntryUnsubscribed` | Remove the contact from the list of every purpose the cycle held, unless another list still holds it |
+| `EntryUnsubscribed`, `SubscriptionLapsed` | Remove the contact from the list of every purpose the cycle held, unless another list still holds it |
 | `EntryForgotten` | Delete the contact once the address is on no list at all; otherwise drop the purposes the remaining entries do not hold |
 
 > Subscribe-time (`EntrySubscribed`) is too early to sync: with double opt-in the
@@ -34,6 +34,10 @@ Three things decide what a sync may remove:
   fires for each list a person leaves; a newsletter agreed to on that list ends
   with it, without a `ConsentWithdrawn` of its own. `ConsentWithdrawn` fires for an
   optional purpose withdrawn while the list goes on.
+- **Not answering a request to confirm again is leaving too.** With
+  `retention.reconfirm_after_days`, a confirmed address that stays silent ends
+  its cycle as lapsed, and `SubscriptionLapsed` fires instead of
+  `EntryUnsubscribed`.
 - **Leaving one list never leaves another.** Lists that share a primary purpose are
   separate waitlists, and the newsletter may be held on another list too.
 - **An erasure can concern one list only.** `EntryForgotten` fires for every
@@ -67,6 +71,7 @@ use Taldres\Waitlist\Events\EntryConfirmed;
 use Taldres\Waitlist\Events\EntryForgotten;
 use Taldres\Waitlist\Events\EntryImported;
 use Taldres\Waitlist\Events\EntryUnsubscribed;
+use Taldres\Waitlist\Events\SubscriptionLapsed;
 use Taldres\Waitlist\Models\WaitlistEntry;
 
 class SyncWaitlistToBrevo implements ShouldQueue, ShouldBeEncrypted
@@ -98,9 +103,9 @@ class SyncWaitlistToBrevo implements ShouldQueue, ShouldBeEncrypted
         $this->removeUnlessHeld($event->entry->project, $event->entry->email, $event->consent->purpose);
     }
 
-    public function onUnsubscribed(EntryUnsubscribed $event): void
+    public function onUnsubscribed(EntryUnsubscribed|SubscriptionLapsed $event): void
     {
-        // Leaving ends the cycle, and with it every purpose it held.
+        // Leaving or lapsing ends the cycle, and with it every purpose it held.
         $event->subscription->consents()->pluck('purpose')->unique()->each(
             fn (string $purpose) => $this->removeUnlessHeld($event->entry->project, $event->entry->email, $purpose),
         );
@@ -170,6 +175,7 @@ use Taldres\Waitlist\Events\EntryConfirmed;
 use Taldres\Waitlist\Events\EntryForgotten;
 use Taldres\Waitlist\Events\EntryImported;
 use Taldres\Waitlist\Events\EntryUnsubscribed;
+use Taldres\Waitlist\Events\SubscriptionLapsed;
 
 public function boot(): void
 {
@@ -178,6 +184,7 @@ public function boot(): void
     Event::listen(ConsentGranted::class, [SyncWaitlistToBrevo::class, 'onGranted']);
     Event::listen(ConsentWithdrawn::class, [SyncWaitlistToBrevo::class, 'onWithdrawn']);
     Event::listen(EntryUnsubscribed::class, [SyncWaitlistToBrevo::class, 'onUnsubscribed']);
+    Event::listen(SubscriptionLapsed::class, [SyncWaitlistToBrevo::class, 'onUnsubscribed']);
     Event::listen(EntryForgotten::class, [SyncWaitlistToBrevo::class, 'onForgotten']);
 }
 ```

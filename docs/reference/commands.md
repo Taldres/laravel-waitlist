@@ -46,7 +46,10 @@ say where they looked.
 - **`waitlist:prune`** applies the retention periods. Schedule it yourself, for
   example `Schedule::command('waitlist:prune')->daily()`, and keep Laravel's
   scheduler running; `waitlist:privacy` warns while no scheduled task runs it. See
-  [GDPR in practice](../gdpr.md#retention).
+  [GDPR in practice](../gdpr.md#retention). With `retention.reconfirm_after_days`
+  set, it also asks confirmed addresses to confirm again
+  (`ReconfirmationRequested`, once per period) and ends the ones whose request
+  expired unanswered, see [Lifecycle](../lifecycle.md#asking-confirmed-addresses-again).
 - **`waitlist:forget --all`** asks before erasing a list; without a terminal to
   ask, it needs `--force`. Use it once a list's purpose is fulfilled, after the
   launch for example.

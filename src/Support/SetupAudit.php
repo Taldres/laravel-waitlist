@@ -49,7 +49,7 @@ final class SetupAudit
      */
     public const array COLUMNS = [
         'entry' => ['id', 'project', 'list', 'email', 'email_hash', 'status', 'latest_subscription_id', 'unsubscribe_token_hash', 'unsubscribe_token', 'manage_token_hash', 'manage_token_expires_at', 'manage_link_sent_at', 'metadata', 'created_at', 'updated_at'],
-        'subscription' => ['id', 'waitlist_entry_id', 'sequence', 'active', 'confirm_token_hash', 'confirm_token_expires_at', 'started_at', 'confirmation_sent_at', 'confirmation_count', 'confirmation_outcome', 'confirmed_at', 'ended_at', 'end_reason', 'created_at', 'updated_at'],
+        'subscription' => ['id', 'waitlist_entry_id', 'sequence', 'active', 'confirm_token_hash', 'confirm_token_expires_at', 'started_at', 'confirmation_sent_at', 'confirmation_count', 'confirmation_outcome', 'confirmed_at', 'ended_at', 'end_reason', 'created_at', 'updated_at', 'reconfirmation_requested_at', 'reconfirmed_at'],
         'consent' => ['id', 'waitlist_subscription_id', 'purpose', 'version', 'locale', 'text', 'required', 'granted_at', 'withdrawn_at', 'active'],
         'activity' => ['id', 'waitlist_entry_id', 'waitlist_subscription_id', 'project', 'list', 'type', 'previous_status', 'purpose', 'reference', 'ip', 'user_agent', 'occurred_at', 'occurred_on'],
         'wording' => ['id', 'project', 'purpose', 'version', 'locale', 'text', 'registered_by', 'registered_at', 'retired_at'],

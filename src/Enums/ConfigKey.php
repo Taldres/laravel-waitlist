@@ -33,6 +33,8 @@ enum ConfigKey: string
     case RetentionPendingDays = 'waitlist.retention.pending_days';
     case RetentionUnsubscribedDays = 'waitlist.retention.unsubscribed_days';
     case RetentionRequestMetadataDays = 'waitlist.retention.request_metadata_days';
+    case RetentionReconfirmAfterDays = 'waitlist.retention.reconfirm_after_days';
+    case RetentionReconfirmWithinDays = 'waitlist.retention.reconfirm_within_days';
 
     case RoutesEnabled = 'waitlist.routes.enabled';
     case RoutesPrefix = 'waitlist.routes.prefix';

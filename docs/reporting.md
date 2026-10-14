@@ -69,13 +69,14 @@ projects. Without a period it covers everything stored.
 ## Confirmed over time
 
 "We had 500, 30 left, 470 are on the list": the log answers that for any day,
-not only today. Every departure (`unsubscribed`, `expired`, `erased`) records
-the status the entry left, so the number of confirmed entries at the end of a
+not only today. Every departure (`unsubscribed`, `expired`, `lapsed`, `erased`)
+records the status the entry left, so the number of confirmed entries at the end of a
 day is
 
 ```
 confirmations up to that day
 − unsubscribes from confirmed
+− lapses (no answer when asked to confirm again)
 − erasures from confirmed
 ```
 
@@ -92,6 +93,7 @@ $month = $report->between('2026-10-01', '2026-10-31')->totals();
 $month->of(ActivityType::Confirmed);                              // joined
 $month->of(ActivityType::Unsubscribed, from: EntryStatus::Confirmed);   // left
 $month->of(ActivityType::Unsubscribed, from: EntryStatus::Pending);     // never confirmed
+$month->of(ActivityType::Lapsed, from: EntryStatus::Confirmed);         // did not answer when asked again
 $month->of(ActivityType::Erased, from: EntryStatus::Confirmed);         // erased while on the list
 $month->of(ActivityType::Erased, from: EntryStatus::Unsubscribed);      // retention clean-up
 $month->confirmedChange();                                        // net change

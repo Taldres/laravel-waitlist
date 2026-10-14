@@ -75,8 +75,11 @@ Laravel's scheduler running (`php artisan schedule:run` every minute);
 back before 1970 (a 36500-day "forever") is refused. `waitlist:prune` applies every
 period that reads, then reports the ones that do not and fails the run: watch the
 logs and the exit code. These are technical defaults, not legal recommendations.
-Active confirmed entries and the remaining reporting rows do not expire
-automatically.
+`reconfirm_after_days` (`null`, off) asks confirmed addresses that have been
+quiet that long to confirm again (`ReconfirmationRequested`, mailed by your
+listener); without an answer within `reconfirm_within_days` (30) they leave the
+list as `lapsed` and are kept like anyone who left. Without it, active confirmed
+entries do not expire; the remaining reporting rows never do.
 
 ### Rotate `APP_KEY`
 

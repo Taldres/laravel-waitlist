@@ -346,6 +346,44 @@ class WaitlistEntry extends Model
     }
 
     /**
+     * Confirmed, with nothing proving interest since $before: neither the
+     * confirmation nor an answer to the last request to confirm again, and no
+     * request out.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeDueForReconfirmation(Builder $query, CarbonInterface $before): Builder
+    {
+        return $query
+            ->where('status', EntryStatus::Confirmed)
+            ->whereHas('currentSubscription', fn (Builder $cycle) => $cycle
+                ->whereNotNull('confirmed_at')
+                ->whereNull('reconfirmation_requested_at')
+                ->where(fn (Builder $cycle) => $cycle
+                    ->where('reconfirmed_at', '<', $before)
+                    ->orWhere(fn (Builder $cycle) => $cycle
+                        ->whereNull('reconfirmed_at')
+                        ->where('confirmed_at', '<', $before))));
+    }
+
+    /**
+     * Asked to confirm again, and the link of that request expired unanswered.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeUnansweredReconfirmation(Builder $query): Builder
+    {
+        return $query
+            ->where('status', EntryStatus::Confirmed)
+            ->whereHas('currentSubscription', fn (Builder $cycle) => $cycle
+                ->whereNotNull('confirmed_at')
+                ->whereNotNull('reconfirmation_requested_at')
+                ->where('confirm_token_expires_at', '<', Carbon::now()));
+    }
+
+    /**
      * Left more than $days ago, counted from the end of the latest cycle.
      *
      * @param  Builder<self>  $query

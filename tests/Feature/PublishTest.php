@@ -55,6 +55,7 @@ it('publishes the migrations in the order their foreign keys need', function () 
         'create_waitlist_consents_table.php',
         'create_waitlist_activity_table.php',
         'create_waitlist_wordings_table.php',
+        'add_reconfirmation_to_waitlist_subscriptions_table.php',
     ]);
 });
 

@@ -37,6 +37,8 @@ use Taldres\Waitlist\Support\ResolvesModel;
  * @property Carbon|null $confirmed_at
  * @property Carbon|null $ended_at
  * @property EndReason|null $end_reason
+ * @property Carbon|null $reconfirmation_requested_at
+ * @property Carbon|null $reconfirmed_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read WaitlistEntry $entry
@@ -67,6 +69,8 @@ class WaitlistSubscription extends Model
         'confirmed_at',
         'ended_at',
         'end_reason',
+        'reconfirmation_requested_at',
+        'reconfirmed_at',
     ];
 
     protected $hidden = [
@@ -88,6 +92,8 @@ class WaitlistSubscription extends Model
             'confirmation_sent_at' => 'datetime',
             'confirmed_at' => 'datetime',
             'ended_at' => 'datetime',
+            'reconfirmation_requested_at' => 'datetime',
+            'reconfirmed_at' => 'datetime',
         ];
     }
 
@@ -141,6 +147,17 @@ class WaitlistSubscription extends Model
     public function isConfirmed(): bool
     {
         return $this->confirmed_at !== null;
+    }
+
+    /**
+     * Confirmed, asked to confirm again, and not answered yet. Its confirm
+     * link is the one that request carried.
+     */
+    public function awaitsReconfirmation(): bool
+    {
+        // Read raw: before its migration ran, the column is missing, which
+        // strict mode would refuse to read.
+        return $this->isOpen() && $this->isConfirmed() && ($this->getAttributes()['reconfirmation_requested_at'] ?? null) !== null;
     }
 
     public function hasExpiredToken(): bool

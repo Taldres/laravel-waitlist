@@ -27,6 +27,8 @@ final readonly class SubscriptionRecord implements Arrayable, JsonSerializable
         public ?DateTimeInterface $confirmedAt,
         public ?DateTimeInterface $endedAt,
         public ?EndReason $endReason,
+        public ?DateTimeInterface $reconfirmationRequestedAt = null,
+        public ?DateTimeInterface $reconfirmedAt = null,
     ) {}
 
     public static function fromModel(WaitlistSubscription $subscription): self
@@ -41,6 +43,9 @@ final readonly class SubscriptionRecord implements Arrayable, JsonSerializable
             confirmedAt: $subscription->confirmed_at,
             endedAt: $subscription->ended_at,
             endReason: $subscription->end_reason,
+            // Missing until their migration ran.
+            reconfirmationRequestedAt: array_key_exists('reconfirmation_requested_at', $subscription->getAttributes()) ? $subscription->reconfirmation_requested_at : null,
+            reconfirmedAt: array_key_exists('reconfirmed_at', $subscription->getAttributes()) ? $subscription->reconfirmed_at : null,
         );
     }
 
@@ -57,6 +62,8 @@ final readonly class SubscriptionRecord implements Arrayable, JsonSerializable
             'confirmed_at' => $this->confirmedAt?->format('Y-m-d H:i:s'),
             'ended_at' => $this->endedAt?->format('Y-m-d H:i:s'),
             'end_reason' => $this->endReason?->value,
+            'reconfirmation_requested_at' => $this->reconfirmationRequestedAt?->format('Y-m-d H:i:s'),
+            'reconfirmed_at' => $this->reconfirmedAt?->format('Y-m-d H:i:s'),
         ];
     }
 

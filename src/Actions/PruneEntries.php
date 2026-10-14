@@ -6,6 +6,8 @@ namespace Taldres\Waitlist\Actions;
 
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use Taldres\Waitlist\Config\ConfigFallback;
 use Taldres\Waitlist\Config\TimestampRange;
 use Taldres\Waitlist\Config\WaitlistConfig;
@@ -50,20 +52,44 @@ class PruneEntries
             'expired' => [WaitlistConfig::pendingDays(...), static fn (ProjectPeriods $periods): ?int => $periods->pendingDays, fn (int $days, ?string $within, bool $leaveOutOwn): int => $this->expirePending($days, $list, $within, $leaveOutOwn ? $except : [])],
             'erased' => [WaitlistConfig::unsubscribedDays(...), static fn (ProjectPeriods $periods): ?int => $periods->unsubscribedDays, fn (int $days, ?string $within, bool $leaveOutOwn): int => $this->eraseUnsubscribed($days, $list, $within, $leaveOutOwn ? $except : [])],
             'cleared' => [WaitlistConfig::requestMetadataDays(...), static fn (ProjectPeriods $periods): ?int => $periods->requestMetadataDays, fn (int $days, ?string $within, bool $leaveOutOwn): int => $this->clearRequestMetadata($days, $list, $within, $leaveOutOwn ? $except : [])],
+            'asked' => [WaitlistConfig::reconfirmAfterDays(...), static fn (ProjectPeriods $periods): ?int => $periods->reconfirmAfterDays, fn (int $days, ?string $within, bool $leaveOutOwn, ?ProjectPeriods $periods): int => $this->askAgain($days, $periods->reconfirmWithinDays ?? WaitlistConfig::reconfirmWithinDays(), $list, $within, $leaveOutOwn ? $except : [])],
         ];
-        $counts = ['expired' => 0, 'erased' => 0, 'cleared' => 0];
+        $counts = ['expired' => 0, 'erased' => 0, 'cleared' => 0, 'asked' => 0, 'lapsed' => 0];
+        // Asking runs last, so a listener that throws or a schema without the
+        // columns it needs never holds up the erasures.
+        $reconfirmable = $this->hasReconfirmationColumns();
 
         foreach ($steps as $step => [$configured, $override, $prune]) {
+            if ($step === 'asked' && ! $reconfirmable) {
+                $this->apply(
+                    fn (): ?int => array_filter($own, static fn (ProjectPeriods $periods): bool => $periods->reconfirmAfterDays !== null) !== [] ? 1 : $configured(),
+                    static fn (): never => throw new InvalidConfigurationException('Confirmed addresses are to be asked to confirm again (retention.reconfirm_after_days), but the waitlist_subscriptions table lacks its columns: publish the migrations with php artisan vendor:publish --tag=waitlist-migrations and run php artisan migrate.'),
+                    $failures,
+                );
+
+                continue;
+            }
+
             if (! $onlyOwn) {
-                $counts[$step] += $this->apply($configured, fn (int $days): int => $prune($days, $project, true), $failures);
+                $counts[$step] += $this->apply($configured, fn (int $days): int => $prune($days, $project, true, null), $failures);
             }
 
             foreach ($own as $name => $periods) {
-                $counts[$step] += $this->apply(fn (): ?int => $override($periods) ?? $configured(), fn (int $days): int => $prune($days, $name, false), $failures);
+                $counts[$step] += $this->apply(fn (): ?int => $override($periods) ?? $configured(), fn (int $days): int => $prune($days, $name, false, $periods), $failures);
             }
         }
 
-        $result = new PruneResult(expired: $counts['expired'], erased: $counts['erased'], cleared: $counts['cleared']);
+        if ($reconfirmable) {
+            $counts['lapsed'] = $this->lapse($list, $project);
+        }
+
+        $result = new PruneResult(
+            expired: $counts['expired'],
+            erased: $counts['erased'],
+            cleared: $counts['cleared'],
+            asked: $counts['asked'],
+            lapsed: $counts['lapsed'],
+        );
 
         if ($failures !== []) {
             foreach (array_slice($failures, 1) as $exception) {
@@ -74,6 +100,17 @@ class PruneEntries
         }
 
         return $result;
+    }
+
+    /**
+     * An application that updated the package without running its newer
+     * migrations still has its retention applied.
+     */
+    private function hasReconfirmationColumns(): bool
+    {
+        $model = new (static::subscriptionModelClass());
+
+        return $model->getConnection()->getSchemaBuilder()->hasColumns($model->getTable(), ['reconfirmation_requested_at', 'reconfirmed_at']);
     }
 
     /**
@@ -102,6 +139,9 @@ class PruneEntries
     }
 
     /**
+     * A step may read a second period, as asking again reads how long the
+     * answer may take; one that does not read fails that step like its own.
+     *
      * @param  Closure(): ?int  $period
      * @param  Closure(int): int  $prune
      * @param  list<InvalidConfigurationException>  $failures
@@ -110,13 +150,70 @@ class PruneEntries
     {
         try {
             $days = $period();
+
+            return $days === null ? 0 : $prune($days);
         } catch (InvalidConfigurationException $exception) {
             $failures[] = $exception;
 
             return 0;
         }
+    }
 
-        return $days === null ? 0 : $prune($days);
+    /**
+     * Asks confirmed addresses that have not confirmed or answered for $days
+     * to confirm again, each with a link that works for $withinDays. One
+     * request per period: the lifecycle claims the cycle conditionally, so a
+     * rerun or a second worker asks nobody twice.
+     *
+     * @param  list<string>  $exceptProjects  projects that follow periods of their own
+     */
+    public function askAgain(int $days, int $withinDays, ?string $list = null, ?string $project = null, array $exceptProjects = []): int
+    {
+        $before = TimestampRange::daysAgo($days);
+        $asked = 0;
+
+        static::modelClass()::query()
+            ->within($list, $project)
+            ->when($exceptProjects !== [], fn (Builder $query) => $query->whereNotIn('project', $exceptProjects))
+            ->dueForReconfirmation($before)
+            ->with('currentSubscription')
+            ->lazyById(500)
+            ->each(function (WaitlistEntry $entry) use (&$asked, $before, $withinDays): void {
+                $cycle = $entry->currentSubscription;
+
+                if ($cycle !== null && $this->lifecycle->requestReconfirmation($cycle, Str::random(64), $before, Carbon::now()->addDays($withinDays), RequestContext::none())) {
+                    $asked++;
+                }
+            });
+
+        return $asked;
+    }
+
+    /**
+     * Ends the cycles whose request to confirm again went unanswered until
+     * its link expired. The deadline was set with the request, so this needs
+     * no period, and a request already out runs its course when asking is
+     * turned off. The entry then waits out unsubscribed_days like anyone
+     * who left: the consent records of the mails it got stay for a dispute.
+     */
+    public function lapse(?string $list = null, ?string $project = null): int
+    {
+        $lapsed = 0;
+
+        static::modelClass()::query()
+            ->within($list, $project)
+            ->unansweredReconfirmation()
+            ->with('currentSubscription')
+            ->lazyById(500)
+            ->each(function (WaitlistEntry $entry) use (&$lapsed): void {
+                $cycle = $entry->currentSubscription;
+
+                if ($cycle !== null && $this->lifecycle->end($cycle, EndReason::Lapsed, RequestContext::none())) {
+                    $lapsed++;
+                }
+            });
+
+        return $lapsed;
     }
 
     /**

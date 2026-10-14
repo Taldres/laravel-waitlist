@@ -176,6 +176,8 @@ final class WaitlistConfig
             pendingDays: self::pendingDays(),
             unsubscribedDays: self::unsubscribedDays(),
             requestMetadataDays: self::requestMetadataDays(),
+            reconfirmAfterDays: self::reconfirmAfterDays(),
+            reconfirmWithinDays: self::reconfirmWithinDays(),
         );
     }
 
@@ -201,6 +203,24 @@ final class WaitlistConfig
     public static function requestMetadataDays(): ?int
     {
         return self::reader()->lookbackDaysOrNull(ConfigKey::RetentionRequestMetadataDays, min: 0);
+    }
+
+    /**
+     * Days after its confirmation, or its last answer, that a confirmed entry
+     * is asked to confirm again; null asks nobody.
+     */
+    public static function reconfirmAfterDays(): ?int
+    {
+        return self::reader()->lookbackDaysOrNull(ConfigKey::RetentionReconfirmAfterDays, min: 1);
+    }
+
+    /**
+     * Days a confirmed entry that was asked again has to answer. The end is
+     * stored with the request, as its link's expiry.
+     */
+    public static function reconfirmWithinDays(): int
+    {
+        return self::reader()->lifetimeDays(ConfigKey::RetentionReconfirmWithinDays, min: 1);
     }
 
     public static function routesEnabled(): bool
@@ -329,6 +349,8 @@ final class WaitlistConfig
             self::pendingDays(...),
             self::unsubscribedDays(...),
             self::requestMetadataDays(...),
+            self::reconfirmAfterDays(...),
+            self::reconfirmWithinDays(...),
             self::routesEnabled(...),
             self::routePrefix(...),
             self::routeName(...),

@@ -29,6 +29,14 @@ final class TimestampRange
     }
 
     /**
+     * Days a date counted forward from now may lie ahead and still be stored.
+     */
+    public static function daysAhead(): int
+    {
+        return intdiv(self::minutesAhead(), 1440);
+    }
+
+    /**
      * Minutes that can be counted back from now before 1970, earlier than
      * any date a timestamp column holds.
      */

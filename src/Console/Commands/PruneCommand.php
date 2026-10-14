@@ -13,7 +13,7 @@ class PruneCommand extends Command
         {--list= : Only prune this waitlist (of the default project unless --project is given)}
         {--project= : Only prune this project}';
 
-    protected $description = 'Apply the retention periods: erase abandoned signups and addresses that left, clear old request metadata';
+    protected $description = 'Apply the retention periods: ask confirmed addresses again and end the silent ones, erase abandoned signups and addresses that left, clear old request metadata';
 
     public function handle(PruneEntries $prune): int
     {
@@ -25,7 +25,7 @@ class PruneCommand extends Command
             project: is_string($project) && $project !== '' ? $project : null,
         );
 
-        $this->info("Expired and erased {$result->expired} unconfirmed, erased {$result->erased} unsubscribed, cleared request metadata on {$result->cleared} log rows.");
+        $this->info("Expired and erased {$result->expired} unconfirmed, erased {$result->erased} unsubscribed, cleared request metadata on {$result->cleared} log rows, asked {$result->asked} confirmed to confirm again, ended {$result->lapsed} that did not answer.");
 
         return self::SUCCESS;
     }

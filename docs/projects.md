@@ -312,11 +312,16 @@ project says so in its definition:
 $project
     ->retention(pendingDays: 7, unsubscribedDays: 365, requestMetadataDays: 14)
     ->confirmLinkLifetime(60 * 24 * 7);   // minutes
+
+// Ask confirmed addresses again after a year; whoever does not answer
+// within 30 days leaves the list.
+$project->retention(reconfirmAfterDays: 365, reconfirmWithinDays: 30);
 ```
 
 Each period is optional and falls back to the configuration when left out. A
 project cannot say "never" for one; to keep data longer than the configuration
-does, give a longer period. The values are checked when the project is defined,
+does, give a longer period; so a project can start asking confirmed addresses
+again, but not stop where the configuration asks them. The values are checked when the project is defined,
 against the same bounds as the configuration (no earlier than 1970, no later
 than 2038 for a link).
 

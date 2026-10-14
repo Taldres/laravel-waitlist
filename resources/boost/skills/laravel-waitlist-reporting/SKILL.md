@@ -59,6 +59,7 @@ $totals = Waitlist::for('beta')->report()->since(30)->totals();   // the last 30
 $totals->signups();                       // subscribed + resubscribed
 $totals->of(ActivityType::Confirmed);
 $totals->of(ActivityType::Unsubscribed, from: EntryStatus::Confirmed);  // left after confirming
+$totals->of(ActivityType::Lapsed, from: EntryStatus::Confirmed);        // did not answer when asked again
 $totals->confirmationRate();              // ?float, null when nobody signed up
 $totals->confirmedChange();               // net change of the confirmed count
 ```
@@ -74,7 +75,7 @@ foreach ($series as $day) {
     $day->of(ActivityType::Confirmed);
 }
 
-$series->toArray();   // [{date, subscribed, resubscribed, confirmation_requested, confirmation_mailed, confirmation_failed, confirmed, unsubscribed, expired, erased, consent_granted, consent_withdrawn, imported}]
+$series->toArray();   // [{date, subscribed, resubscribed, confirmation_requested, confirmation_mailed, confirmation_failed, confirmed, unsubscribed, expired, reconfirmation_requested, reconfirmed, lapsed, erased, consent_granted, consent_withdrawn, imported}]
 ```
 
 `fillGaps()` adds days without activity, which a chart needs.

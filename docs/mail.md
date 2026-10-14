@@ -25,6 +25,7 @@ a second list in step, in both directions.
 | [Confirmation](#the-confirmation-mail) | `EntrySubscribed` with `requiresConfirmation` | `confirmUrl`, `unsubscribeUrl` | with double opt-in |
 | [Preference page link](#the-preference-page-link) | `ManageLinkRequested` | `manageUrl`, only ever to the address itself | when you offer the preference page |
 | [Welcome](#a-welcome-mail) | `EntryConfirmed` | `unsubscribeUrl`, one-click headers | no |
+| [Still interested?](#asking-again-after-a-while) | `ReconfirmationRequested` | `confirmUrl`, `unsubscribeUrl`, `answerBy` | with `retention.reconfirm_after_days` |
 | [Launch, updates about a list](#launch-mails-and-newsletters) | you decide | a link that leaves the list | no |
 | [Newsletter, an optional purpose](#launch-mails-and-newsletters) | you decide | a link that withdraws the newsletter | no |
 
@@ -331,6 +332,55 @@ public function headers(): Headers
 
 `EntryConfirmed` carries a ready-made `unsubscribeUrl`. The unsubscribe token is
 not rotated, so a retried job builds the same link.
+
+## Asking again after a while
+
+With `retention.reconfirm_after_days` set, `waitlist:prune` asks confirmed
+addresses that have been quiet for that long whether they still want to be on
+the list, see [Lifecycle](lifecycle.md#asking-confirmed-addresses-again).
+Whoever does not answer by `answerBy` leaves the list at the next run.
+
+```php
+// app/Listeners/SendWaitlistReconfirmationMail.php
+namespace App\Listeners;
+
+use App\Mail\StillInterestedMail;
+use Illuminate\Contracts\Queue\ShouldBeEncrypted;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Support\Facades\Mail;
+use LogicException;
+use Taldres\Waitlist\Events\ReconfirmationRequested;
+
+class SendWaitlistReconfirmationMail implements ShouldQueue, ShouldBeEncrypted
+{
+    public function handle(ReconfirmationRequested $event): void
+    {
+        $confirmUrl = $event->confirmUrl ?? throw new LogicException('Set the confirm page in urls() or enable the package routes.');
+
+        Mail::to($event->entry->email)->send(new StillInterestedMail(
+            $confirmUrl,
+            $event->unsubscribeUrl,
+            $event->answerBy,
+        ));
+    }
+}
+```
+
+- **The link** is a confirm link, so it opens your confirm page, which posts it
+  back as it does for a signup. Answering keeps the address and starts the
+  period anew; nothing else changes.
+- **One request per period.** A rerun of `waitlist:prune` does not ask again,
+  and a retried job mails the same link.
+- **Your confirm page** posts the token back as for a signup. If it looks
+  first with `GET`, `data.answer_by` set means: post, although `status` reads
+  `confirmed`.
+- **Queue the listener.** `waitlist:prune` fires the event; a synchronous
+  listener that throws ends the run.
+- **A mail that never went out** still lets the address lapse: the package
+  cannot tell. Watch failed jobs and send it again with
+  `Waitlist::for($list)->resendConfirmation($email)`, which fires the event once
+  more with a fresh link and the same `answerBy`, under the resend cooldown and
+  cap; a signup of the address does the same.
 
 ## Launch mails and newsletters
 
