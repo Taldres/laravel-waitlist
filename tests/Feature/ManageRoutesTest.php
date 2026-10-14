@@ -6,7 +6,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Taldres\Waitlist\Actions\EraseEntry;
 use Taldres\Waitlist\Definitions\ProjectDefinition;
-use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Enums\EntryStatus;
 use Taldres\Waitlist\Events\EntryForgotten;
 use Taldres\Waitlist\Events\ManageLinkRequested;
@@ -39,10 +38,7 @@ it('refuses to mint or request a manage link for a project without them', functi
 
 describe('with routes enabled', function () {
     beforeEach(function () {
-        config()->set(ConfigKey::RoutesEnabled->value, true);
-        config()->set(ConfigKey::RoutesMiddleware->value, []);
-
-        require __DIR__.'/../../routes/waitlist.php';
+        enableWaitlistRoutes();
 
         $this->tokens = subscribeAndCapture('beta', 'user@example.com', [...waitlistConsent(), 'newsletter' => '2026-10']);
         Waitlist::confirm($this->tokens['confirm']);

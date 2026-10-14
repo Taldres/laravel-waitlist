@@ -28,10 +28,7 @@ use Taldres\Waitlist\Models\WaitlistEntry;
  */
 
 beforeEach(function () {
-    config()->set(ConfigKey::RoutesEnabled->value, true);
-    config()->set(ConfigKey::RoutesMiddleware->value, []);
-
-    require __DIR__.'/../../routes/waitlist.php';
+    enableWaitlistRoutes();
 });
 
 /**

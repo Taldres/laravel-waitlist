@@ -17,10 +17,7 @@ use Taldres\Waitlist\Tests\Fixtures\RequireFormCheck;
 beforeEach(function () {
     // The provider registers routes at boot, before this flag is set, so register them again.
     // Middleware is cleared: the testbench skeleton defines no "api" group.
-    config()->set(ConfigKey::RoutesEnabled->value, true);
-    config()->set(ConfigKey::RoutesMiddleware->value, []);
-
-    require __DIR__.'/../../routes/waitlist.php';
+    enableWaitlistRoutes();
 
     $this->tokens = function (): array {
         $tokens = [];

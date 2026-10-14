@@ -122,10 +122,7 @@ describe('with a date class the app chose with Date::use()', function () {
     it('discloses the history over the manage link', function (string $dateClass) {
         Date::use($dateClass);
 
-        config()->set(ConfigKey::RoutesEnabled->value, true);
-        config()->set(ConfigKey::RoutesMiddleware->value, []);
-
-        require __DIR__.'/../../routes/waitlist.php';
+        enableWaitlistRoutes();
 
         $tokens = subscribeAndCapture('beta', 'user@example.com');
         Waitlist::confirm($tokens['confirm']);

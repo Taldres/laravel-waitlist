@@ -107,10 +107,7 @@ it('publishes a provider for several projects that works as it is, apart from th
 
     // What the install output warns about: without a resolver, the routes act
     // for the default project, which has no lists.
-    config()->set(ConfigKey::RoutesEnabled->value, true);
-    config()->set(ConfigKey::RoutesMiddleware->value, []);
-
-    require __DIR__.'/../../routes/waitlist.php';
+    enableWaitlistRoutes();
 
     $this->postJson('/waitlist', ['email' => 'user@example.com', 'purposes' => waitlistConsent()])
         ->assertStatus(422)

@@ -362,10 +362,7 @@ function edgeCaseRun(string $flow, array $settings, array $contracts, mixed $tes
     [, $http, $arrange] = edgeCaseFlows()[$flow];
 
     if ($http) {
-        config()->set(ConfigKey::RoutesEnabled->value, true);
-        config()->set(ConfigKey::RoutesMiddleware->value, []);
-
-        require __DIR__.'/../../routes/waitlist.php';
+        enableWaitlistRoutes();
     }
 
     $act = $arrange($test);

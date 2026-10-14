@@ -53,10 +53,7 @@ function authorizationTestEndpoints(): array
 }
 
 beforeEach(function () {
-    config()->set(ConfigKey::RoutesEnabled->value, true);
-    config()->set(ConfigKey::RoutesMiddleware->value, []);
-
-    require __DIR__.'/../../routes/waitlist.php';
+    enableWaitlistRoutes();
 
     Auth::viaRequest('waitlist-first', fn (Request $request) => authorizationTestCaller($request->header('X-First')));
     Auth::viaRequest('waitlist-second', fn (Request $request) => authorizationTestCaller($request->header('X-Second')));

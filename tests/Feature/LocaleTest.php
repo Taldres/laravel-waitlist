@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use Taldres\Waitlist\Definitions\ProjectDefinition;
-use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Exceptions\UnknownPurposeException;
 use Taldres\Waitlist\Facades\Waitlist;
 use Taldres\Waitlist\Models\WaitlistConsent;
@@ -99,10 +98,7 @@ it('adds an optional purpose in the locale the preference page showed', function
 
 describe('over HTTP', function () {
     beforeEach(function () {
-        config()->set(ConfigKey::RoutesEnabled->value, true);
-        config()->set(ConfigKey::RoutesMiddleware->value, []);
-
-        require __DIR__.'/../../routes/waitlist.php';
+        enableWaitlistRoutes();
     });
 
     it('serves the wording in a locale and takes back what it served', function () {

@@ -4,16 +4,12 @@ declare(strict_types=1);
 
 use Illuminate\Http\Request;
 use Taldres\Waitlist\Contracts\SpamProtector;
-use Taldres\Waitlist\Enums\ConfigKey;
 use Taldres\Waitlist\Facades\Waitlist;
 use Taldres\Waitlist\Models\WaitlistEntry;
 use Taldres\Waitlist\Support\ClosureSpamProtector;
 
 beforeEach(function () {
-    config()->set(ConfigKey::RoutesEnabled->value, true);
-    config()->set(ConfigKey::RoutesMiddleware->value, []);
-
-    require __DIR__.'/../../routes/waitlist.php';
+    enableWaitlistRoutes();
 });
 
 function denyAllProtector(): SpamProtector

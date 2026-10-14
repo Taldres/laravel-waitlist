@@ -13,10 +13,7 @@ use Taldres\Waitlist\Support\TimeTrapSpamProtector;
 use Taldres\Waitlist\Tests\Fixtures\ProjectCaller;
 
 beforeEach(function () {
-    config()->set(ConfigKey::RoutesEnabled->value, true);
-    config()->set(ConfigKey::RoutesMiddleware->value, []);
-
-    require __DIR__.'/../../routes/waitlist.php';
+    enableWaitlistRoutes();
 
     $this->freezeTime();
     app()->bind(SpamProtector::class, TimeTrapSpamProtector::class);

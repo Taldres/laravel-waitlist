@@ -101,10 +101,7 @@ it('leaves the routes alone while the switch does not read, as that is reported 
 });
 
 it('knows the routes of each group, so the check cannot drift from routes/waitlist.php', function () {
-    config()->set(ConfigKey::RoutesEnabled->value, true);
-    config()->set(ConfigKey::RoutesMiddleware->value, []);
-
-    require __DIR__.'/../../routes/waitlist.php';
+    enableWaitlistRoutes();
     app('router')->getRoutes()->refreshNameLookups();
 
     $registered = collect(app('router')->getRoutes()->getRoutes())

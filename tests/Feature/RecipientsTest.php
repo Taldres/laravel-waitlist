@@ -9,9 +9,7 @@ use Taldres\Waitlist\Facades\Waitlist;
 use Taldres\Waitlist\Support\Recipient;
 
 beforeEach(function () {
-    config()->set(ConfigKey::RoutesEnabled->value, true);
-    config()->set(ConfigKey::RoutesMiddleware->value, []);
-    require __DIR__.'/../../routes/waitlist.php';
+    enableWaitlistRoutes();
 
     $this->both = [...waitlistConsent(), 'newsletter' => '2026-10'];
     $this->confirmed = function (string $list, string $email, ?array $purposes = null, string $project = 'default'): array {

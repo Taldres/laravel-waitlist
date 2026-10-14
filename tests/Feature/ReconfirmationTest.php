@@ -410,10 +410,7 @@ describe('not answering', function () {
 
 describe('over HTTP', function () {
     beforeEach(function () {
-        config()->set(ConfigKey::RoutesEnabled->value, true);
-        config()->set(ConfigKey::RoutesMiddleware->value, []);
-
-        require __DIR__.'/../../routes/waitlist.php';
+        enableWaitlistRoutes();
 
         confirmedAddress();
         $this->requests = captureReconfirmations();
@@ -527,9 +524,7 @@ describe('before the migration ran', function () {
 
     it('confirms, answers and exports in strict mode', function () {
         Model::preventAccessingMissingAttributes();
-        config()->set(ConfigKey::RoutesEnabled->value, true);
-        config()->set(ConfigKey::RoutesMiddleware->value, []);
-        require __DIR__.'/../../routes/waitlist.php';
+        enableWaitlistRoutes();
 
         $tokens = subscribeAndCapture('beta', 'user@example.com');
 

@@ -42,10 +42,7 @@ function newsletterGranted(): bool
 
 describe('the manage page', function () {
     beforeEach(function () {
-        config()->set(ConfigKey::RoutesEnabled->value, true);
-        config()->set(ConfigKey::RoutesMiddleware->value, []);
-
-        require __DIR__.'/../../routes/waitlist.php';
+        enableWaitlistRoutes();
     });
 
     it('withdraws a purpose whatever the settings of a signup are', function (ConfigKey $key, mixed $value) {
