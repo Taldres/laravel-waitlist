@@ -13,8 +13,16 @@ return new class extends Migration
         return is_string($connection) && $connection !== '' ? $connection : null;
     }
 
+    /**
+     * Guarded, so an application that published the migrations of an earlier
+     * release and publishes them all again does not fail on the tables it has.
+     */
     public function up(): void
     {
+        if (Schema::hasTable('waitlist_wordings')) {
+            return;
+        }
+
         Schema::create('waitlist_wordings', function (Blueprint $table) {
             $table->id();
             // Project names are at most 100 characters, which keeps the unique
