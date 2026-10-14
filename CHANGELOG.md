@@ -1,6 +1,6 @@
 # Release Notes
 
-## [Unreleased](https://github.com/taldres/laravel-waitlist/commits/main/compare/v0.1.1...HEAD)
+## [Unreleased](https://github.com/taldres/laravel-waitlist/commits/main/compare/v0.2.0...HEAD)
 
 - Requires PHP 8.3+ and Laravel 13
 - Subscription cycles with exactly-once state changes
@@ -61,6 +61,52 @@
 - Breaking: `Waitlist::verifySpamUsing()` and `Waitlist::spamProtector()` are gone, bind a `SpamProtector` (`ClosureSpamProtector` wraps a closure); the `ConfirmationUrlGenerator` contract is now `LinkGenerator` and `DefaultConfirmationUrlGenerator` is `DefaultLinkGenerator`; `ListPolicy::doubleOptIn` is a method, `doubleOptIn()`
 - Purposes and versions may be up to 255 characters, the length of their columns; `waitlist_wordings.project` holds the 100 characters a project name may have, which keeps the unique index within what MySQL holds, and wording for a longer project name is refused. `widen_waitlist_wordings_table` widens a table that `v0.1.1` created, and on MySQL and MariaDB first shrinks `project` to 100 characters, so a project name longer than that makes it fail
 - A Boost guideline (`resources/boost/guidelines/core.blade.php`) is installed with the bundled skills, so the conventions that matter in every task are loaded upfront
+
+## [v0.2.0](https://github.com/taldres/laravel-waitlist/commits/main/compare/v0.1.1...v0.2.0) - 2026-10-14
+
+This release adds a public count and place in line, import of existing subscribers, asking confirmed addresses again after a while, a bot check without an outside service and a project resolver for browser pages. It also moves the package onto Laravel 13's attributes, form requests and container bindings, which renames a few things; they are listed under "Breaking changes".
+
+### What's new
+
+- **Count and place in line.** `->publicCount()` and `->publicPosition()` on a list answer `GET /waitlist/count` (confirmed addresses rounded down to ten, `null` below ten, cached for a minute) and `GET /waitlist/unsubscribe/{token}/position` (the place of the token's own address, never by address). Both are off until a list opts in, and stay off on a list without double opt-in.
+- **Asking confirmed addresses again.** With `retention.reconfirm_after_days` set, `waitlist:prune` fires `ReconfirmationRequested` for an address that has not confirmed or answered for that long. Without an answer within `reconfirm_within_days` (30) the subscription ends as `lapsed`. Off by default.
+- **Import.** `waitlist:import` and `Waitlist::for($list)->import()` take a CSV and keep where each consent came from: confirmed without a mail with its original time of consent (`EntryImported`), or waiting for the usual confirmation mail.
+- **A bot check without an outside service.** `TimeTrapSpamProtector` checks a hidden field and the time between loading and submitting the form. Bind it as the `SpamProtector`; it is not bound by default.
+- **`PublishableKeyResolver`** maps the `X-Waitlist-Key` header of a browser page to its project.
+- **`waitlist:install --mail`** writes the double opt-in confirmation mail, its view and its queued listener into your app.
+- **Opt-in command options.** `--isolated` on `waitlist:prune`, `waitlist:rekey` and `waitlist:wording` runs the command under a cache lock; `waitlist:show`, `waitlist:export` and `waitlist:import` ask for a missing argument in a terminal.
+- **Purposes and versions up to 255 characters.** `project` holds 100 in `waitlist_wordings`, the length a project name may have.
+- A Boost guideline next to the skills, a referrals example, and a contribution guide with issue and pull request templates and release instructions.
+
+### Fixes
+
+- A signup for an address with a pending cycle signs up again when `waitlist:prune` ended or erased that cycle between the lookup and the resend, where it used to store nothing or answer `422`.
+
+### Breaking changes
+
+- `Waitlist::verifySpamUsing()` and `Waitlist::spamProtector()` are removed. Bind a `SpamProtector`; `ClosureSpamProtector` wraps a closure for a short check.
+- `ConfirmationUrlGenerator` is `LinkGenerator`, and `DefaultConfirmationUrlGenerator` is `DefaultLinkGenerator`. A binding of yours works under the new name.
+- `ListPolicy::doubleOptIn` is a method, `doubleOptIn()`.
+- The models name their factories with `#[UseFactory]`. A model of yours that extends a package model needs a factory of its own.
+- `ActivityType`, `EndReason` and `WaitlistAction` gain cases (`Imported`, the reconfirmation steps, `Lapsed`, `ViewCount`), so an exhaustive `match` over them needs them.
+- The links in mails have one route per method: `GET` only reports, `POST` acts (`confirm.store`, `unsubscribe.store`). URLs and answers stay.
+
+### Upgrading
+
+Publish and run the new migrations, `add_reconfirmation_to_waitlist_subscriptions_table` and `widen_waitlist_wordings_table`, and run `php artisan route:cache` again if you cache routes:
+
+```bash
+php artisan vendor:publish --tag=waitlist-migrations
+php artisan migrate
+
+```
+Publishing all migrations again also adds copies of the first five, which skip the tables you have and which you can delete. On MySQL and MariaDB, `widen_waitlist_wordings_table` shrinks `waitlist_wordings.project` to 100 characters first; it fails if a longer project name is stored.
+
+### Worth knowing
+
+- **JS client:** the count, the place in line, the `challenge` of `GET /purposes` and `answer_by` need `@taldres/laravel-waitlist` 0.2.0 or later. Earlier versions do not read them: for pages that use one, leave `reconfirm_after_days` unset and do not bind `TimeTrapSpamProtector`.
+
+**Full Changelog**: https://github.com/Taldres/laravel-waitlist/compare/v0.1.1...v0.2.0
 
 ## [v0.1.1](https://github.com/taldres/laravel-waitlist/commits/main/compare/v0.1.0...v0.1.1) - 2026-10-14
 
