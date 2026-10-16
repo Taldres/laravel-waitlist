@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   update:
@@ -24,9 +25,25 @@ jobs:
           latest-version: ${{ github.event.release.name }}
           release-notes: ${{ github.event.release.body }}
 
-      - name: Commit updated changelog
-        uses: stefanzweifel/git-auto-commit-action@4a55954c782fc1ea30b9056cd3e7a2b40ca8887d # v7
-        with:
-          branch: main
-          commit_message: Update CHANGELOG
-          file_pattern: CHANGELOG.md
+      # main requires passing checks, which a push by this workflow cannot
+      # have, so the changelog goes through a pull request that a maintainer
+      # merges (checks do not run on pull requests opened with GITHUB_TOKEN).
+      - name: Open a pull request with the updated changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+          BASE: main
+        run: |
+          if git diff --quiet -- CHANGELOG.md; then
+            echo "The changelog is up to date."
+            exit 0
+          fi
+          branch="changelog/${TAG}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch --create "$branch"
+          git commit --message "docs: update the changelog for ${TAG}" -- CHANGELOG.md
+          git push --force origin "$branch"
+          gh pr create --base "$BASE" --head "$branch" \
+            --title "docs: update the changelog for ${TAG}" \
+            --body "Generated from the release notes of ${TAG}."
