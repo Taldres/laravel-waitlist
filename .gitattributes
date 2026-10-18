@@ -12,6 +12,7 @@
 /workbench          export-ignore
 /.claude            export-ignore
 /.agents            export-ignore
+/.mcp.json          export-ignore
 /CLAUDE.md          export-ignore
 /RELEASE.md         export-ignore
 /AGENTS.md          export-ignore
