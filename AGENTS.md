@@ -83,6 +83,16 @@ package needs.
 - Do not add any other AI attribution, such as "Generated with ..." lines, to commit messages or pull request descriptions.
 - Commits are authored by the configured git user only.
 
+## Laravel Boost
+
+This package is developed with [Laravel Boost](https://laravel.com/docs/boost).
+
+- Before changes that depend on Laravel behavior, search the documentation with the Boost `search-docs` tool. The MCP
+  server is configured in `.mcp.json` and runs through Testbench in the local environment:
+  `APP_ENV=local APP_DEBUG=true vendor/bin/testbench boost:mcp`. Boost only runs when the environment is `local`.
+- The Boost resources of the package live in `resources/boost`: `guidelines/core.blade.php` and the skills; the
+  `package-generate-skill` skill updates them.
+
 ## Quick Commands
 
 - Full validation: `composer test`
